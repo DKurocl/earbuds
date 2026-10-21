@@ -82,7 +82,7 @@ GitHub Actions → **Build APK**:
    malformed input, invalid checksums and invalid setting replies.
 2. Android lint, debug APK and optimized installable personal release build (R8 + resource shrinking).
 3. API 35 emulator smoke run with actual Compose screenshots: light ANC, dark ambient,
-   larger text/error layout. A debug-only, read-only `DesignPreviewActivity` supplies
+   larger text/error layout, then installs and opens the optimized release APK. A debug-only, read-only `DesignPreviewActivity` supplies
    deterministic UI state without Bluetooth access; it is absent from release.
 
 Artifacts: **Hush-install** (optimized personal APK), **Hush-debug** (debug harness), **Hush-checks** (reports/build log),

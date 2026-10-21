@@ -58,6 +58,10 @@ jobs:
         with:
           name: Hush-debug
           path: apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: Hush-install
+          path: release
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -85,6 +89,12 @@ jobs:
             adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene error
             sleep 3
             adb exec-out screencap -p > screens/error-large-text.png
+            adb shell am force-stop ua.olex.sonyanc
+            adb install -r release/app-release.apk
+            adb shell am start -W -n ua.olex.sonyanc/.MainActivity
+            sleep 3
+            adb exec-out screencap -p > screens/release-first-launch.png
+            adb shell pidof ua.olex.sonyanc
             adb logcat -d -s AndroidRuntime:E > screens/crash.log
             ! grep -q "FATAL EXCEPTION" screens/crash.log
       - uses: actions/upload-artifact@v4
