@@ -18,7 +18,7 @@ class DesignPreviewActivity : ComponentActivity() {
                 status=if(scene=="error") Headphones.Status.FAILED else Headphones.Status.CONNECTED,
                 nc=state,pending=null,fresh=true,
                 error=if(scene=="error") "Could not connect. Check that your earbuds are connected to this phone." else null,
-                battery=null,granted=scene!="permission",hasDevice=true,
+                battery=SonyProtocol.Battery(82,79,56,rightCharging=true),granted=scene!="permission",hasDevice=true,
                 onMode={state=it},onSettings={},onConnect={},onPermission={},onBluetooth={},onPick={})
         } }
     }

@@ -15,6 +15,7 @@ object SonyProtocol {
 
     const val TYPE_ACK: Byte = 0x01
     const val TYPE_COMMAND: Byte = 0x0C
+    const val TYPE_COMMAND_2: Byte = 0x0E
 
     fun frame(type: Byte, seq: Int, payload: ByteArray): ByteArray {
         val body = ArrayList<Byte>(payload.size + 7)
@@ -111,15 +112,15 @@ object SonyProtocol {
     data class Battery(val left: Int? = null, val right: Int? = null, val case: Int? = null,
                        val leftCharging: Boolean = false, val rightCharging: Boolean = false,
                        val caseCharging: Boolean = false)
-    val BATTERY_GETS = listOf(byteArrayOf(0x22, 0x09), byteArrayOf(0x22, 0x0A))
+    val BATTERY_GETS = listOf(byteArrayOf(0x22, 0x01), byteArrayOf(0x22, 0x09), byteArrayOf(0x22, 0x0A))
     private fun pct(b: Byte): Int? = u(b).takeIf { it in 1..100 }
     fun parseBattery(p: ByteArray, old: Battery): Battery? {
         if (p.size < 4 || u(p[0]) !in listOf(0x23, 0x25)) return null
         return when (u(p[1])) {
-            0x01, 0x09 -> if (p.size == 6 && u(p[3]) in 0..1 && u(p[5]) in 0..1)
+            0x01, 0x09 -> if (p.size >= 6 && u(p[3]) in 0..1 && u(p[5]) in 0..1)
                 old.copy(left = pct(p[2]), leftCharging = p[3].toInt() == 1,
                     right = pct(p[4]), rightCharging = p[5].toInt() == 1) else null
-            0x0A -> if (p.size == 4 && u(p[3]) in 0..1)
+            0x0A -> if (p.size >= 4 && u(p[3]) in 0..1)
                 old.copy(case = pct(p[2]), caseCharging = p[3].toInt() == 1) else null
             else -> null
         }

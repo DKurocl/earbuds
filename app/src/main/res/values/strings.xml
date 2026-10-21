@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Hush</string>
     <string name="widget_desc">WF-1000XM5 noise control: ANC, Ambient and Off</string>
+    <string name="shortcut_anc">ANC</string>
+    <string name="shortcut_ambient">Ambient</string>
+    <string name="shortcut_off">Off</string>
 </resources>

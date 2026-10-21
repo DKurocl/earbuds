@@ -126,12 +126,12 @@ class SonyConnection(
             }
             return
         }
-        if (f.type != SonyProtocol.TYPE_COMMAND.toInt()) return
+        if (f.type !in listOf(SonyProtocol.TYPE_COMMAND.toInt(), SonyProtocol.TYPE_COMMAND_2.toInt())) return
         synchronized(outputLock) {
             s.outputStream.write(SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - f.seq, byteArrayOf()))
             s.outputStream.flush()
         }
-        log("← ${SonyProtocol.hex(f.payload)}")
+        log("← [%02X] %s".format(f.type, SonyProtocol.hex(f.payload)))
         onPayload(f.payload)
     }
 

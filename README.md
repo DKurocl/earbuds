@@ -1,4 +1,4 @@
-# Hush 0.3.0
+# Hush 0.4.0
 
 A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 
@@ -6,7 +6,7 @@ A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 
 Material 3 Expressive theme and motion scheme, native morphing toggle buttons,
 expressive loading indicator, official rounded Material icons, wallpaper colors,
-optional haptics and a new rosette/H adaptive and themed app icon. A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
+optional haptics and a minimal rounded h adaptive and themed app icon. A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
 identifies the device; no decorative hero, slogans or idle animation. The primary screen is noise control.
 The expressive dependency is deliberately pinned to `material3:1.4.0-alpha18`,
 which exposes the public expressive APIs, rather than the stable 1.4.0 that removed them.
@@ -19,8 +19,11 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
   Unknown/unavailable levels remain `—`; zero or invalid device values are not invented percentages.
 - On-demand equalizer: read-back gate, known Sony presets, Clear Bass + five bands.
   Writes use the V2 custom layout and are verified by reading actual state.
-- Device selection, reconnect and home-screen widget.
+- Read-backed DSEE and pause-on-removal controls, with verified writes.
+- Device selection, reconnect, home-screen widget and launcher ANC/Ambient/Off shortcuts.
 - Wallpaper colors and haptics switches; copyable bounded diagnostics.
+- Minimal home screen without repeated mode captions; interruptible shape/width motion,
+  top-anchored ambient transitions and last-choice-wins mode requests.
 
 ## Running without Sony Sound Connect
 
@@ -45,7 +48,9 @@ One serialized on-demand RFCOMM connection, secure V2 first, bounded blocking co
 with a socket-closing watchdog, bounded ACK waits, checksum/length/escape validation,
 and a read-back after NC writes. The link remains available 12 s after leaving the app,
 then closes. There is no foreground service, background notification or Internet permission.
-Optional battery reads yield between requests and stop if a mode request is pending.
+Optional battery reads yield between requests and defer while a mode request is pending.
+Polling retries unavailable values and handles both V2 dual-battery formats (01/09),
+case format 0A and command frame types 0C/0E. Battery refresh is available on the home screen.
 The widget labels its highlight as last known state because it has no persistent connection.
 
 ## Protocol evidence
@@ -58,7 +63,7 @@ Framing, ANC, battery and EQ facts were cross-checked against:
 - The owner's earlier device-confirmed NC type `17`, which takes precedence over generic model assumptions.
 
 The Kotlin implementation is written for this app; protocol byte values and layouts
-are interoperability facts. Battery: `22 09` / `22 0A`, replies `23` / notifications `25`.
+are interoperability facts. Battery: `22 01` / `22 09` / `22 0A`, replies `23` / notifications `25`.
 EQ read `56 00`; reply `57` / notification `59` with preset, count and six values offset by 10.
 EQ preset set `58 00 <preset> 00`; custom set `58 00 A0 06 <six offset values>`.
 
@@ -72,7 +77,7 @@ GitHub Actions → **Build APK**. Artifacts:
 - **Hush-visual-check** — emulator screenshots (does not gate delivery of the built APK).
 
 Unit tests cover recorded NC payloads, escaping, malformed frames, checksums, battery
-layout validation and EQ bounds. Both debug and optimized release are built.
+layout validation, unavailable battery values, feature switch polarity and EQ bounds. Both debug and optimized release are built.
 Release uses ephemeral Android debug signing for private use. No private signing key is
 stored in the repo or Actions cache; different CI builds may require reinstalling.
 

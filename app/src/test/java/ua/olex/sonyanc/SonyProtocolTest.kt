@@ -62,4 +62,30 @@ class SonyProtocolTest {
         assertNull(EqualizerProtocol.parse(SonyProtocol.parseHex("57 00 A0 06 FF 0A 0A 0A 0A 0A")))
         assertNull(EqualizerProtocol.parse(SonyProtocol.parseHex("57 00 A0 07 0A 0A 0A 0A 0A 0A")))
     }
+    @Test fun dualBatteryFallbackAndNotificationKeepCase() {
+        val previous=SonyProtocol.Battery(case=61)
+        val b=SonyProtocol.parseBattery(SonyProtocol.parseHex("25 01 64 01 4F 00 00"),previous)!!
+        assertEquals(100,b.left)
+        assertEquals(79,b.right)
+        assertEquals(61,b.case)
+        assertTrue(b.leftCharging)
+        assertFalse(b.rightCharging)
+        val missing=SonyProtocol.parseBattery(SonyProtocol.parseHex("23 01 00 00 FF 00"),previous)!!
+        assertNull(missing.left)
+        assertNull(missing.right)
+        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 01 50 02 50 00"),previous))
+        assertEquals(listOf("22 01","22 09","22 0A"),SonyProtocol.BATTERY_GETS.map{SonyProtocol.hex(it)})
+    }
+    @Test fun featureBooleansUseTheirOwnSonyPolarity() {
+        val dsee=DeviceSettingsProtocol.Feature.DSEE
+        val pause=DeviceSettingsProtocol.Feature.AUTO_PAUSE
+        assertEquals("E8 01 01",SonyProtocol.hex(dsee.set(true)))
+        assertEquals("F8 01 00",SonyProtocol.hex(pause.set(true)))
+        assertEquals(dsee to true,DeviceSettingsProtocol.parse(SonyProtocol.parseHex("E7 01 01")))
+        assertEquals(pause to true,DeviceSettingsProtocol.parse(SonyProtocol.parseHex("27 01 00")))
+        assertEquals(pause to false,DeviceSettingsProtocol.parse(SonyProtocol.parseHex("F9 01 01")))
+        listOf("E7 02 01","E7 01 FF","E7 01 01 00","27 01","26 01 00").forEach {
+            assertNull(it,DeviceSettingsProtocol.parse(SonyProtocol.parseHex(it)))
+        }
+    }
 }
