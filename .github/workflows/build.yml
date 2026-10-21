@@ -41,6 +41,10 @@ jobs:
         with:
           name: Hush-debug
           path: app/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hush-install
+          path: app/build/outputs/apk/release/*.apk
   visual-check:
     needs: build
     runs-on: ubuntu-24.04
