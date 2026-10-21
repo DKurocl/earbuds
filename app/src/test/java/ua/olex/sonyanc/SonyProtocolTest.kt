@@ -42,4 +42,24 @@ class SonyProtocolTest {
         assertTrue(parsed.checksumOk)
         assertArrayEquals(payload,parsed.payload)
     }
+    @Test fun v2BatteryOnlyAcceptsKnownLayouts() {
+        val b=SonyProtocol.parseBattery(SonyProtocol.parseHex("23 09 50 00 46 01"),SonyProtocol.Battery())!!
+        assertEquals(80,b.left)
+        assertEquals(70,b.right)
+        assertTrue(b.rightCharging)
+        val c=SonyProtocol.parseBattery(SonyProtocol.parseHex("25 0A 32 00"),b)!!
+        assertEquals(50,c.case)
+        assertEquals(80,c.left)
+        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 02 50 00"),b))
+        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 09 50 00"),b))
+        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 09 FF 00 00 00"),b)!!.left)
+    }
+    @Test fun equalizerUsesBoundedV2Bands() {
+        val state=EqualizerProtocol.parse(SonyProtocol.parseHex("57 00 A0 06 14 0D 0C 0C 0D 0E"))!!
+        assertEquals(listOf(10,3,2,2,3,4),state.bands)
+        assertEquals("58 00 A0 06 14 0D 0C 0C 0D 0E",SonyProtocol.hex(EqualizerProtocol.custom(state.bands)))
+        assertEquals("58 00 00 00",SonyProtocol.hex(EqualizerProtocol.preset(0)))
+        assertNull(EqualizerProtocol.parse(SonyProtocol.parseHex("57 00 A0 06 FF 0A 0A 0A 0A 0A")))
+        assertNull(EqualizerProtocol.parse(SonyProtocol.parseHex("57 00 A0 07 0A 0A 0A 0A 0A 0A")))
+    }
 }
