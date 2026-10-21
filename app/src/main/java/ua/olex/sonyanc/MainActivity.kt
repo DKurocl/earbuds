@@ -17,7 +17,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -83,6 +85,42 @@ fun App() {
     var busy by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf<SonyProtocol.Mode?>(null) }
     var rawHex by remember { mutableStateOf(SonyProtocol.INIT_HEX) }
+
+    // Per-mode payloads: learned ones (saved) override the built-in V1 defaults.
+    val prefs = remember { ctx.getSharedPreferences("payloads", 0) }
+    val payloads = remember {
+        mutableStateMapOf<SonyProtocol.Mode, String>().apply {
+            SonyProtocol.Mode.entries.forEach { m -> put(m, prefs.getString(m.name, null) ?: m.payloadHex) }
+        }
+    }
+    val learned = remember {
+        mutableStateMapOf<SonyProtocol.Mode, Boolean>().apply {
+            SonyProtocol.Mode.entries.forEach { m -> put(m, prefs.contains(m.name)) }
+        }
+    }
+    var learning by remember { mutableStateOf<SonyProtocol.Mode?>(null) }
+
+    LaunchedEffect(Unit) {
+        conn.onPayload = { p ->
+            scope.launch {
+                // 0x69 = headphones reporting the ambient-sound/ANC state; the "set"
+                // command is the same layout with 0x68 in front.
+                if (p.isNotEmpty() && p[0] == 0x69.toByte()) {
+                    val target = learning
+                    if (target != null) {
+                        val set = p.copyOf().also { it[0] = 0x68 }
+                        val hex = SonyProtocol.hex(set)
+                        payloads[target] = hex; learned[target] = true
+                        prefs.edit().putString(target.name, hex).apply()
+                        logLines += "★ «${target.label}» = $hex"
+                        mode = target; learning = null
+                    } else {
+                        logLines += "★ стан ANC: ${SonyProtocol.hex(p)}"
+                    }
+                }
+            }
+        }
+    }
 
     LaunchedEffect(granted) {
         if (granted) {
@@ -153,12 +191,17 @@ fun App() {
                 SonyProtocol.Mode.entries.forEach { m ->
                     ModeTile(
                         label = m.label,
-                        selected = mode == m,
+                        sub = when { learning == m -> "тапни навушник…"; learned[m] == true -> "навчено"; else -> null },
+                        selected = mode == m || learning == m,
                         enabled = isConnected,
-                        modifier = Modifier.weight(1f).fillMaxHeight()
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        onLongClick = {
+                            learning = if (learning == m) null else m
+                            if (learning == m) logLines += "Навчання «${m.label}»: перемкни цей режим дотиком на навушнику"
+                        }
                     ) {
                         mode = m
-                        scope.launch { conn.sendCommand(SonyProtocol.parseHex(m.payloadHex)) }
+                        scope.launch { conn.sendCommand(SonyProtocol.parseHex(payloads[m] ?: m.payloadHex)) }
                     }
                 }
             }
@@ -193,9 +236,13 @@ fun App() {
     }
 }
 
-/** Expressive-style tile: shape and colour spring-morph when selected. */
+/** Expressive-style tile: shape and colour spring-morph when selected. Long-press = learn. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ModeTile(label: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+fun ModeTile(
+    label: String, sub: String?, selected: Boolean, enabled: Boolean, modifier: Modifier,
+    onLongClick: () -> Unit, onClick: () -> Unit,
+) {
     val corner by animateDpAsState(
         if (selected) 40.dp else 16.dp,
         spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "corner"
@@ -207,10 +254,14 @@ fun ModeTile(label: String, selected: Boolean, enabled: Boolean, modifier: Modif
     )
     val fg = when { !enabled -> cs.onSurfaceVariant.copy(alpha = 0.5f); selected -> cs.onPrimary; else -> cs.onSecondaryContainer }
     Box(
-        modifier.clip(RoundedCornerShape(corner)).background(bg).clickable(enabled = enabled, onClick = onClick),
+        modifier.clip(RoundedCornerShape(corner)).background(bg)
+            .combinedClickable(enabled = enabled, onLongClick = onLongClick, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 14.sp, modifier = Modifier.padding(8.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(6.dp)) {
+            Text(label, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 13.sp, maxLines = 2, textAlign = TextAlign.Center)
+            if (sub != null) Text(sub, color = fg.copy(alpha = 0.75f), fontSize = 10.sp, textAlign = TextAlign.Center)
+        }
     }
 }
