@@ -27,6 +27,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.BatteryStd
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -47,13 +50,19 @@ import ua.olex.sonyanc.SonyProtocol.NcState
 
 class MainActivity : ComponentActivity() {
     private val startTick = mutableIntStateOf(0)
+    private val shortcutMode=mutableStateOf<Mode?>(null)
+    private fun consumeIntent(intent:Intent?) {
+        shortcutMode.value=intent?.getStringExtra("hush.mode")?.let {name->runCatching{Mode.valueOf(name)}.getOrNull()}
+    }
+    override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);consumeIntent(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Headphones.init(this)
+        consumeIntent(intent)
         enableEdgeToEdge()
         setContent {
             var dynamic by remember { mutableStateOf(Prefs.dynamicColor(this)) }
-            AppTheme(dynamic) { App(startTick.intValue,dynamic) { dynamic=it; Prefs.setDynamicColor(this,it) } }
+            AppTheme(dynamic) { App(startTick.intValue,dynamic,shortcutMode.value,{shortcutMode.value=null}) { dynamic=it; Prefs.setDynamicColor(this,it) } }
         }
     }
     override fun onStart() { super.onStart(); Headphones.hold(); startTick.intValue++ }
@@ -80,7 +89,7 @@ fun AppTheme(dynamic:Boolean=true,content:@Composable ()->Unit) {
 
 @SuppressLint("MissingPermission")
 @Composable
-fun App(startTick:Int,dynamic:Boolean,onDynamic:(Boolean)->Unit) {
+fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed:()->Unit={},onDynamic:(Boolean)->Unit) {
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
     val status by Headphones.status.collectAsState()
@@ -89,6 +98,9 @@ fun App(startTick:Int,dynamic:Boolean,onDynamic:(Boolean)->Unit) {
     val fresh by Headphones.fresh.collectAsState()
     val error by Headphones.error.collectAsState()
     val battery by Headphones.battery.collectAsState()
+    val batteryRefreshing by Headphones.batteryRefreshing.collectAsState()
+    val batteryFresh by Headphones.batteryFresh.collectAsState()
+    val batteryNote by Headphones.batteryNote.collectAsState()
     var granted by remember { mutableStateOf(Headphones.hasPermission(ctx)) }
     var saved by remember { mutableStateOf(Prefs.deviceAddress(ctx)) }
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
@@ -109,14 +121,22 @@ fun App(startTick:Int,dynamic:Boolean,onDynamic:(Boolean)->Unit) {
             } else if(saved!=null) Headphones.connectAndSync()
         }
     }
+    LaunchedEffect(shortcutMode,granted,saved) {
+        if(shortcutMode!=null && granted && saved!=null) {
+            Headphones.request((Headphones.nc.value ?: NcState(shortcutMode)).copy(mode=shortcutMode))
+            onShortcutConsumed()
+        }
+    }
     HushScreen(status,nc,pending,fresh,error,battery,granted,saved!=null,
+        batteryRefreshing=batteryRefreshing,batteryFresh=batteryFresh,batteryNote=batteryNote,
+        onBattery={scope.launch{Headphones.queryBattery()}},
         onMode={Headphones.request(it)},onSettings={sheet="settings"},onEqualizer={sheet="equalizer"},
         onConnect={scope.launch {Headphones.connectAndSync()}},
         onPermission={if(Build.VERSION.SDK_INT>=31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)},
         onBluetooth={bluetooth()},onPick={sheet="settings"},onWidget={pinWidget()},
         canPin=widgetManager.isRequestPinAppWidgetSupported,haptics=haptics)
     if(sheet!=null) ModalBottomSheet(onDismissRequest={sheet=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
-        if(sheet=="diagnostics") Diagnostics() else if(sheet=="equalizer") EqualizerSheet() else {
+        if(sheet=="diagnostics") Diagnostics() else if(sheet=="equalizer") EqualizerSheet() else if(sheet=="earbuds") EarbudSettingsSheet() else {
             Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 Text("Settings",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.SemiBold)
                 GroupLabel("DEVICE")
@@ -137,10 +157,11 @@ fun App(startTick:Int,dynamic:Boolean,onDynamic:(Boolean)->Unit) {
                 Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                     if(widgetManager.isRequestPinAppWidgetSupported) SettingsRow(Glyph.WIDGET,"Add home screen widget",onClick={pinWidget()})
                     SettingsRow(Glyph.EQ,"Equalizer",onClick={sheet="equalizer"})
+                    SettingsRow(Glyph.TUNE,"Earbud settings",onClick={sheet="earbuds"})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={sheet="diagnostics"})
                 }
                 Text("Firmware updates require Sony Sound Connect. Everyday controls work independently.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Hush 0.3.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text("Hush 0.4.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -152,6 +173,7 @@ fun HushScreen(
     status:Headphones.Status,nc:NcState?,pending:NcState?,fresh:Boolean,error:String?,battery:SonyProtocol.Battery?,
     granted:Boolean,hasDevice:Boolean,onMode:(NcState)->Unit,onSettings:()->Unit,onConnect:()->Unit,
     onPermission:()->Unit,onBluetooth:()->Unit,onPick:()->Unit,onEqualizer:()->Unit={},onWidget:()->Unit={},canPin:Boolean=true,haptics:Boolean=true,
+    batteryRefreshing:Boolean=false,batteryFresh:Boolean=true,batteryNote:String="Live levels",onBattery:()->Unit={},
 ) {
     val cs=MaterialTheme.colorScheme
     val state=pending ?: nc
@@ -171,6 +193,7 @@ fun HushScreen(
     }) {insets ->
         Column(Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
             DeviceCard(status,onConnect)
+            if(hasDevice && granted) BatterySection(battery ?: SonyProtocol.Battery(),batteryFresh,batteryRefreshing,batteryNote,onBattery)
             if(!granted) {
                 SetupCard("Bluetooth access", "Allow Hush to connect to your WF-1000XM5.","Allow Bluetooth",Glyph.BLUETOOTH,onPermission)
             } else if(!hasDevice) {
@@ -187,25 +210,12 @@ fun HushScreen(
                             ModeControl(mode,state?.mode==mode,Modifier.weight(weight)) {choose((state ?: NcState(mode)).copy(mode=mode))}
                         }
                     }
-                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        HushIcon(if(fresh && pending==null) Glyph.CHECK else Glyph.INFO,Modifier.size(16.dp),cs.onSurfaceVariant)
-                        val label=when {
-                            pending!=null -> "Applying ${pending.mode.short.lowercase()}…"
-                            !fresh && nc!=null -> "${nc.mode.label} · last known"
-                            state!=null -> state.mode.label
-                            status==Headphones.Status.CONNECTING -> "Choose a mode while connecting"
-                            else -> "Select a mode"
-                        }
-                        Text(label,style=MaterialTheme.typography.bodyMedium,color=cs.onSurfaceVariant,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
-                    }
+
                 }
-                AnimatedVisibility(state?.mode==Mode.AMBIENT,enter=expandVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec())+fadeIn(),exit=shrinkVertically(animationSpec=MaterialTheme.motionScheme.fastSpatialSpec())+fadeOut()) {
-                    AmbientPanel(state ?: NcState(Mode.AMBIENT),::choose)
+                AnimatedVisibility(state?.mode==Mode.AMBIENT,enter=expandVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),expandFrom=Alignment.Top)+fadeIn(),exit=shrinkVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),shrinkTowards=Alignment.Top)+fadeOut()) {
+                    AmbientPanel((state ?: NcState(Mode.AMBIENT)).copy(mode=Mode.AMBIENT),::choose)
                 }
-                if(state?.mode==Mode.ANC) SelectedModePanel(Glyph.QUIET,"Noise cancelling")
-                if(state?.mode==Mode.OFF) SelectedModePanel(Glyph.OFF,"Noise control off")
                 SettingsRow(Glyph.EQ,"Equalizer",onClick=onEqualizer)
-                if(canPin) SettingsRow(Glyph.WIDGET,"Home screen widget",onClick=onWidget)
             }
             AnimatedVisibility(error!=null,enter=fadeIn()+expandVertically(),exit=fadeOut()+shrinkVertically()) {
                 Surface(shape=RoundedCornerShape(24.dp),color=cs.errorContainer) {
@@ -218,7 +228,6 @@ fun HushScreen(
                     }
                 }
             }
-            if(hasDevice && granted) BatteryRow(battery ?: SonyProtocol.Battery())
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -247,13 +256,14 @@ private fun DeviceCard(status:Headphones.Status,onConnect:()->Unit) {
 @Composable
 private fun ModeControl(mode:Mode,selected:Boolean,modifier:Modifier,onClick:()->Unit) {
     val cs=MaterialTheme.colorScheme
+    val contentColor by animateColorAsState(if(selected) cs.onPrimary else cs.onSurface,animationSpec=tween(180),label="mode content")
     ToggleButton(checked=selected,onCheckedChange={onClick()},modifier=modifier.heightIn(min=112.dp).semantics{role=Role.RadioButton;this.selected=selected;contentDescription=mode.label},
         shapes=ToggleButtonDefaults.shapes(shape=RoundedCornerShape(36.dp),pressedShape=RoundedCornerShape(16.dp),checkedShape=RoundedCornerShape(22.dp)),
         colors=ToggleButtonDefaults.toggleButtonColors(containerColor=cs.surfaceContainerHigh,contentColor=cs.onSurface,checkedContainerColor=cs.primary,checkedContentColor=cs.onPrimary),
         elevation=null,contentPadding=PaddingValues(horizontal=4.dp,vertical=20.dp)) {
         Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            HushIcon(when(mode){Mode.ANC->Glyph.QUIET;Mode.AMBIENT->Glyph.AMBIENT;Mode.OFF->Glyph.OFF},Modifier.size(28.dp),if(selected)cs.onPrimary else cs.onSurface)
-            Text(mode.short,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
+            HushIcon(when(mode){Mode.ANC->Glyph.QUIET;Mode.AMBIENT->Glyph.AMBIENT;Mode.OFF->Glyph.OFF},Modifier.size(28.dp),contentColor)
+            Text(mode.short,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold,color=contentColor)
         }
     }
 }
@@ -261,7 +271,9 @@ private fun ModeControl(mode:Mode,selected:Boolean,modifier:Modifier,onClick:()-
 @Composable
 private fun AmbientPanel(state:NcState,onChange:(NcState)->Unit) {
     val cs=MaterialTheme.colorScheme
-    var level by remember(state.level){mutableFloatStateOf(state.level.toFloat())}
+    var level by remember {mutableFloatStateOf(state.level.toFloat())}
+    var dragging by remember {mutableStateOf(false)}
+    LaunchedEffect(state.level,dragging) {if(!dragging) level=state.level.toFloat()}
     Surface(shape=RoundedCornerShape(28.dp),color=cs.surfaceContainer,modifier=Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -274,8 +286,8 @@ private fun AmbientPanel(state:NcState,onChange:(NcState)->Unit) {
                     Text(" / 20",style=MaterialTheme.typography.bodyMedium,color=cs.onSurfaceVariant,modifier=Modifier.padding(bottom=7.dp))
                 }
             }
-            Slider(value=level,onValueChange={level=it.roundToInt().toFloat()},valueRange=0f..20f,
-                onValueChangeFinished={onChange(state.copy(level=level.roundToInt()))},
+            Slider(value=level,onValueChange={dragging=true;level=it.roundToInt().toFloat()},valueRange=0f..20f,
+                onValueChangeFinished={onChange(state.copy(level=level.roundToInt()));dragging=false},
                 modifier=Modifier.fillMaxWidth().semantics{contentDescription="Ambient sound level";stateDescription="${level.roundToInt()} of 20"})
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 listOf("Low" to 5,"Medium" to 12,"High" to 20).forEachIndexed {index,(label,value)->
@@ -285,20 +297,9 @@ private fun AmbientPanel(state:NcState,onChange:(NcState)->Unit) {
             HorizontalDivider(color=cs.outlineVariant.copy(alpha=.5f))
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text("Voice focus",style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f))
-                Switch(checked=state.voice,onCheckedChange={onChange(state.copy(voice=it))},thumbContent=if(state.voice) ({HushIcon(Glyph.CHECK,Modifier.size(16.dp),cs.onPrimary)}) else null,
+                Switch(checked=state.voice,onCheckedChange={onChange(state.copy(voice=it))},thumbContent=if(state.voice) ({HushIcon(Glyph.CHECK,Modifier.size(16.dp),cs.primary)}) else null,
                     modifier=Modifier.semantics{contentDescription="Voice focus"})
             }
-        }
-    }
-}
-
-@Composable
-private fun SelectedModePanel(glyph:Glyph,title:String) {
-    val cs=MaterialTheme.colorScheme
-    Surface(shape=RoundedCornerShape(28.dp),color=cs.primaryContainer,modifier=Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(24.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-            HushIcon(glyph,Modifier.size(32.dp),cs.onPrimaryContainer)
-            Text(title,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Medium,color=cs.onPrimaryContainer)
         }
     }
 }
@@ -339,16 +340,31 @@ private fun SettingsRow(glyph:Glyph,title:String,subtitle:String?=null,onClick:(
 }
 
 @Composable
-private fun BatteryRow(b:SonyProtocol.Battery) {
-    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        listOf("Left" to b.left,"Right" to b.right,"Case" to b.case).forEach {(label,value)->
-            Surface(shape=RoundedCornerShape(22.dp),color=MaterialTheme.colorScheme.surfaceContainerLow,modifier=Modifier.weight(1f)) {
-                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                    Text(label,style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(value?.let{"$it%"} ?: "—",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
+private fun BatterySection(b:SonyProtocol.Battery,fresh:Boolean,busy:Boolean,note:String,onRefresh:()->Unit) {
+    val cs=MaterialTheme.colorScheme
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            Text("Battery",style=MaterialTheme.typography.titleSmall,color=cs.onSurfaceVariant,modifier=Modifier.weight(1f))
+            IconButton(onClick=onRefresh,enabled=!busy,modifier=Modifier.size(40.dp).semantics{contentDescription="Refresh battery"}) {
+                if(busy) LoadingIndicator(Modifier.size(24.dp)) else HushIcon(Glyph.REFRESH,Modifier.size(20.dp),cs.onSurfaceVariant)
+            }
+        }
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            listOf(Triple("Left",b.left,b.leftCharging),Triple("Right",b.right,b.rightCharging),Triple("Case",b.case,b.caseCharging)).forEach {(label,value,charging)->
+                Surface(shape=RoundedCornerShape(22.dp),color=cs.surfaceContainerLow,modifier=Modifier.weight(1f)) {
+                    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            Text(label,style=MaterialTheme.typography.labelMedium,color=cs.onSurfaceVariant,modifier=Modifier.weight(1f))
+                            Icon(if(charging) Icons.Rounded.BatteryChargingFull else Icons.Rounded.BatteryStd,
+                                contentDescription=if(charging) "Charging" else null,modifier=Modifier.size(16.dp),tint=if(value!=null && value<=20) cs.error else cs.onSurfaceVariant)
+                        }
+                        Text(value?.let{"$it%"} ?: "—",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,
+                            color=if(fresh) cs.onSurface else cs.onSurfaceVariant)
+                    }
                 }
             }
         }
+        if(!fresh && !busy) Text(note,style=MaterialTheme.typography.labelSmall,color=cs.onSurfaceVariant,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
     }
 }
 
@@ -383,9 +399,10 @@ private fun EqualizerSheet() {
     val scope=rememberCoroutineScope()
     var busy by remember {mutableStateOf(true)}
     var message by remember {mutableStateOf<String?>(null)}
-    fun load() {scope.launch {busy=true;message=null;try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false}}}
-    LaunchedEffect(Unit) {try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false}}
-    fun update(preset:Int?=null,bands:List<Int>?=null) {scope.launch {busy=true;message=null;try {if(!Headphones.writeEqualizer(preset,bands)) message="Change not confirmed. Your earbuds may still use the previous setting."} finally {busy=false}}}
+    var revision by remember {mutableIntStateOf(0)}
+    fun load() {scope.launch {busy=true;message=null;try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false;revision++}}}
+    LaunchedEffect(Unit) {try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false;revision++}}
+    fun update(preset:Int?=null,bands:List<Int>?=null) {scope.launch {busy=true;message=null;try {if(!Headphones.writeEqualizer(preset,bands)) message="Change not confirmed. Your earbuds may still use the previous setting."} finally {busy=false;revision++}}}
     Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Text("Equalizer",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
@@ -407,7 +424,8 @@ private fun EqualizerSheet() {
                 }
             }
             if(eq!!.bands.size==6) {
-                var bands by remember(eq){mutableStateOf(eq!!.bands)}
+                OutlinedButton(enabled=!busy,onClick={update(bands=List(6){0})}) {Text("Reset bands")}
+                var bands by remember(eq,revision){mutableStateOf(eq!!.bands)}
                 Surface(shape=RoundedCornerShape(24.dp),color=MaterialTheme.colorScheme.surfaceContainer) {
                     Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                         listOf("Clear Bass","400 Hz","1 kHz","2.5 kHz","6.3 kHz","16 kHz").forEachIndexed {index,label->
@@ -422,6 +440,42 @@ private fun EqualizerSheet() {
                 }
             }
         }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun EarbudSettingsSheet() {
+    val values by Headphones.features.collectAsState()
+    val scope=rememberCoroutineScope()
+    var loading by remember {mutableStateOf(emptySet<DeviceSettingsProtocol.Feature>())}
+    var message by remember {mutableStateOf<String?>(null)}
+    suspend fun load() {
+        for(feature in DeviceSettingsProtocol.Feature.entries) {
+            loading=loading+feature
+            try {Headphones.readFeature(feature)} finally {loading=loading-feature}
+        }
+    }
+    LaunchedEffect(Unit) {load()}
+    Column(Modifier.padding(horizontal=24.dp).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        Text("Earbud settings",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.SemiBold)
+        DeviceSettingsProtocol.Feature.entries.forEach {feature ->
+            val value=values[feature]
+            SettingsRow(if(feature==DeviceSettingsProtocol.Feature.DSEE) Glyph.EQ else Glyph.EARBUDS,feature.title,
+                subtitle=if(feature in loading) "Reading…" else if(value==null) "No device response" else null,
+                trailing={
+                    Switch(checked=value ?: false,enabled=value!=null && feature !in loading,
+                        modifier=Modifier.semantics{contentDescription=feature.title},onCheckedChange={wanted->
+                            scope.launch {
+                                loading=loading+feature;message=null
+                                try {if(!Headphones.writeFeature(feature,wanted)) message="The earbuds did not confirm the change."}
+                                finally {loading=loading-feature}
+                            }
+                        })
+                })
+        }
+        message?.let {Text(it,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.error)}
+        OutlinedButton(enabled=loading.isEmpty(),onClick={scope.launch{load()}}) {Text("Refresh settings")}
         Spacer(Modifier.height(24.dp))
     }
 }

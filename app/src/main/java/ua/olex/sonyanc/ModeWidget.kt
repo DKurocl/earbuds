@@ -60,6 +60,8 @@ class ModeWidget : AppWidgetProvider() {
             SonyProtocol.Mode.OFF to R.id.w_off,
         )
 
+        fun clearNote(ctx:Context) {note=null;refreshAll(ctx)}
+
         fun refreshAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, ModeWidget::class.java))
