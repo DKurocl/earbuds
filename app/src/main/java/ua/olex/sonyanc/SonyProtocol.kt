@@ -75,9 +75,11 @@ object SonyProtocol {
      * in the app to experiment.
      */
     enum class Mode(val label: String, val payloadHex: String) {
-        ANC("Шумозаглушення", "68 02 11 02 02 01 00 14"),
-        AMBIENT("Прозорість", "68 02 11 02 00 01 00 14"),
-        OFF("Вимк", "68 02 00 02 00 01 00 14"),
+        // V2 layout (WF/WH-1000XM5), discovered via "67 17 01 01 01 00 14" probe reply:
+        // 68 17 01 <effect on> <0=NC,1=ambient> <focus voice> <ambient level>
+        ANC("Шумозаглушення", "68 17 01 01 00 00 14"),
+        AMBIENT("Прозорість", "68 17 01 01 01 00 14"),
+        OFF("Вимк", "68 17 01 00 00 00 14"),
     }
 
     /** "Get protocol info" — the headphones usually want this first. */
