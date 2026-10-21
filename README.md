@@ -80,13 +80,17 @@ GitHub Actions → **Build APK**:
 
 1. Unit tests for recorded XM5 payloads, reserved-byte escaping, all-byte round-trips,
    malformed input, invalid checksums and invalid setting replies.
-2. Android lint, debug APK and optimized unsigned release build (R8 + resource shrinking).
+2. Android lint, debug APK and optimized installable personal release build (R8 + resource shrinking).
 3. API 35 emulator smoke run with actual Compose screenshots: light ANC, dark ambient,
    larger text/error layout. A debug-only, read-only `DesignPreviewActivity` supplies
    deterministic UI state without Bluetooth access; it is absent from release.
 
-Artifacts: **Hush-debug** (installable debug APK), **Hush-checks** (reports/build log),
+Artifacts: **Hush-install** (optimized personal APK), **Hush-debug** (debug harness), **Hush-checks** (reports/build log),
 **Hush-visual-check** (screenshots/crash log). No local Android SDK is required for CI.
+The personal release uses Android’s standard debug signing configuration for private
+use, not store distribution. No signing key is stored in the repository or Actions
+cache. Different CI runs can have different signatures and require reinstalling the app.
+
 Local build: Gradle 8.11.1, Java 17 and Android SDK 35; run
 `gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
 

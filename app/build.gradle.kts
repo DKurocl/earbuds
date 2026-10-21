@@ -35,6 +35,8 @@ dependencies {
 android {
     buildTypes {
         getByName("release") {
+            // Personal APK: optimized, installable, using the CI debug identity.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
