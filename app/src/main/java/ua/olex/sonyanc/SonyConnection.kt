@@ -19,8 +19,10 @@ class SonyConnection(
     private val log: (String) -> Unit,
 ) {
     companion object {
-        /** Sony's own SPP service UUID; standard SPP as fallback. */
-        val SONY_UUID: UUID = UUID.fromString("96CC203E-5068-46AD-B32D-E316F5E069BA")
+        /** Newer Sony devices (XM5 generation, LinkBuds…) — protocol V2. */
+        val SONY_V2_UUID: UUID = UUID.fromString("956C7B26-D49A-4BA8-B03F-B17D393CB6E2")
+        /** Older Sony devices (XM3/XM4) — protocol V1. */
+        val SONY_V1_UUID: UUID = UUID.fromString("96CC203E-5068-46AD-B32D-E316F5E069BA")
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 
@@ -28,24 +30,43 @@ class SonyConnection(
     private var reader: Job? = null
     private var seq = 0
 
+    /** Called for every incoming command payload (not ACKs). */
+    var onPayload: ((ByteArray) -> Unit)? = null
+
     val connected get() = socket?.isConnected == true
 
     suspend fun connect(device: BluetoothDevice): Boolean = withContext(Dispatchers.IO) {
         close()
-        for (uuid in listOf(SONY_UUID, SPP_UUID)) {
+
+        // UUIDs the headphones advertise via SDP, Sony ones first.
+        val advertised = device.uuids?.map { it.uuid }.orEmpty()
+        log("SDP: " + (if (advertised.isEmpty()) "(порожньо)" else advertised.joinToString { it.toString().take(8) }))
+        val candidates = (listOf(SONY_V2_UUID, SONY_V1_UUID) + advertised.filter {
+            it.toString().startsWith("956c7b26") || it.toString().startsWith("96cc203e")
+        } + SPP_UUID).distinct()
+
+        val attempts = buildList<Pair<String, () -> BluetoothSocket>> {
+            for (u in candidates) {
+                add("secure ${u.toString().take(8)}" to { device.createRfcommSocketToServiceRecord(u) })
+                add("insecure ${u.toString().take(8)}" to { device.createInsecureRfcommSocketToServiceRecord(u) })
+            }
+        }
+        for ((name, make) in attempts) {
             try {
-                log("→ connect ${device.name} via $uuid")
-                val s = device.createRfcommSocketToServiceRecord(uuid)
+                log("→ $name")
+                val s = make()
                 s.connect()
                 socket = s
                 seq = 0
                 startReader(s)
-                log("✓ connected")
+                log("✓ connected ($name)")
                 return@withContext true
             } catch (e: Exception) {
-                log("✗ ${e.javaClass.simpleName}: ${e.message}")
+                log("✗ ${e.message?.take(60)}")
+                Thread.sleep(300)
             }
         }
+        log("Не вдалось. Закрий Sound Connect (примусово зупини) і спробуй ще.")
         false
     }
 
@@ -105,6 +126,7 @@ class SonyConnection(
         log("← type %02X [seq ${f.seq}]%s %s".format(
             f.type, if (f.checksumOk) "" else " BAD-CRC", SonyProtocol.hex(f.payload)))
         sendAck(f.seq)
+        onPayload?.invoke(f.payload)
     }
 
     fun close() {
