@@ -40,7 +40,11 @@ object Headphones {
         _fresh.value = false
         _battery.value = null
     }
-    private var holders = 0
+    private val _equalizer = MutableStateFlow<EqualizerProtocol.State?>(null)
+    val equalizer = _equalizer.asStateFlow()
+    @Volatile private var eqReply: CompletableDeferred<EqualizerProtocol.State>? = null
+    private var infoJob: Job? = null
+    @Volatile private var holders = 0
     private var idleJob: Job? = null
 
     init {
@@ -91,20 +95,21 @@ object Headphones {
 
     private suspend fun ensureConnectedLocked(): Boolean {
         if (conn.connected) return true
-        if (!hasPermission(app)) return fail("Дозволь доступ до Bluetooth")
+        if (!hasPermission(app)) return fail("Allow Bluetooth access")
         val adapter = app.getSystemService(BluetoothManager::class.java)?.adapter
-        if (adapter?.isEnabled != true) return fail("Увімкни Bluetooth на телефоні")
-        val dev = savedDevice() ?: return fail("Вибери свої WF-1000XM5")
+        if (adapter?.isEnabled != true) return fail("Turn on Bluetooth")
+        val dev = savedDevice() ?: return fail("Select your WF-1000XM5")
         _status.value = Status.CONNECTING
         _fresh.value = false
         _battery.value = null
+        _equalizer.value = null
         try {
             if (!conn.connect(dev) || !conn.send(SonyProtocol.parseHex(SonyProtocol.INIT_HEX))) {
                 conn.close()
-                return fail("Не вдалося підключитися. Перевір навушники та закрий Sony Sound Connect.")
+                return fail("Could not connect. Check that your earbuds are connected to this phone.")
             }
         } catch (e: CancellationException) { conn.close(); throw e }
-        catch (e: Exception) { addLog("✗ ${e.message}"); return fail("Не вдалося підключитися до навушників") }
+        catch (e: Exception) { addLog("✗ ${e.message}"); return fail("Could not connect to the earbuds") }
         _status.value = Status.CONNECTED
         _error.value = null
         return true
@@ -119,6 +124,15 @@ object Headphones {
         if (!ensureConnectedLocked()) return@withLock false
         // Mode controls never wait behind speculative battery probes.
         if (_pending.value == null) conn.send(SonyProtocol.NC_GET)
+        infoJob?.cancel()
+        infoJob=scope.launch {
+            delay(450)
+            for(q in SonyProtocol.BATTERY_GETS) {
+                if(holders==0 || _pending.value!=null) break
+                lock.withLock {if(conn.connected && _pending.value==null) conn.send(q)}
+                yield()
+            }
+        }
         true
     }
 
@@ -136,7 +150,7 @@ object Headphones {
             // ACK acknowledges delivery; a read-back provides actual device state.
             _fresh.value = false
             conn.send(SonyProtocol.NC_GET)
-        } else _error.value = "Режим не застосовано. Спробуй ще раз."
+        } else _error.value = "The earbuds did not confirm the command. Try again."
         ok
     }
 
@@ -152,12 +166,35 @@ object Headphones {
             if (!conn.send(q)) break
         }
     }
+    suspend fun readEqualizer(): EqualizerProtocol.State? = lock.withLock {
+        if(!ensureConnectedLocked()) return@withLock null
+        val reply=CompletableDeferred<EqualizerProtocol.State>()
+        eqReply=reply
+        try {
+            if(!conn.send(EqualizerProtocol.get)) return@withLock null
+            withTimeoutOrNull(1400){reply.await()}
+        } finally {if(eqReply===reply) eqReply=null}
+    }
+    suspend fun writeEqualizer(preset:Int?=null,bands:List<Int>?=null):Boolean = lock.withLock {
+        if(!ensureConnectedLocked() || _equalizer.value==null) return@withLock false
+        val payload=if(bands!=null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
+        if(!conn.send(payload)) return@withLock false
+        val reply=CompletableDeferred<EqualizerProtocol.State>()
+        eqReply=reply
+        try {
+            if(!conn.send(EqualizerProtocol.get)) return@withLock false
+            val actual=withTimeoutOrNull(1400){reply.await()} ?: return@withLock false
+            if(bands!=null) actual.preset==0xA0 && actual.bands==bands else actual.preset==preset
+        } finally {if(eqReply===reply) eqReply=null}
+    }
+
     private fun setNc(state: SonyProtocol.NcState) {
         _nc.value = state
         Prefs.saveNc(app, state)
         ModeWidget.refreshAll(app)
     }
     private fun onPayload(p: ByteArray) {
+        EqualizerProtocol.parse(p)?.let { _equalizer.value=it;eqReply?.complete(it);return }
         SonyProtocol.parseNc(p)?.let { setNc(it); _fresh.value = true; return }
         SonyProtocol.parseBattery(p, _battery.value ?: SonyProtocol.Battery())?.let { _battery.value = it }
     }

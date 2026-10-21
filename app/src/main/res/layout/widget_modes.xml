@@ -7,6 +7,12 @@
     android:background="@drawable/w_bg"
     android:padding="14dp">
 
+    <ImageView
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_hush_mark"
+        android:tint="@color/w_title"
+        android:contentDescription="Hush" />
     <TextView
         android:id="@+id/w_title"
         android:layout_width="match_parent"
@@ -49,7 +55,7 @@
             android:textColor="@color/w_off_text"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:text="Прозорість" />
+            android:text="Ambient" />
 
         <TextView
             android:id="@+id/w_off"
@@ -62,7 +68,7 @@
             android:textColor="@color/w_off_text"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:text="Вимк" />
+            android:text="Off" />
     </LinearLayout>
 </LinearLayout>
 

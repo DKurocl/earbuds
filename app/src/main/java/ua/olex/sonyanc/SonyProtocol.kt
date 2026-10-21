@@ -77,9 +77,9 @@ object SonyProtocol {
     // set:    68 17 …   (same layout)
 
     enum class Mode(val label: String, val short: String) {
-        ANC("Шумозаглушення", "ANC"),
-        AMBIENT("Прозорість", "Прозор."),
-        OFF("Вимкнено", "Вимк"),
+        ANC("Noise cancelling", "ANC"),
+        AMBIENT("Ambient sound", "Ambient"),
+        OFF("Noise control off", "Off"),
     }
 
     data class NcState(val mode: Mode, val voice: Boolean = false, val level: Int = 20)
@@ -107,34 +107,20 @@ object SonyProtocol {
         return NcState(mode, p[5].toInt() == 1, u(p[6]).coerceIn(0, 20))
     }
 
-    // ---- Battery ---------------------------------------------------------------------
-    // Requests for both protocol generations; whatever the earbuds answer gets parsed.
-    // V2: 22 <type> -> 23 <type> …   V1: 10 <type> -> 11 <type> …
-    // type: 00/08 single, 01/09 left+right, 02/0A case.
-
+    // V2 dual earbuds / case. Unknown and unavailable values remain unknown.
     data class Battery(val left: Int? = null, val right: Int? = null, val case: Int? = null,
                        val leftCharging: Boolean = false, val rightCharging: Boolean = false,
                        val caseCharging: Boolean = false)
-
-    val BATTERY_GETS = listOf(
-        byteArrayOf(0x22, 0x09), byteArrayOf(0x22, 0x0A),
-        byteArrayOf(0x22, 0x01), byteArrayOf(0x22, 0x02),
-    )
-
-    private fun pct(b: Byte): Int? = u(b).takeIf { it in 0..100 }
-
-    /** Merges a battery reply into [old]; returns null if [p] is not a battery reply. */
+    val BATTERY_GETS = listOf(byteArrayOf(0x22, 0x09), byteArrayOf(0x22, 0x0A))
+    private fun pct(b: Byte): Int? = u(b).takeIf { it in 1..100 }
     fun parseBattery(p: ByteArray, old: Battery): Battery? {
-        if (p.size < 3) return null
-        val head = u(p[0])
-        if (head != 0x23 && head != 0x11 && head != 0x25 && head != 0x13) return null
+        if (p.size < 4 || u(p[0]) !in listOf(0x23, 0x25)) return null
         return when (u(p[1])) {
-            0x01, 0x09 -> if (p.size >= 6)
-                old.copy(left = pct(p[2]) ?: old.left, leftCharging = p[3].toInt() == 1,
-                         right = pct(p[4]) ?: old.right, rightCharging = p[5].toInt() == 1)
-                else null
-            0x02, 0x0A -> old.copy(case = pct(p[2]) ?: old.case, caseCharging = p.size > 3 && p[3].toInt() == 1)
-            0x00, 0x08 -> old.copy(left = pct(p[2]) ?: old.left, leftCharging = p.size > 3 && p[3].toInt() == 1)
+            0x01, 0x09 -> if (p.size == 6 && u(p[3]) in 0..1 && u(p[5]) in 0..1)
+                old.copy(left = pct(p[2]), leftCharging = p[3].toInt() == 1,
+                    right = pct(p[4]), rightCharging = p[5].toInt() == 1) else null
+            0x0A -> if (p.size == 4 && u(p[3]) in 0..1)
+                old.copy(case = pct(p[2]), caseCharging = p[3].toInt() == 1) else null
             else -> null
         }
     }

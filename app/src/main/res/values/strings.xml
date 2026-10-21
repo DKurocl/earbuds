@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Hush</string>
-    <string name="widget_desc">Три режими WF-1000XM5 одним дотиком: ANC, прозорість і вимкнення</string>
+    <string name="widget_desc">WF-1000XM5 noise control: ANC, Ambient and Off</string>
 </resources>

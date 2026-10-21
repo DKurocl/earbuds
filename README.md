@@ -1,117 +1,98 @@
-# Hush
+# Hush 0.3.0
 
-A small, personal controller for **Sony WF-1000XM5**. Ukrainian UI, Material 3,
-expressive shape/color transitions, wallpaper colors, haptic mode selection and
-an entirely native shaded earbud illustration. No account, network permission,
-analytics, ads, foreground service, 3D runtime or permanent notification.
+A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 
-## Everyday controls
+## Interface
 
-- ANC / ambient / off, always one tap away. You can choose while connecting.
-- Ambient level 0–20 and focus on voice; Street (12) and Conversation (20 + voice) presets.
-- Home-screen widget; add it from the app's settings sheet.
-- Automatically select a paired WF-1000XM5 if there is exactly one; remember the address.
-- Reconnect on foreground; keep an existing socket for 12 seconds after leaving the app.
-- Separate diagnostics sheet with bounded log, copy action and opt-in experimental battery query.
+Material 3 Expressive theme and motion scheme, native morphing toggle buttons,
+expressive loading indicator, official rounded Material icons, wallpaper colors,
+optional haptics and a new rosette/H adaptive and themed app icon. A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
+identifies the device; no decorative hero, slogans or idle animation. The primary screen is noise control.
+The expressive dependency is deliberately pinned to `material3:1.4.0-alpha18`,
+which exposes the public expressive APIs, rather than the stable 1.4.0 that removed them.
 
-The title and main mode controls render immediately from last known state. Pending
-choices are distinguished from device read-back. Failed commands show an actionable
-error and do not persist a fake successful selection. The widget explicitly labels its
-highlight as the **last known mode**, since there is no background connection.
+## Daily controls
 
-Only WF-1000XM5 devices appear in the picker. Pair them in Android settings first.
-Close/force-stop Sony Sound Connect if it occupies the same RFCOMM service.
+- ANC / Ambient / Off; choices queue while connecting and rapid taps are conflated.
+- Ambient level 0–20, Low/Medium/High shortcuts and voice focus.
+- Battery L/R/case, read after the primary NC sync without speculative protocol families.
+  Unknown/unavailable levels remain `—`; zero or invalid device values are not invented percentages.
+- On-demand equalizer: read-back gate, known Sony presets, Clear Bass + five bands.
+  Writes use the V2 custom layout and are verified by reading actual state.
+- Device selection, reconnect and home-screen widget.
+- Wallpaper colors and haptics switches; copyable bounded diagnostics.
 
-## Reliability and startup
+## Running without Sony Sound Connect
 
-`Headphones` owns a single shared transport. All commands are serialized. Rapid UI
-choices use a conflated queue: a command already in progress finishes, then the newest
-queued choice wins. A mode command is followed by a state read-back. Speculative battery
-requests never run during normal startup or mode switching.
+Hush connects directly to the paired WF-1000XM5 over RFCOMM V2. It does not call,
+query, launch or depend on the Sony app, its accounts, telemetry or online services.
+Pairing remains Android's responsibility. Hush remembers the device address in its
+own preferences. On each connection it reads current settings rather than resetting
+the earbuds or overwriting an existing EQ on launch.
 
-`SonyConnection` tries the verified secure V2 UUID first, then insecure V2 only. Each
-blocking socket connect has a close watchdog (2.4 s per attempt) and cancellation closes
-the candidate. ACK waits are bounded to 1.2 s. A missing ACK closes the session, so its late
-reply cannot accidentally acknowledge a later command. Command and reader ACK writes
-share an output lock. Bad checksums, invalid sequence numbers, malformed escape sequences,
-overflowing lengths and oversized frames are rejected.
+**Firmware updates are not implemented.** Sony's supported update procedure uses
+Sound Connect. Removing it also removes its phone-side integrations such as location
+based adaptive routines and Sony account features; Hush intentionally does not clone
+those. Bluetooth audio, calls and Android codec/device settings are handled by Android.
 
-There is no claim that Hush can shorten Bluetooth's physical reconnect time. A warm
-connection avoids that work; a cold start immediately renders the controls and queues
-your choice. No invented millisecond benchmark is used.
+Do not confuse protocol support with a hardware test: NC switching was previously
+verified by the owner. The revised UI, battery and EQ implementation need an owner
+check on the actual WF-1000XM5, especially all six EQ bands and voice focus.
 
-## Verified vs. still needing the owner's device
+## Transport
 
-| Feature | Evidence |
-|---|---|
-| Secure V2 RFCOMM, ANC / ambient / off payloads | Previously verified on the owner's WF-1000XM5 |
-| New UI, resources and build variants | Checked by CI; see latest Build APK run |
-| Ambient level / voice focus | Implemented using existing V2 layout; hardware check still needed |
-| Mode notifications and read-back | Implemented; confirm real behavior after updating |
-| New queue, reconnect, widget taps | Software checked; phone + earbuds validation still required |
-| Battery L/R/case | Existing speculative parser retained, diagnostics-only query; no fabricated percentages |
+One serialized on-demand RFCOMM connection, secure V2 first, bounded blocking connects
+with a socket-closing watchdog, bounded ACK waits, checksum/length/escape validation,
+and a read-back after NC writes. The link remains available 12 s after leaving the app,
+then closes. There is no foreground service, background notification or Internet permission.
+Optional battery reads yield between requests and stop if a mode request is pending.
+The widget labels its highlight as last known state because it has no persistent connection.
 
-EQ, codec changes, multipoint, Speak-to-Chat, adaptive location modes and firmware updates
-are deliberately absent. They need verified protocol support and are outside this lean
-instant-control scope.
+## Protocol evidence
 
-## Structure
+Framing, ANC, battery and EQ facts were cross-checked against:
 
-```
-app/src/main/java/ua/olex/sonyanc/
-  MainActivity.kt    lifecycle, real state, home screen, ambient controls, sheets
-  Artwork.kt        small Canvas icons, Hush mark, shaded earbud illustration
-  Headphones.kt     link ownership, serialized commands, conflated UI requests
-  SonyConnection.kt bounded WF-XM5 RFCOMM transport + ACK reader
-  SonyProtocol.kt   framing and V2 payload parsing
-  Prefs.kt          selected device + acknowledged last known mode
-  ModeWidget.kt     on-demand widget actions via goAsync (8.5 s budget)
-```
+- [Gadgetbridge SonyProtocolImplV2](https://github.com/Freeyourgadget/Gadgetbridge/blob/master/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/sony/headphones/protocol/impl/v2/SonyProtocolImplV2.java)
+- [Gadgetbridge SonyProtocolImplV1 reply layouts](https://github.com/Freeyourgadget/Gadgetbridge/blob/master/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/sony/headphones/protocol/impl/v1/SonyProtocolImplV1.java)
+- [WF-1000XM5 coordinator capabilities](https://github.com/Freeyourgadget/Gadgetbridge/blob/master/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/devices/sony/headphones/coordinators/SonyWF1000XM5Coordinator.java)
+- The owner's earlier device-confirmed NC type `17`, which takes precedence over generic model assumptions.
 
-The package/application ID remains `ua.olex.sonyanc` to preserve app identity. Brand is
-**Hush**, version **0.2.0**. Adaptive icon includes Android themed-icon monochrome art.
-The illustration is native shaded vector artwork, **not a rotatable 3D model**. It avoids
-model parsing, textures, a graphics engine and continuous idle animation on the critical path.
-Animation is limited to state changes and respects Android/Compose animation scaling.
+The Kotlin implementation is written for this app; protocol byte values and layouts
+are interoperability facts. Battery: `22 09` / `22 0A`, replies `23` / notifications `25`.
+EQ read `56 00`; reply `57` / notification `59` with preset, count and six values offset by 10.
+EQ preset set `58 00 <preset> 00`; custom set `58 00 A0 06 <six offset values>`.
 
-## Build and checks
+## Build
 
-GitHub Actions → **Build APK**:
+GitHub Actions → **Build APK**. Artifacts:
 
-1. Unit tests for recorded XM5 payloads, reserved-byte escaping, all-byte round-trips,
-   malformed input, invalid checksums and invalid setting replies.
-2. Android lint, debug APK and optimized installable personal release build (R8 + resource shrinking).
-3. API 35 emulator smoke run with actual Compose screenshots: light ANC, dark ambient,
-   larger text/error layout, then installs and opens the optimized release APK. A debug-only, read-only `DesignPreviewActivity` supplies
-   deterministic UI state without Bluetooth access; it is absent from release.
+- **Hush-install** — optimized installable personal APK.
+- **Hush-debug** — debug APK, including a read-only UI preview activity absent from release.
+- **Hush-checks** — unit test, lint and build reports.
+- **Hush-visual-check** — emulator screenshots (does not gate delivery of the built APK).
 
-Artifacts: **Hush-install** (optimized personal APK), **Hush-debug** (debug harness), **Hush-checks** (reports/build log),
-**Hush-visual-check** (screenshots/crash log). No local Android SDK is required for CI.
-The personal release uses Android’s standard debug signing configuration for private
-use, not store distribution. No signing key is stored in the repository or Actions
-cache. Different CI runs can have different signatures and require reinstalling the app.
+Unit tests cover recorded NC payloads, escaping, malformed frames, checksums, battery
+layout validation and EQ bounds. Both debug and optimized release are built.
+Release uses ephemeral Android debug signing for private use. No private signing key is
+stored in the repo or Actions cache; different CI builds may require reinstalling.
 
-Local build: Gradle 8.11.1, Java 17 and Android SDK 35; run
-`gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
+Locally: Java 17, Android SDK 35, Gradle 8.11.1, then
+`gradle :app:testDebugUnitTest :app:lintDebug :app:assembleRelease`.
 
-## Owner's quick hardware check
+## Owner check
 
-1. Open with WF-1000XM5 connected to the phone. Confirm auto-selection and state read-back.
-2. Tap ANC → ambient → off, including several fast taps; final choice must match the earbuds.
-3. In ambient, try 0 / 12 / 20 and voice focus. Confirm the actual audible effect.
-4. Leave and reopen inside 12 seconds, then after the grace period.
-5. Add the widget and test each button with the app closed.
-6. Turn Bluetooth off / put earbuds in the case; retry must remain responsive and show a clear error.
-7. Optionally query battery once in diagnostics and inspect actual replies before trusting the parser.
+1. Pair and connect WF-1000XM5 in Android; open Hush and allow Bluetooth.
+2. Tap ANC/Ambient/Off rapidly; final choice must match the audible mode.
+3. Verify ambient 0/12/20 and voice focus; reopen after less/more than 12 s.
+4. Check L/R/case readings; unavailable case/earbud data must remain unknown.
+5. Open EQ, select a preset, adjust each band and reopen to verify actual read-back.
+6. Add widget; test with the app closed, Bluetooth off and earbuds in the case.
+7. Confirm the same behavior with Sound Connect uninstalled.
 
-## Protocol reference (previous device session)
+## Product artwork
 
-Frame: `3E | type | seq | len(4, BE) | payload | checksum | 3C`.
-Checksum is sum(type..payload) & 0xFF. Escape `3C/3D/3E` as `3D, b & EF`.
-Command `0C`, ACK `01`; response ACK sequence `1 - incoming seq`.
-
-V2 UUID: `956C7B26-D49A-4BA8-B03F-B17D393CB6E2`. Init `00 00`.
-NC get `66 17`; replies `67 17 01 <on> <ambient> <voice> <level>` / notification `69`.
-Set `68 17 01 <on> <ambient> <voice> <level>`.
-ANC: `68 17 01 01 00 00 14`; ambient: `68 17 01 01 01 00 14`;
-off: `68 17 01 00 00 00 14`.
+`wf1000xm5_silver.webp` is an imagegen-assisted product cutout based on the owner’s
+white/silver WF-1000XM5 reference, with transparency and gold microphone detail.
+The prompt asks for faithful proportions, grey foam tips, no case/background/rings
+and a compact side-by-side product composition. It is a static identification image,
+not a 3D model. It is sized at 400×220 or smaller to keep decode and APK costs low.

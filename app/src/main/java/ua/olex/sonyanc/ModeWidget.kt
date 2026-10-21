@@ -32,14 +32,14 @@ class ModeWidget : AppWidgetProvider() {
         CoroutineScope(Dispatchers.IO).launch {
             Headphones.hold()
             try {
-                note = "Підключаю…"
+                note = "Connecting…"
                 refreshAll(ctx)
                 val base = Headphones.nc.value ?: SonyProtocol.NcState(mode)
                 val ok = withTimeoutOrNull(8_500) { Headphones.apply(base.copy(mode = mode)) } ?: false
-                note = if (ok) null else "Немає зʼєднання"
+                note = if (ok) null else "Not connected"
                 refreshAll(ctx)
             } catch (e: Exception) {
-                note = "Не вдалося · відкрий Hush"
+                note = "Open Hush to reconnect"
                 refreshAll(ctx)
             } finally {
                 Headphones.release(graceMs = 1_500)
@@ -69,7 +69,7 @@ class ModeWidget : AppWidgetProvider() {
         private fun render(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_modes)
             val current = Prefs.lastNc(ctx)?.mode
-            v.setTextViewText(R.id.w_title, note ?: if (Prefs.deviceAddress(ctx) == null) "Hush · відкрий для налаштування" else "Hush · WF-1000XM5 · останній режим")
+            v.setTextViewText(R.id.w_title, note ?: if (Prefs.deviceAddress(ctx) == null) "Hush · tap to set up" else "Hush · WF-1000XM5 · last known mode")
 
             for ((mode, id) in tiles) {
                 val on = mode == current

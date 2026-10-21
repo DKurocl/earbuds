@@ -12,8 +12,8 @@ android {
         applicationId = "ua.olex.sonyanc"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -25,8 +25,9 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
-    implementation(platform("androidx.compose:compose-bom:2025.01.00"))
-    implementation("androidx.compose.material3:material3")
+    implementation(platform("androidx.compose:compose-bom:2025.06.01"))
+    implementation("androidx.compose.material3:material3:1.4.0-alpha18")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }

@@ -17,7 +17,7 @@ class DesignPreviewActivity : ComponentActivity() {
             HushScreen(
                 status=if(scene=="error") Headphones.Status.FAILED else Headphones.Status.CONNECTED,
                 nc=state,pending=null,fresh=true,
-                error=if(scene=="error") "Не вдалося підключитися. Перевір навушники та закрий Sony Sound Connect." else null,
+                error=if(scene=="error") "Could not connect. Check that your earbuds are connected to this phone." else null,
                 battery=null,granted=scene!="permission",hasDevice=true,
                 onMode={state=it},onSettings={},onConnect={},onPermission={},onBluetooth={},onPick={})
         } }
