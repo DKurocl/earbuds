@@ -3,20 +3,29 @@ package ua.olex.sonyanc
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 
-/** One RFCOMM socket + a reader loop. All callbacks arrive on the reader thread. */
+/**
+ * One RFCOMM socket + a reader loop. Not thread-safe for concurrent sends:
+ * callers serialize (see [Headphones]). The protocol is stop-and-wait —
+ * each command must be ACKed before the next one, so [send] waits for it.
+ */
 @SuppressLint("MissingPermission")
 class SonyConnection(
     private val scope: CoroutineScope,
     private val log: (String) -> Unit,
+    private val onPayload: (ByteArray) -> Unit,
+    private val onClosed: () -> Unit,
 ) {
     companion object {
         /** Newer Sony devices (XM5 generation, LinkBuds…) — protocol V2. */
@@ -29,22 +38,13 @@ class SonyConnection(
     private var socket: BluetoothSocket? = null
     private var reader: Job? = null
     private var seq = 0
-
-    /** Called for every incoming command payload (not ACKs). */
-    var onPayload: ((ByteArray) -> Unit)? = null
+    @Volatile private var pendingAck: CompletableDeferred<Unit>? = null
 
     val connected get() = socket?.isConnected == true
 
     suspend fun connect(device: BluetoothDevice): Boolean = withContext(Dispatchers.IO) {
-        close()
-
-        // UUIDs the headphones advertise via SDP, Sony ones first.
-        val advertised = device.uuids?.map { it.uuid }.orEmpty()
-        log("SDP: " + (if (advertised.isEmpty()) "(порожньо)" else advertised.joinToString { it.toString().take(8) }))
-        val candidates = (listOf(SONY_V2_UUID, SONY_V1_UUID) + advertised.filter {
-            it.toString().startsWith("956c7b26") || it.toString().startsWith("96cc203e")
-        } + SPP_UUID).distinct()
-
+        close(notify = false)
+        val candidates = listOf(SONY_V2_UUID, SONY_V1_UUID, SPP_UUID)
         val attempts = buildList<Pair<String, () -> BluetoothSocket>> {
             for (u in candidates) {
                 add("secure ${u.toString().take(8)}" to { device.createRfcommSocketToServiceRecord(u) })
@@ -53,7 +53,6 @@ class SonyConnection(
         }
         for ((name, make) in attempts) {
             try {
-                log("→ $name")
                 val s = make()
                 s.connect()
                 socket = s
@@ -62,28 +61,35 @@ class SonyConnection(
                 log("✓ connected ($name)")
                 return@withContext true
             } catch (e: Exception) {
-                log("✗ ${e.message?.take(60)}")
-                Thread.sleep(300)
+                log("✗ $name: ${e.message?.take(50)}")
+                delay(200)
             }
         }
-        log("Не вдалось. Закрий Sound Connect (примусово зупини) і спробуй ще.")
         false
     }
 
-    suspend fun sendCommand(payload: ByteArray) = withContext(Dispatchers.IO) {
-        val s = socket ?: run { log("✗ not connected"); return@withContext }
-        val frame = SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, seq, payload)
+    /** Sends one command and waits (up to 1.5 s) for the ACK. Returns true if ACKed. */
+    suspend fun send(payload: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        val s = socket ?: return@withContext false
+        val ack = CompletableDeferred<Unit>()
+        pendingAck = ack
         try {
-            s.outputStream.write(frame); s.outputStream.flush()
+            s.outputStream.write(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, seq, payload))
+            s.outputStream.flush()
             log("→ [seq $seq] ${SonyProtocol.hex(payload)}")
         } catch (e: Exception) {
             log("✗ write: ${e.message}")
+            close()
+            return@withContext false
         }
+        val ok = withTimeoutOrNull(1500) { ack.await() } != null
+        if (!ok) log("… no ACK")
+        ok
     }
 
     private fun sendAck(incomingSeq: Int) {
-        val ack = SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - incomingSeq, ByteArray(0))
-        runCatching { socket?.outputStream?.write(ack) }
+        val frame = SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - incomingSeq, ByteArray(0))
+        runCatching { socket?.outputStream?.write(frame) }
     }
 
     private fun startReader(s: BluetoothSocket) {
@@ -108,30 +114,29 @@ class SonyConnection(
                         }
                     }
                 }
-            } catch (e: Exception) {
-                log("✗ read: ${e.message}")
-            }
-            log("— disconnected")
+            } catch (e: Exception) { }
+            if (socket === s) close()
         }
     }
 
     private fun handle(f: SonyProtocol.Frame?) {
         if (f == null) { log("← (broken frame)"); return }
         if (f.type == SonyProtocol.TYPE_ACK.toInt()) {
-            // Headphones accepted our message: next one uses the seq they acked with.
-            seq = f.seq
-            log("← ACK (next seq $seq)")
+            seq = f.seq            // next message uses the seq the device acked with
+            pendingAck?.complete(Unit)
             return
         }
-        log("← type %02X [seq ${f.seq}]%s %s".format(
-            f.type, if (f.checksumOk) "" else " BAD-CRC", SonyProtocol.hex(f.payload)))
+        log("← %02X [seq ${f.seq}] %s".format(f.type, SonyProtocol.hex(f.payload)))
         sendAck(f.seq)
-        onPayload?.invoke(f.payload)
+        onPayload(f.payload)
     }
 
-    fun close() {
+    fun close(notify: Boolean = true) {
+        val had = socket != null
         reader?.cancel(); reader = null
         runCatching { socket?.close() }
         socket = null
+        pendingAck?.cancel(); pendingAck = null
+        if (had && notify) { log("— disconnected"); onClosed() }
     }
 }
