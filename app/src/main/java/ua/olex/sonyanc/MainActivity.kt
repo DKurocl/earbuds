@@ -199,11 +199,12 @@ fun HushScreen(
             } else if(!hasDevice) {
                 SetupCard("Connect your earbuds","Pair WF-1000XM5 in Android Bluetooth settings.","Select device",Glyph.EARBUDS,onPick)
             } else {
-                Column(verticalArrangement=Arrangement.spacedBy(18.dp)) {
+                Column {
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                         Text("Noise control",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.SemiBold,letterSpacing=(-1.1).sp,modifier=Modifier.weight(1f))
                         if(pending!=null) LoadingIndicator(Modifier.size(32.dp))
                     }
+                    Spacer(Modifier.height(18.dp))
                     Row(Modifier.fillMaxWidth().selectableGroup(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                         Mode.entries.forEach {mode ->
                             val weight by animateFloatAsState(if(state?.mode==mode) 1.16f else 1f,MaterialTheme.motionScheme.fastSpatialSpec(),label="mode width")
@@ -211,9 +212,12 @@ fun HushScreen(
                         }
                     }
 
-                }
                 AnimatedVisibility(state?.mode==Mode.AMBIENT,enter=expandVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),expandFrom=Alignment.Top)+fadeIn(),exit=shrinkVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),shrinkTowards=Alignment.Top)+fadeOut()) {
-                    AmbientPanel((state ?: NcState(Mode.AMBIENT)).copy(mode=Mode.AMBIENT),::choose)
+                    Column {
+                        Spacer(Modifier.height(24.dp))
+                        AmbientPanel((state ?: NcState(Mode.AMBIENT)).copy(mode=Mode.AMBIENT),::choose)
+                    }
+                }
                 }
                 SettingsRow(Glyph.EQ,"Equalizer",onClick=onEqualizer)
             }
@@ -364,7 +368,9 @@ private fun BatterySection(b:SonyProtocol.Battery,fresh:Boolean,busy:Boolean,not
                 }
             }
         }
-        if(!fresh && !busy) Text(note,style=MaterialTheme.typography.labelSmall,color=cs.onSurfaceVariant,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
+        Box(Modifier.heightIn(min=16.dp)) {
+            if(!fresh && !busy) Text(note,style=MaterialTheme.typography.labelSmall,color=cs.onSurfaceVariant,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
+        }
     }
 }
 
