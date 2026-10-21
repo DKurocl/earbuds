@@ -2,9 +2,6 @@ package ua.olex.sonyanc
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,20 +9,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,16 +33,35 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ua.olex.sonyanc.SonyProtocol.Mode
+import ua.olex.sonyanc.SonyProtocol.NcState
 
 class MainActivity : ComponentActivity() {
+    /** Bumped on every onStart so the UI re-syncs when you come back to the app. */
+    private val startTick = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Headphones.init(this)
         enableEdgeToEdge()
-        setContent { AppTheme { App() } }
+        setContent { AppTheme { App(startTick.intValue) } }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Headphones.hold()
+        startTick.intValue++
+    }
+
+    override fun onStop() {
+        // Socket closes a few seconds after the app leaves the screen.
+        Headphones.release()
+        super.onStop()
     }
 }
 
@@ -62,86 +80,41 @@ fun AppTheme(content: @Composable () -> Unit) {
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App() {
+fun App(startTick: Int) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val logLines = remember { mutableStateListOf<String>() }
-    val conn = remember {
-        SonyConnection(scope) { line -> scope.launch { logLines += line } }
-    }
-    DisposableEffect(Unit) { onDispose { conn.close() } }
+
+    val status by Headphones.status.collectAsState()
+    val nc by Headphones.nc.collectAsState()
+    val battery by Headphones.battery.collectAsState()
+    val connected = status == Headphones.Status.CONNECTED
 
     val permission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_CONNECT
                      else Manifest.permission.BLUETOOTH
-    var granted by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED)
-    }
+    var granted by remember { mutableStateOf(Headphones.hasPermission(ctx)) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
 
-    val adapter = remember { ctx.getSystemService(BluetoothManager::class.java)?.adapter }
-    var devices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
-    var selected by remember { mutableStateOf<BluetoothDevice?>(null) }
-    var isConnected by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var mode by remember { mutableStateOf<SonyProtocol.Mode?>(null) }
-    var rawHex by remember { mutableStateOf(SonyProtocol.INIT_HEX) }
+    var deviceName by remember { mutableStateOf(Prefs.deviceName(ctx)) }
+    var picking by remember { mutableStateOf(Prefs.deviceAddress(ctx) == null) }
 
-    // Per-mode payloads: learned ones (saved) override the built-in V1 defaults.
-    val prefs = remember { ctx.getSharedPreferences("payloads", 0) }
-    val payloads = remember {
-        mutableStateMapOf<SonyProtocol.Mode, String>().apply {
-            SonyProtocol.Mode.entries.forEach { m -> put(m, prefs.getString(m.name, null) ?: m.payloadHex) }
-        }
-    }
-    val learned = remember {
-        mutableStateMapOf<SonyProtocol.Mode, Boolean>().apply {
-            SonyProtocol.Mode.entries.forEach { m -> put(m, prefs.contains(m.name)) }
-        }
-    }
-    var learning by remember { mutableStateOf<SonyProtocol.Mode?>(null) }
-
-    LaunchedEffect(Unit) {
-        conn.onPayload = { p ->
-            scope.launch {
-                // 0x69 = headphones reporting the ambient-sound/ANC state; the "set"
-                // command is the same layout with 0x68 in front.
-                if (p.isNotEmpty() && p[0] == 0x69.toByte()) {
-                    val target = learning
-                    if (target != null) {
-                        val set = p.copyOf().also { it[0] = 0x68 }
-                        val hex = SonyProtocol.hex(set)
-                        payloads[target] = hex; learned[target] = true
-                        prefs.edit().putString(target.name, hex).apply()
-                        logLines += "★ «${target.label}» = $hex"
-                        mode = target; learning = null
-                    } else {
-                        logLines += "★ стан ANC: ${SonyProtocol.hex(p)}"
-                    }
-                }
-                // 0x67 = reply to a "get" (0x66 XX) probe
-                if (p.isNotEmpty() && p[0] == 0x67.toByte()) {
-                    logLines += "◆ GET ${SonyProtocol.hex(p)}"
-                }
-            }
-        }
+    // Connect + read current state whenever the app comes to the foreground.
+    LaunchedEffect(startTick, granted, deviceName) {
+        if (granted && deviceName != null && !picking) Headphones.connectAndSync()
     }
 
-    LaunchedEffect(granted) {
-        if (granted) {
-            devices = adapter?.bondedDevices?.sortedByDescending {
-                (it.name ?: "").contains(Regex("WH-|WF-|Sony|LinkBuds|ULT", RegexOption.IGNORE_CASE))
-            }.orEmpty()
-            if (selected == null) selected = devices.firstOrNull()
-        }
-    }
+    fun setNc(s: NcState) { scope.launch { Headphones.apply(s) } }
 
     Scaffold(
         topBar = {
-            LargeTopAppBar(title = { Text("Sony ANC", fontWeight = FontWeight.Black) })
+            LargeTopAppBar(title = {
+                Column {
+                    Text(deviceName ?: "Sony ANC", fontWeight = FontWeight.Black)
+                }
+            })
         }
     ) { pad ->
         Column(
-            Modifier.padding(pad).padding(horizontal = 16.dp).fillMaxSize(),
+            Modifier.padding(pad).padding(horizontal = 16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (!granted) {
@@ -151,144 +124,195 @@ fun App() {
                 return@Column
             }
 
-            // Device picker + connect
-            var expanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                OutlinedTextField(
-                    value = selected?.name ?: "Немає спарених пристроїв",
-                    onValueChange = {}, readOnly = true, label = { Text("Навушники") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    devices.forEach { d ->
-                        DropdownMenuItem(text = { Text(d.name ?: d.address) }, onClick = {
-                            selected = d; expanded = false
-                        })
-                    }
+            // ---- device picker ----
+            AnimatedVisibility(picking, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                DevicePicker { dev ->
+                    Prefs.saveDevice(ctx, dev.address, dev.name)
+                    Headphones.disconnect()
+                    deviceName = dev.name
+                    picking = false
+                    ModeWidget.refreshAll(ctx)
+                }
+            }
+            if (picking) return@Column
+
+            // ---- status + battery ----
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val (label, retry) = when (status) {
+                    Headphones.Status.CONNECTED -> "● Підключено" to false
+                    Headphones.Status.CONNECTING -> "Підключаю…" to false
+                    Headphones.Status.FAILED -> "Не вдалось · повторити" to true
+                    Headphones.Status.DISCONNECTED -> "Не підключено · підключити" to true
+                }
+                Pill(label, highlight = connected,
+                    onClick = if (retry) ({ scope.launch { Headphones.connectAndSync() }; Unit }) else null)
+                Spacer(Modifier.weight(1f))
+                battery?.let { b ->
+                    b.left?.let { Pill("L $it%" + if (b.leftCharging) "⚡" else "") }
+                    b.right?.let { Pill("R $it%" + if (b.rightCharging) "⚡" else "") }
+                    b.case?.let { Pill("Кейс $it%" + if (b.caseCharging) "⚡" else "") }
                 }
             }
 
-            Button(
-                enabled = selected != null && !busy,
-                onClick = {
-                    scope.launch {
-                        busy = true
-                        if (isConnected) { conn.close(); isConnected = false }
-                        else {
-                            isConnected = conn.connect(selected!!)
-                            if (isConnected) conn.sendCommand(SonyProtocol.parseHex(SonyProtocol.INIT_HEX))
-                        }
-                        busy = false
-                    }
-                },
-                shape = RoundedCornerShape(if (isConnected) 16.dp else 28.dp),
-                colors = if (isConnected) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.buttonColors(),
-                modifier = Modifier.fillMaxWidth().height(56.dp)
-            ) {
-                Text(when { busy -> "Підключаю…"; isConnected -> "Відключити"; else -> "Підключити" }, fontSize = 16.sp)
-            }
-
-            // The three big mode tiles
+            // ---- the three modes ----
             Row(Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SonyProtocol.Mode.entries.forEach { m ->
+                Mode.entries.forEach { m ->
                     ModeTile(
                         label = m.label,
-                        sub = when { learning == m -> "тапни навушник…"; learned[m] == true -> "навчено"; else -> null },
-                        selected = mode == m || learning == m,
-                        enabled = isConnected,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        onLongClick = {
-                            learning = if (learning == m) null else m
-                            if (learning == m) logLines += "Навчання «${m.label}»: перемкни цей режим дотиком на навушнику"
+                        selected = nc?.mode == m,
+                        enabled = status != Headphones.Status.CONNECTING,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    ) { setNc((nc ?: NcState(m)).copy(mode = m)) }
+                }
+            }
+
+            // ---- ambient settings (only in transparency mode) ----
+            AnimatedVisibility(nc?.mode == Mode.AMBIENT,
+                enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                val cur = nc ?: NcState(Mode.AMBIENT)
+                var level by remember(cur.level) { mutableFloatStateOf(cur.level.toFloat()) }
+                Surface(shape = RoundedCornerShape(28.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Рівень прозорості", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Text("${level.toInt()}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
-                    ) {
-                        mode = m
-                        scope.launch { conn.sendCommand(SonyProtocol.parseHex(payloads[m] ?: m.payloadHex)) }
+                        Slider(
+                            value = level, onValueChange = { level = it },
+                            valueRange = 0f..20f, steps = 19,
+                            onValueChangeFinished = { setNc(cur.copy(level = level.toInt())) }
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Фокус на голосі", style = MaterialTheme.typography.titleMedium)
+                                Text("Глушить фон, пропускає мову", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = cur.voice, onCheckedChange = { setNc(cur.copy(voice = it)) })
+                        }
                     }
                 }
             }
 
-            // Raw command field for experimenting with other models
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = rawHex, onValueChange = { rawHex = it },
-                    label = { Text("Сирий payload (hex)") }, singleLine = true,
-                    textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-                    shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f)
+            // ---- footer ----
+            var diag by remember { mutableStateOf(false) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { picking = true }) { Text("Змінити пристрій") }
+                TextButton(onClick = { diag = !diag }) { Text(if (diag) "Сховати діагностику" else "Діагностика") }
+            }
+            if (diag) Diagnostics(connected)
+
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@SuppressLint("MissingPermission")
+@Composable
+private fun DevicePicker(onPick: (android.bluetooth.BluetoothDevice) -> Unit) {
+    val ctx = LocalContext.current
+    val devices = remember { Headphones.bondedDevices(ctx) }
+    Surface(shape = RoundedCornerShape(28.dp), tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            Text("Вибери навушники", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+            if (devices.isEmpty()) {
+                Text("Немає спарених пристроїв. Спочатку спар навушники в налаштуваннях Bluetooth.",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            }
+            devices.forEach { d ->
+                ListItem(
+                    headlineContent = { Text(d.name ?: d.address) },
+                    supportingContent = { Text(d.address, fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                    colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                    modifier = Modifier.clickable { onPick(d) }
                 )
-                FilledTonalButton(
-                    enabled = isConnected,
-                    onClick = { scope.launch { conn.sendCommand(SonyProtocol.parseHex(rawHex)) } },
-                    modifier = Modifier.height(56.dp)
-                ) { Text("Send") }
-            }
-
-            // Ask the headphones for every ambient-sound/ANC setting type: 66 00 … 66 2F
-            var probing by remember { mutableStateOf(false) }
-            OutlinedButton(
-                enabled = isConnected && !probing,
-                onClick = {
-                    scope.launch {
-                        probing = true
-                        logLines.clear()
-                        logLines += "Зондую 66 00…66 2F (≈20 с)"
-                        for (t in 0x00..0x2F) {
-                            conn.sendCommand(byteArrayOf(0x66, t.toByte()))
-                            kotlinx.coroutines.delay(400)
-                        }
-                        val gets = logLines.filter { it.startsWith("◆") || it.startsWith("★") }
-                        logLines.clear()
-                        logLines += "Готово. Відповіді (${gets.size}):"
-                        logLines += gets
-                        probing = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(48.dp)
-            ) { Text(if (probing) "Зондую…" else "Зондувати") }
-
-            // Log
-            val listState = rememberLazyListState()
-            LaunchedEffect(logLines.size) { if (logLines.isNotEmpty()) listState.animateScrollToItem(logLines.lastIndex) }
-            Surface(
-                tonalElevation = 2.dp, shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp)
-            ) {
-                LazyColumn(state = listState, contentPadding = PaddingValues(12.dp)) {
-                    items(logLines) { Text(it, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp) }
-                }
             }
         }
     }
 }
 
-/** Expressive-style tile: shape and colour spring-morph when selected. Long-press = learn. */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ModeTile(
-    label: String, sub: String?, selected: Boolean, enabled: Boolean, modifier: Modifier,
-    onLongClick: () -> Unit, onClick: () -> Unit,
-) {
+private fun Diagnostics(connected: Boolean) {
+    val scope = rememberCoroutineScope()
+    val log by Headphones.log.collectAsState()
+    var rawHex by remember { mutableStateOf(SonyProtocol.INIT_HEX) }
+    var probing by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = rawHex, onValueChange = { rawHex = it },
+                label = { Text("Payload (hex)") }, singleLine = true,
+                textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
+                shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f)
+            )
+            FilledTonalButton(
+                enabled = connected,
+                onClick = { scope.launch { Headphones.sendRaw(SonyProtocol.parseHex(rawHex)) } },
+                modifier = Modifier.height(56.dp)
+            ) { Text("Send") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                enabled = connected && !probing,
+                onClick = {
+                    scope.launch {
+                        probing = true
+                        Headphones.clearLog()
+                        for (t in 0x00..0x2F) Headphones.sendRaw(byteArrayOf(0x66, t.toByte()))
+                        val answers = Headphones.log.value.filter { it.startsWith("←") }
+                        Headphones.clearLog()
+                        Headphones.addLog("Відповіді (${answers.size}):")
+                        answers.forEach { Headphones.addLog(it) }
+                        probing = false
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text(if (probing) "Зондую…" else "Зондувати 66 xx") }
+            OutlinedButton(onClick = { Headphones.clearLog() }) { Text("Очистити") }
+        }
+        Surface(tonalElevation = 2.dp, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().height(260.dp)) {
+            val s = rememberScrollState()
+            LaunchedEffect(log.size) { delay(50); s.animateScrollTo(s.maxValue) }
+            Column(Modifier.verticalScroll(s).padding(12.dp)) {
+                log.forEach { Text(it, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Pill(text: String, highlight: Boolean = false, onClick: (() -> Unit)? = null) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (highlight) cs.primaryContainer else cs.surfaceContainerHigh,
+        contentColor = if (highlight) cs.onPrimaryContainer else cs.onSurfaceVariant,
+        modifier = if (onClick != null) Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick) else Modifier
+    ) {
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    }
+}
+
+/** Expressive-style tile: shape and colour spring-morph when selected. */
+@Composable
+fun ModeTile(label: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val corner by animateDpAsState(
         if (selected) 40.dp else 16.dp,
         spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "corner"
     )
     val cs = MaterialTheme.colorScheme
     val bg by animateColorAsState(
-        when { !enabled -> cs.surfaceVariant.copy(alpha = 0.5f); selected -> cs.primary; else -> cs.secondaryContainer },
-        label = "bg"
+        when { selected -> cs.primary; else -> cs.secondaryContainer }, label = "bg"
     )
-    val fg = when { !enabled -> cs.onSurfaceVariant.copy(alpha = 0.5f); selected -> cs.onPrimary; else -> cs.onSecondaryContainer }
+    val fg = if (selected) cs.onPrimary else cs.onSecondaryContainer
     Box(
-        modifier.clip(RoundedCornerShape(corner)).background(bg)
-            .combinedClickable(enabled = enabled, onLongClick = onLongClick, onClick = onClick),
+        modifier.clip(RoundedCornerShape(corner)).background(bg).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(6.dp)) {
-            Text(label, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                fontSize = 13.sp, maxLines = 2, textAlign = TextAlign.Center)
-            if (sub != null) Text(sub, color = fg.copy(alpha = 0.75f), fontSize = 10.sp, textAlign = TextAlign.Center)
-        }
+        Text(label, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp))
     }
 }

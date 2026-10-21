@@ -1,7 +1,7 @@
 package ua.olex.sonyanc
 
 /**
- * Sony "MDR" protocol over Bluetooth RFCOMM (reverse-engineered, see Gadgetbridge).
+ * Sony "MDR" protocol over Bluetooth RFCOMM.
  *
  * Frame on the wire:
  *   0x3E | type | seq | len(4 bytes, BE) | payload | checksum | 0x3C
@@ -37,7 +37,6 @@ object SonyProtocol {
         return out.toByteArray()
     }
 
-    /** Decoded incoming frame. */
     data class Frame(val type: Int, val seq: Int, val payload: ByteArray, val checksumOk: Boolean)
 
     /** Unescape and parse the bytes between START and END (markers excluded). */
@@ -52,7 +51,7 @@ object SonyProtocol {
         if (un.size < 7) return null
         val len = ((un[2].toInt() and 0xFF) shl 24) or ((un[3].toInt() and 0xFF) shl 16) or
                 ((un[4].toInt() and 0xFF) shl 8) or (un[5].toInt() and 0xFF)
-        if (un.size < 6 + len + 1) return null
+        if (len < 0 || un.size < 6 + len + 1) return null
         val sum = un.subList(0, 6 + len).sumOf { it.toInt() and 0xFF } and 0xFF
         return Frame(
             type = un[0].toInt() and 0xFF,
@@ -68,20 +67,75 @@ object SonyProtocol {
         s.replace(Regex("[^0-9A-Fa-f]"), "").chunked(2).filter { it.length == 2 }
             .map { it.toInt(16).toByte() }.toByteArray()
 
-    /**
-     * Payloads for the "V1" family (WH-1000XM3 / XM4, WF-1000XM3 / XM4).
-     * Layout: 68 02 <on?11:00> 02 <anc:02 / ambient:00> 01 <voice> <ambient level 0..20>
-     * XM5-generation devices use protocol V2 with different payloads — use the raw field
-     * in the app to experiment.
-     */
-    enum class Mode(val label: String, val payloadHex: String) {
-        // V2 layout (WF/WH-1000XM5), discovered via "67 17 01 01 01 00 14" probe reply:
-        // 68 17 01 <effect on> <0=NC,1=ambient> <focus voice> <ambient level>
-        ANC("Шумозаглушення", "68 17 01 01 00 00 14"),
-        AMBIENT("Прозорість", "68 17 01 01 01 00 14"),
-        OFF("Вимк", "68 17 01 00 00 00 14"),
+    private fun u(b: Byte) = b.toInt() and 0xFF
+
+    // ---- Noise cancelling / ambient sound (V2, WF/WH-1000XM5) -------------------------
+    // get:    66 17
+    // reply:  67 17 01 <effect on> <0=NC,1=ambient> <focus voice> <ambient level 0..20>
+    // notify: 69 17 …   (same layout, sent when changed on the earbuds)
+    // set:    68 17 …   (same layout)
+
+    enum class Mode(val label: String, val short: String) {
+        ANC("Шумозаглушення", "ANC"),
+        AMBIENT("Прозорість", "Прозор."),
+        OFF("Вимк", "Вимк"),
     }
 
-    /** "Get protocol info" — the headphones usually want this first. */
+    data class NcState(val mode: Mode, val voice: Boolean = false, val level: Int = 20)
+
+    const val NC_TYPE: Byte = 0x17
+    val NC_GET = byteArrayOf(0x66, NC_TYPE)
+
+    fun ncSet(s: NcState): ByteArray = byteArrayOf(
+        0x68.toByte(), NC_TYPE, 0x01.toByte(),
+        (if (s.mode == Mode.OFF) 0 else 1).toByte(),
+        (if (s.mode == Mode.AMBIENT) 1 else 0).toByte(),
+        (if (s.voice) 1 else 0).toByte(),
+        s.level.coerceIn(0, 20).toByte(),
+    )
+
+    fun parseNc(p: ByteArray): NcState? {
+        if (p.size < 7 || p[1] != NC_TYPE) return null
+        if (u(p[0]) != 0x67 && u(p[0]) != 0x69) return null
+        val mode = when {
+            p[3].toInt() == 0 -> Mode.OFF
+            p[4].toInt() == 1 -> Mode.AMBIENT
+            else -> Mode.ANC
+        }
+        return NcState(mode, p[5].toInt() == 1, u(p[6]).coerceIn(0, 20))
+    }
+
+    // ---- Battery ---------------------------------------------------------------------
+    // Requests for both protocol generations; whatever the earbuds answer gets parsed.
+    // V2: 22 <type> -> 23 <type> …   V1: 10 <type> -> 11 <type> …
+    // type: 00/08 single, 01/09 left+right, 02/0A case.
+
+    data class Battery(val left: Int? = null, val right: Int? = null, val case: Int? = null,
+                       val leftCharging: Boolean = false, val rightCharging: Boolean = false,
+                       val caseCharging: Boolean = false)
+
+    val BATTERY_GETS = listOf(
+        byteArrayOf(0x22, 0x09), byteArrayOf(0x22, 0x0A),
+        byteArrayOf(0x22, 0x01), byteArrayOf(0x22, 0x02),
+    )
+
+    private fun pct(b: Byte): Int? = u(b).takeIf { it in 0..100 }
+
+    /** Merges a battery reply into [old]; returns null if [p] is not a battery reply. */
+    fun parseBattery(p: ByteArray, old: Battery): Battery? {
+        if (p.size < 3) return null
+        val head = u(p[0])
+        if (head != 0x23 && head != 0x11 && head != 0x25 && head != 0x13) return null
+        return when (u(p[1])) {
+            0x01, 0x09 -> if (p.size >= 6)
+                old.copy(left = pct(p[2]) ?: old.left, leftCharging = p[3].toInt() == 1,
+                         right = pct(p[4]) ?: old.right, rightCharging = p[5].toInt() == 1)
+                else null
+            0x02, 0x0A -> old.copy(case = pct(p[2]) ?: old.case, caseCharging = p.size > 3 && p[3].toInt() == 1)
+            0x00, 0x08 -> old.copy(left = pct(p[2]) ?: old.left, leftCharging = p.size > 3 && p[3].toInt() == 1)
+            else -> null
+        }
+    }
+
     const val INIT_HEX = "00 00"
 }
