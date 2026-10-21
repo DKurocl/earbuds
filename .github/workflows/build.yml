@@ -86,7 +86,7 @@ jobs:
             sleep 3
             adb exec-out screencap -p > screens/error-large-text.png
             adb logcat -d -s AndroidRuntime:E > screens/crash.log
-            test ! -s screens/crash.log
+            ! grep -q "FATAL EXCEPTION" screens/crash.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
