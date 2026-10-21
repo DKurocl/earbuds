@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -37,6 +38,9 @@ class ModeWidget : AppWidgetProvider() {
                 val ok = withTimeoutOrNull(8_500) { Headphones.apply(base.copy(mode = mode)) } ?: false
                 note = if (ok) null else "Немає зʼєднання"
                 refreshAll(ctx)
+            } catch (e: Exception) {
+                note = "Не вдалося · відкрий Hush"
+                refreshAll(ctx)
             } finally {
                 Headphones.release(graceMs = 1_500)
                 pending.finish()
@@ -65,7 +69,7 @@ class ModeWidget : AppWidgetProvider() {
         private fun render(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_modes)
             val current = Prefs.lastNc(ctx)?.mode
-            v.setTextViewText(R.id.w_title, note ?: Prefs.deviceName(ctx) ?: "Sony ANC — відкрий, щоб вибрати пристрій")
+            v.setTextViewText(R.id.w_title, note ?: if (Prefs.deviceAddress(ctx) == null) "Hush · відкрий для налаштування" else "Hush · WF-1000XM5 · останній режим")
 
             for ((mode, id) in tiles) {
                 val on = mode == current
@@ -83,3 +87,4 @@ class ModeWidget : AppWidgetProvider() {
         }
     }
 }
+

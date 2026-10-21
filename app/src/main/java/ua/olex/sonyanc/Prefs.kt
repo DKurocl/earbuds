@@ -20,3 +20,4 @@ object Prefs {
     fun saveNc(ctx: Context, s: SonyProtocol.NcState) =
         p(ctx).edit().putString("mode", s.mode.name).putBoolean("voice", s.voice).putInt("level", s.level).apply()
 }
+
