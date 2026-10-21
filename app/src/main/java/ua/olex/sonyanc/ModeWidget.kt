@@ -11,6 +11,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -29,18 +32,29 @@ class ModeWidget : AppWidgetProvider() {
 
         Headphones.init(ctx)
         val pending = goAsync()
+        val generation=latestTap.incrementAndGet()
         CoroutineScope(Dispatchers.IO).launch {
             Headphones.hold()
             try {
-                note = "Connecting…"
+                delay(70)
+                if(latestTap.get()!=generation) return@launch
+                note = "Applying…"
                 refreshAll(ctx)
-                val base = Headphones.nc.value ?: SonyProtocol.NcState(mode)
-                val ok = withTimeoutOrNull(8_500) { Headphones.apply(base.copy(mode = mode)) } ?: false
-                note = if (ok) null else "Not connected"
-                refreshAll(ctx)
+                val base = Headphones.pending.value ?: Headphones.nc.value ?: SonyProtocol.NcState(mode)
+                Headphones.request(base.copy(mode=mode))
+                val ok=withTimeoutOrNull(8_000) {
+                    Headphones.pending.first{it==null}
+                    Headphones.status.value==Headphones.Status.CONNECTED && Headphones.nc.value?.mode==mode
+                } ?: false
+                if(latestTap.get()==generation) {
+                    note = if(ok) null else "Open Hush to reconnect"
+                    refreshAll(ctx)
+                }
             } catch (e: Exception) {
-                note = "Open Hush to reconnect"
-                refreshAll(ctx)
+                if(latestTap.get()==generation) {
+                    note = "Open Hush to reconnect"
+                    refreshAll(ctx)
+                }
             } finally {
                 Headphones.release(graceMs = 1_500)
                 pending.finish()
@@ -53,6 +67,7 @@ class ModeWidget : AppWidgetProvider() {
         private const val EXTRA_MODE = "mode"
 
         @Volatile private var note: String? = null
+        private val latestTap=AtomicLong()
 
         private val tiles = listOf(
             SonyProtocol.Mode.ANC to R.id.w_anc,
