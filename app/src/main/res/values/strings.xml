@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Sony ANC</string>
-    <string name="widget_desc">Перемикання шумозаглушення / прозорості</string>
+    <string name="app_name">Hush</string>
+    <string name="widget_desc">Три режими WF-1000XM5 одним дотиком: ANC, прозорість і вимкнення</string>
 </resources>

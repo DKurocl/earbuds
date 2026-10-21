@@ -6,3 +6,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SonyAnc"
 include(":app")
+

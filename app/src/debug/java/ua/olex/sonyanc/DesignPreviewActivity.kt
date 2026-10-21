@@ -1,0 +1,25 @@
+package ua.olex.sonyanc
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.*
+
+/** Deterministic emulator visual checks; no connection, permissions, or hidden hardware mocks. */
+class DesignPreviewActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        val scene=intent.getStringExtra("scene") ?: "anc"
+        setContent { AppTheme {
+            var state by remember { mutableStateOf(SonyProtocol.NcState(if(scene=="ambient") SonyProtocol.Mode.AMBIENT else SonyProtocol.Mode.ANC,level=12)) }
+            HushScreen(
+                status=if(scene=="error") Headphones.Status.FAILED else Headphones.Status.CONNECTED,
+                nc=state,pending=null,fresh=true,
+                error=if(scene=="error") "Не вдалося підключитися. Перевір навушники та закрий Sony Sound Connect." else null,
+                battery=null,granted=scene!="permission",hasDevice=true,
+                onMode={state=it},onSettings={},onConnect={},onPermission={},onBluetooth={},onPick={})
+        } }
+    }
+}

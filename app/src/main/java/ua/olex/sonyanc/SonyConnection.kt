@@ -3,23 +3,11 @@ package ua.olex.sonyanc
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 
-/**
- * One RFCOMM socket + a reader loop. Not thread-safe for concurrent sends:
- * callers serialize (see [Headphones]). The protocol is stop-and-wait —
- * each command must be ACKed before the next one, so [send] waits for it.
- */
+/** WF-1000XM5 transport. Headphones serializes commands; the reader only sends ACKs. */
 @SuppressLint("MissingPermission")
 class SonyConnection(
     private val scope: CoroutineScope,
@@ -28,115 +16,132 @@ class SonyConnection(
     private val onClosed: () -> Unit,
 ) {
     companion object {
-        /** Newer Sony devices (XM5 generation, LinkBuds…) — protocol V2. */
         val SONY_V2_UUID: UUID = UUID.fromString("956C7B26-D49A-4BA8-B03F-B17D393CB6E2")
-        /** Older Sony devices (XM3/XM4) — protocol V1. */
-        val SONY_V1_UUID: UUID = UUID.fromString("96CC203E-5068-46AD-B32D-E316F5E069BA")
-        val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 
-    private var socket: BluetoothSocket? = null
+    @Volatile private var socket: BluetoothSocket? = null
     private var reader: Job? = null
-    private var seq = 0
-    @Volatile private var pendingAck: CompletableDeferred<Unit>? = null
-
+    private val outputLock = Any()
+    @Volatile private var seq = 0
+    @Volatile private var pendingAck: CompletableDeferred<Boolean>? = null
     val connected get() = socket?.isConnected == true
 
     suspend fun connect(device: BluetoothDevice): Boolean = withContext(Dispatchers.IO) {
         close(notify = false)
-        val candidates = listOf(SONY_V2_UUID, SONY_V1_UUID, SPP_UUID)
-        val attempts = buildList<Pair<String, () -> BluetoothSocket>> {
-            for (u in candidates) {
-                add("secure ${u.toString().take(8)}" to { device.createRfcommSocketToServiceRecord(u) })
-                add("insecure ${u.toString().take(8)}" to { device.createInsecureRfcommSocketToServiceRecord(u) })
+        // The secure V2 service is verified on the owner's WF-1000XM5.
+        // No slow attempts at unrelated XM3/SPP services.
+        for (secure in listOf(true, false)) {
+            currentCoroutineContext().ensureActive()
+            val candidate = if (secure) device.createRfcommSocketToServiceRecord(SONY_V2_UUID)
+                else device.createInsecureRfcommSocketToServiceRecord(SONY_V2_UUID)
+            // BluetoothSocket.connect is blocking: cancellation MUST close the socket.
+            // A child of an independent scope also covers a cancelled caller/widget timeout.
+            val caller = currentCoroutineContext().job
+            val watchdog = scope.launch {
+                var elapsed = 0
+                while (caller.isActive && elapsed < 2400) { delay(50); elapsed += 50 }
+                runCatching { candidate.close() }
             }
-        }
-        for ((name, make) in attempts) {
             try {
-                val s = make()
-                s.connect()
-                socket = s
+                candidate.connect()
+                currentCoroutineContext().ensureActive()
+                watchdog.cancel()
+                socket = candidate
                 seq = 0
-                startReader(s)
-                log("✓ connected ($name)")
+                startReader(candidate)
+                log("✓ WF-1000XM5 · ${if (secure) "secure" else "insecure"} V2")
                 return@withContext true
+            } catch (e: CancellationException) {
+                runCatching { candidate.close() }
+                throw e
             } catch (e: Exception) {
-                log("✗ $name: ${e.message?.take(50)}")
-                delay(200)
-            }
+                runCatching { candidate.close() }
+                log("✗ connect: ${e.message?.take(80)}")
+            } finally { watchdog.cancel() }
         }
         false
     }
 
-    /** Sends one command and waits (up to 1.5 s) for the ACK. Returns true if ACKed. */
     suspend fun send(payload: ByteArray): Boolean = withContext(Dispatchers.IO) {
         val s = socket ?: return@withContext false
-        val ack = CompletableDeferred<Unit>()
+        val ack = CompletableDeferred<Boolean>()
         pendingAck = ack
         try {
-            s.outputStream.write(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, seq, payload))
-            s.outputStream.flush()
-            log("→ [seq $seq] ${SonyProtocol.hex(payload)}")
-        } catch (e: Exception) {
-            log("✗ write: ${e.message}")
+            synchronized(outputLock) {
+                s.outputStream.write(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, seq, payload))
+                s.outputStream.flush()
+            }
+            log("→ ${SonyProtocol.hex(payload)}")
+            val ok = withTimeoutOrNull(1200) { ack.await() } == true
+            if (!ok) {
+                // A late ACK must never satisfy the next command or corrupt its sequence.
+                log("✗ ACK timeout; closing link")
+                close()
+            }
+            ok
+        } catch (e: CancellationException) {
             close()
-            return@withContext false
-        }
-        val ok = withTimeoutOrNull(1500) { ack.await() } != null
-        if (!ok) log("… no ACK")
-        ok
-    }
-
-    private fun sendAck(incomingSeq: Int) {
-        val frame = SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - incomingSeq, ByteArray(0))
-        runCatching { socket?.outputStream?.write(frame) }
+            throw e
+        } catch (e: Exception) {
+            log("✗ send: ${e.message?.take(80)}")
+            close()
+            false
+        } finally { if (pendingAck === ack) pendingAck = null }
     }
 
     private fun startReader(s: BluetoothSocket) {
         reader = scope.launch(Dispatchers.IO) {
-            val input = s.inputStream
             val buf = ByteArrayOutputStream()
             var inFrame = false
             val chunk = ByteArray(512)
             try {
-                while (isActive) {
-                    val n = input.read(chunk)
+                while (isActive && socket === s) {
+                    val n = s.inputStream.read(chunk)
                     if (n < 0) break
                     for (i in 0 until n) {
-                        val b = chunk[i]
-                        when {
-                            b == SonyProtocol.START -> { buf.reset(); inFrame = true }
-                            b == SonyProtocol.END && inFrame -> {
+                        when (val b = chunk[i]) {
+                            SonyProtocol.START -> { buf.reset(); inFrame = true }
+                            SonyProtocol.END -> if (inFrame) {
                                 inFrame = false
-                                handle(SonyProtocol.parse(buf.toByteArray()))
+                                handle(s, SonyProtocol.parse(buf.toByteArray()))
                             }
-                            inFrame -> buf.write(b.toInt())
+                            else -> if (inFrame) {
+                                if (buf.size() >= 8192) { inFrame = false; buf.reset() }
+                                else buf.write(b.toInt())
+                            }
                         }
                     }
                 }
-            } catch (e: Exception) { }
-            if (socket === s) close()
+            } catch (_: Exception) { /* close below wakes a pending send */ }
+            finally { if (socket === s) close() }
         }
     }
 
-    private fun handle(f: SonyProtocol.Frame?) {
-        if (f == null) { log("← (broken frame)"); return }
+    private fun handle(s: BluetoothSocket, f: SonyProtocol.Frame?) {
+        if (socket !== s || f == null || !f.checksumOk || f.seq !in 0..1) return
         if (f.type == SonyProtocol.TYPE_ACK.toInt()) {
-            seq = f.seq            // next message uses the seq the device acked with
-            pendingAck?.complete(Unit)
+            if (f.payload.isEmpty() && f.seq == 1 - seq) {
+                seq = f.seq
+                pendingAck?.complete(true)
+            }
             return
         }
-        log("← %02X [seq ${f.seq}] %s".format(f.type, SonyProtocol.hex(f.payload)))
-        sendAck(f.seq)
+        if (f.type != SonyProtocol.TYPE_COMMAND.toInt()) return
+        synchronized(outputLock) {
+            s.outputStream.write(SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - f.seq, byteArrayOf()))
+            s.outputStream.flush()
+        }
+        log("← ${SonyProtocol.hex(f.payload)}")
         onPayload(f.payload)
     }
 
-    fun close(notify: Boolean = true) {
-        val had = socket != null
-        reader?.cancel(); reader = null
-        runCatching { socket?.close() }
+    @Synchronized fun close(notify: Boolean = true) {
+        val old = socket
         socket = null
-        pendingAck?.cancel(); pendingAck = null
-        if (had && notify) { log("— disconnected"); onClosed() }
+        pendingAck?.complete(false)
+        pendingAck = null
+        reader?.cancel(); reader = null
+        runCatching { old?.close() }
+        if (old != null && notify) onClosed()
     }
 }

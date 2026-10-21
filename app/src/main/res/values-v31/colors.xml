@@ -8,3 +8,4 @@
     <color name="w_off">@android:color/system_accent2_100</color>
     <color name="w_off_text">@android:color/system_accent2_900</color>
 </resources>
+

@@ -44,14 +44,15 @@ object SonyProtocol {
         val un = ArrayList<Byte>(raw.size)
         var i = 0
         while (i < raw.size) {
-            if (raw[i] == ESC && i + 1 < raw.size) {
+            if (raw[i] == ESC) {
+                if (i + 1 >= raw.size || raw[i + 1].toInt() !in listOf(0x2C, 0x2D, 0x2E)) return null
                 un += (raw[i + 1].toInt() or 0x10).toByte(); i += 2
             } else { un += raw[i]; i++ }
         }
         if (un.size < 7) return null
         val len = ((un[2].toInt() and 0xFF) shl 24) or ((un[3].toInt() and 0xFF) shl 16) or
                 ((un[4].toInt() and 0xFF) shl 8) or (un[5].toInt() and 0xFF)
-        if (len < 0 || un.size < 6 + len + 1) return null
+        if (len < 0 || len > 4096 || len != un.size - 7) return null
         val sum = un.subList(0, 6 + len).sumOf { it.toInt() and 0xFF } and 0xFF
         return Frame(
             type = un[0].toInt() and 0xFF,
@@ -78,7 +79,7 @@ object SonyProtocol {
     enum class Mode(val label: String, val short: String) {
         ANC("Шумозаглушення", "ANC"),
         AMBIENT("Прозорість", "Прозор."),
-        OFF("Вимк", "Вимк"),
+        OFF("Вимкнено", "Вимк"),
     }
 
     data class NcState(val mode: Mode, val voice: Boolean = false, val level: Int = 20)
@@ -95,7 +96,8 @@ object SonyProtocol {
     )
 
     fun parseNc(p: ByteArray): NcState? {
-        if (p.size < 7 || p[1] != NC_TYPE) return null
+        if (p.size != 7 || p[1] != NC_TYPE || u(p[2]) != 1) return null
+        if (u(p[3]) !in 0..1 || u(p[4]) !in 0..1 || u(p[5]) !in 0..1 || u(p[6]) !in 0..20) return null
         if (u(p[0]) != 0x67 && u(p[0]) != 0x69) return null
         val mode = when {
             p[3].toInt() == 0 -> Mode.OFF
@@ -139,3 +141,4 @@ object SonyProtocol {
 
     const val INIT_HEX = "00 00"
 }
+

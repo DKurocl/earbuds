@@ -1,95 +1,113 @@
-# Sony ANC — lean replacement for Sony Sound Connect
+# Hush
 
-Minimal Android app + home-screen widget that controls Sony WF-1000XM5 (and likely other
-XM5-generation devices) over Bluetooth RFCOMM. Goal: replace the official app for everyday
-use — no account, no telemetry, no background service, no notifications.
+A small, personal controller for **Sony WF-1000XM5**. Ukrainian UI, Material 3,
+expressive shape/color transitions, wallpaper colors, haptic mode selection and
+an entirely native shaded earbud illustration. No account, network permission,
+analytics, ads, foreground service, 3D runtime or permanent notification.
 
-Kotlin, Jetpack Compose (Material 3, expressive-style motion), minSdk 26, targetSdk 35.
-Dependencies: Compose BOM, activity-compose, kotlinx-coroutines. Nothing else, on purpose.
+## Everyday controls
 
-## Status
+- ANC / ambient / off, always one tap away. You can choose while connecting.
+- Ambient level 0–20 and focus on voice; Street (12) and Conversation (20 + voice) presets.
+- Home-screen widget; add it from the app's settings sheet.
+- Automatically select a paired WF-1000XM5 if there is exactly one; remember the address.
+- Reconnect on foreground; keep an existing socket for 12 seconds after leaving the app.
+- Separate diagnostics sheet with bounded log, copy action and opt-in experimental battery query.
 
-| Feature | State |
+The title and main mode controls render immediately from last known state. Pending
+choices are distinguished from device read-back. Failed commands show an actionable
+error and do not persist a fake successful selection. The widget explicitly labels its
+highlight as the **last known mode**, since there is no background connection.
+
+Only WF-1000XM5 devices appear in the picker. Pair them in Android settings first.
+Close/force-stop Sony Sound Connect if it occupies the same RFCOMM service.
+
+## Reliability and startup
+
+`Headphones` owns a single shared transport. All commands are serialized. Rapid UI
+choices use a conflated queue: a command already in progress finishes, then the newest
+queued choice wins. A mode command is followed by a state read-back. Speculative battery
+requests never run during normal startup or mode switching.
+
+`SonyConnection` tries the verified secure V2 UUID first, then insecure V2 only. Each
+blocking socket connect has a close watchdog (2.4 s per attempt) and cancellation closes
+the candidate. ACK waits are bounded to 1.2 s. A missing ACK closes the session, so its late
+reply cannot accidentally acknowledge a later command. Command and reader ACK writes
+share an output lock. Bad checksums, invalid sequence numbers, malformed escape sequences,
+overflowing lengths and oversized frames are rejected.
+
+There is no claim that Hush can shorten Bluetooth's physical reconnect time. A warm
+connection avoids that work; a cold start immediately renders the controls and queues
+your choice. No invented millisecond benchmark is used.
+
+## Verified vs. still needing the owner's device
+
+| Feature | Evidence |
 |---|---|
-| RFCOMM connect to WF-1000XM5 | ✅ verified on device (UUID `956C7B26-…`, secure socket) |
-| ANC / Ambient / Off switching | ✅ verified on device |
-| Live mode updates when changed on earbuds (`69 17 …`) | ⚠️ implemented, not verified |
-| Ambient level slider 0–20, focus-on-voice switch | ⚠️ implemented (same payload layout), not verified |
-| Battery L/R/case | ❓ guessed request format, unverified — may show nothing |
-| Home-screen widget (3 modes, dynamic colors) | ⚠️ implemented, builds, not verified |
-| EQ, Speak-to-Chat, codec, multipoint | ❌ not started — needs probing |
+| Secure V2 RFCOMM, ANC / ambient / off payloads | Previously verified on the owner's WF-1000XM5 |
+| New UI, resources and build variants | Checked by CI; see latest Build APK run |
+| Ambient level / voice focus | Implemented using existing V2 layout; hardware check still needed |
+| Mode notifications and read-back | Implemented; confirm real behavior after updating |
+| New queue, reconnect, widget taps | Software checked; phone + earbuds validation still required |
+| Battery L/R/case | Existing speculative parser retained, diagnostics-only query; no fabricated percentages |
 
-## Architecture
+EQ, codec changes, multipoint, Speak-to-Chat, adaptive location modes and firmware updates
+are deliberately absent. They need verified protocol support and are outside this lean
+instant-control scope.
+
+## Structure
 
 ```
 app/src/main/java/ua/olex/sonyanc/
-  SonyProtocol.kt   framing, escaping, checksum; NC/ambient + battery payload builders/parsers
-  SonyConnection.kt one RFCOMM socket, reader loop, stop-and-wait ACK handling
-  Headphones.kt     process-wide singleton: link ownership, StateFlows (status, nc, battery, log)
-  Prefs.kt          SharedPreferences: chosen device, last known NC state (widget reads it)
-  ModeWidget.kt     AppWidgetProvider (RemoteViews); tap = goAsync → connect → send → release
-  MainActivity.kt   Compose UI: device picker, status/battery pills, mode tiles, ambient card,
-                    diagnostics (raw hex send, probe 66 00..2F, log)
-.github/workflows/build.yml   CI build → APK artifact; compile errors surfaced as annotations
+  MainActivity.kt    lifecycle, real state, home screen, ambient controls, sheets
+  Artwork.kt        small Canvas icons, Hush mark, shaded earbud illustration
+  Headphones.kt     link ownership, serialized commands, conflated UI requests
+  SonyConnection.kt bounded WF-XM5 RFCOMM transport + ACK reader
+  SonyProtocol.kt   framing and V2 payload parsing
+  Prefs.kt          selected device + acknowledged last known mode
+  ModeWidget.kt     on-demand widget actions via goAsync (8.5 s budget)
 ```
 
-**Link lifetime:** users `hold()`/`release()` the link (activity while visible, widget for one
-tap). When nobody holds it, the socket closes after a grace period (4 s app / 1.5 s widget).
-No foreground service, so nothing runs in the background.
+The package/application ID remains `ua.olex.sonyanc` to preserve app identity. Brand is
+**Hush**, version **0.2.0**. Adaptive icon includes Android themed-icon monochrome art.
+The illustration is native shaded vector artwork, **not a rotatable 3D model**. It avoids
+model parsing, textures, a graphics engine and continuous idle animation on the critical path.
+Animation is limited to state changes and respects Android/Compose animation scaling.
 
-**Concurrency:** all sends go through a `Mutex` in `Headphones`; the protocol is stop-and-wait,
-so `SonyConnection.send()` waits up to 1.5 s for the ACK before returning.
+## Build and checks
 
-## Protocol notes (reverse-engineered, verified on WF-1000XM5)
+GitHub Actions → **Build APK**:
 
-Frame: `3E | type | seq | len(4, BE) | payload | checksum | 3C`
-- checksum = sum(type..payload) & 0xFF
-- inside the frame, `3C/3D/3E` are escaped as `3D, b & 0xEF`
-- type `0C` = command, `01` = ACK. Reply ACK with `seq = 1 - incoming seq`; after receiving an
-  ACK, the next outgoing message uses the seq from that ACK.
+1. Unit tests for recorded XM5 payloads, reserved-byte escaping, all-byte round-trips,
+   malformed input, invalid checksums and invalid setting replies.
+2. Android lint, debug APK and optimized unsigned release build (R8 + resource shrinking).
+3. API 35 emulator smoke run with actual Compose screenshots: light ANC, dark ambient,
+   larger text/error layout. A debug-only, read-only `DesignPreviewActivity` supplies
+   deterministic UI state without Bluetooth access; it is absent from release.
 
-RFCOMM service UUID for XM5 generation: `956C7B26-D49A-4BA8-B03F-B17D393CB6E2`
-(older XM3/XM4: `96CC203E-5068-46AD-B32D-E316F5E069BA`).
+Artifacts: **Hush-debug** (installable debug APK), **Hush-checks** (reports/build log),
+**Hush-visual-check** (screenshots/crash log). No local Android SDK is required for CI.
+Local build: Gradle 8.11.1, Java 17 and Android SDK 35; run
+`gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`.
 
-Init: send `00 00` → device replies `01 00 03 00 30 18 00 00` (protocol info).
+## Owner's quick hardware check
 
-**Noise cancelling / ambient (type `17`):**
-- get `66 17` → reply `67 17 01 <on> <amb> <voice> <level>`
-- set `68 17 01 <on> <amb> <voice> <level>`
-- notify `69 17 …` (same layout)
-- `on`: 0 = everything off, 1 = effect on; `amb`: 0 = NC, 1 = ambient;
-  `voice`: focus on voice; `level`: ambient level 0..20 (0x14 = 20)
-- verified commands: ANC `68 17 01 01 00 00 14`, ambient `68 17 01 01 01 00 14`,
-  off `68 17 01 00 00 00 14`
+1. Open with WF-1000XM5 connected to the phone. Confirm auto-selection and state read-back.
+2. Tap ANC → ambient → off, including several fast taps; final choice must match the earbuds.
+3. In ambient, try 0 / 12 / 20 and voice focus. Confirm the actual audible effect.
+4. Leave and reopen inside 12 seconds, then after the grace period.
+5. Add the widget and test each button with the app closed.
+6. Turn Bluetooth off / put earbuds in the case; retry must remain responsive and show a clear error.
+7. Optionally query battery once in diagnostics and inspect actual replies before trusting the parser.
 
-Probing `66 00..2F` on WF-1000XM5 got replies only for `17` and `18`
-(`67 18 01 01 01 00 14` — same layout, purpose unknown, maybe adaptive/auto-ambient).
+## Protocol reference (previous device session)
 
-**Battery (unverified guess):** sends `22 09`, `22 0A`, `22 01`, `22 02`; parser accepts replies
-starting with `23`/`11`/`25`/`13`: type `01/09` → `L% Lchg R% Rchg`, `02/0A` → `case% chg`.
-If nothing appears, probe other command families the same way as `66 xx` (try `22 xx`, `10 xx`)
-via Diagnostics and read the log.
+Frame: `3E | type | seq | len(4, BE) | payload | checksum | 3C`.
+Checksum is sum(type..payload) & 0xFF. Escape `3C/3D/3E` as `3D, b & EF`.
+Command `0C`, ACK `01`; response ACK sequence `1 - incoming seq`.
 
-**How to discover new settings:** Diagnostics → "Зондувати" sends `66 00..2F` and lists replies.
-A reply `67 XX …` means setting `XX` exists; the setter is usually `68 XX` + same layout.
-Changing a setting on the earbuds while connected shows `69 XX …` notifications in the log.
-
-## Build
-
-No local SDK needed: push to GitHub → Actions → "Build APK" → download artifact
-`SonyAnc-debug` (zip with `app-debug.apk`). Runner pinned to `ubuntu-24.04` (preinstalled SDK).
-
-Locally: open in Android Studio, or `gradle :app:assembleDebug` with Gradle 8.11+ and SDK 35.
-There is no Gradle wrapper in the repo (CI uses `gradle/actions/setup-gradle`).
-
-## Testing notes
-
-- Force-stop Sony Sound Connect before testing: it holds the same RFCOMM channel and causes
-  `read failed, socket might closed`.
-- Owner's device: WF-1000XM5.
-
-## Design constraints (owner's preferences)
-
-- Lean: no extra libraries, no background services, no notifications, no analytics.
-- Material 3 with expressive-style motion (spring shape morphing), dynamic color.
-- UI language: Ukrainian.
+V2 UUID: `956C7B26-D49A-4BA8-B03F-B17D393CB6E2`. Init `00 00`.
+NC get `66 17`; replies `67 17 01 <on> <ambient> <voice> <level>` / notification `69`.
+Set `68 17 01 <on> <ambient> <voice> <level>`.
+ANC: `68 17 01 01 00 00 14`; ambient: `68 17 01 01 01 00 14`;
+off: `68 17 01 00 00 00 14`.
