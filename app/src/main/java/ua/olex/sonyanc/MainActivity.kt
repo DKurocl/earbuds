@@ -118,6 +118,10 @@ fun App() {
                         logLines += "★ стан ANC: ${SonyProtocol.hex(p)}"
                     }
                 }
+                // 0x67 = reply to a "get" (0x66 XX) probe
+                if (p.isNotEmpty() && p[0] == 0x67.toByte()) {
+                    logLines += "◆ GET ${SonyProtocol.hex(p)}"
+                }
             }
         }
     }
@@ -220,6 +224,29 @@ fun App() {
                     modifier = Modifier.height(56.dp)
                 ) { Text("Send") }
             }
+
+            // Ask the headphones for every ambient-sound/ANC setting type: 66 00 … 66 2F
+            var probing by remember { mutableStateOf(false) }
+            OutlinedButton(
+                enabled = isConnected && !probing,
+                onClick = {
+                    scope.launch {
+                        probing = true
+                        logLines.clear()
+                        logLines += "Зондую 66 00…66 2F (≈20 с)"
+                        for (t in 0x00..0x2F) {
+                            conn.sendCommand(byteArrayOf(0x66, t.toByte()))
+                            kotlinx.coroutines.delay(400)
+                        }
+                        val gets = logLines.filter { it.startsWith("◆") || it.startsWith("★") }
+                        logLines.clear()
+                        logLines += "Готово. Відповіді (${gets.size}):"
+                        logLines += gets
+                        probing = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) { Text(if (probing) "Зондую…" else "Зондувати") }
 
             // Log
             val listState = rememberLazyListState()
