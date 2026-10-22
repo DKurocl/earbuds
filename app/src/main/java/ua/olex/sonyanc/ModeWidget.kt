@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
 import android.view.View
-import android.widget.LinearLayout
 import android.os.Handler
 import android.os.Looper
 import android.widget.RemoteViews
@@ -101,16 +100,16 @@ class ModeWidget : AppWidgetProvider() {
 
         /** The debug harness inflates these same RemoteViews at real launcher sizes. */
         internal fun viewsForSize(ctx:Context,width:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,interactive:Boolean=true):RemoteViews {
-            val v=RemoteViews(ctx.packageName,R.layout.widget_modes)
             val labels=width>=mediumWidth(ctx)
             val wide=width>=wideWidth(ctx)
+            // LinearLayout.setOrientation is not remotable: use separate native layouts.
+            val v=RemoteViews(ctx.packageName,if(wide) R.layout.widget_modes else R.layout.widget_modes_stacked)
             val density=ctx.resources.displayMetrics.density
             for(tile in tiles) {
                 val mode=tile.mode
                 val on=mode==current
                 val applying=mode==pending
                 v.setInt(tile.id,"setBackgroundResource",if(on) R.drawable.w_tile_on else tile.normal)
-                v.setInt(tile.id,"setOrientation",if(wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL)
                 v.setImageViewResource(tile.icon,if(on) tile.selectedIcon else tile.normalIcon)
                 v.setTextColor(tile.label,ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
                 v.setTextViewText(tile.label,mode.short+if(applying) "…" else "")
