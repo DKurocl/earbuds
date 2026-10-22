@@ -28,6 +28,7 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
   No hidden Android APIs, preferred-codec inference, invented bitrate or sample rate.
   Changes update via notifications and foreground polling; closing the link clears the codec.
 - Device selection, reconnect, home-screen widget and launcher ANC/Ambient/Off shortcuts.
+  The widget contains only ANC / Ambient / Off: no app name, logo, battery or codec.
   The widget waits for command delivery rather than optional read-back completion,
   reconnects once after a stale-socket write failure and can retry from the widget.
   Missing pairing/permission opens the app for setup.

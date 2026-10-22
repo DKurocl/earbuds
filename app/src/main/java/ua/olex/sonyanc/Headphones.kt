@@ -321,7 +321,7 @@ object Headphones {
     private fun setNc(state: SonyProtocol.NcState) {
         _nc.value = state
         Prefs.saveNc(app, state)
-        ModeWidget.clearNote(app)
+        ModeWidget.refreshAll(app)
     }
     private fun onPayload(p: ByteArray) {
         CodecProtocol.parse(p)?.let {
