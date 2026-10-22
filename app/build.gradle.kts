@@ -12,8 +12,8 @@ android {
         applicationId = "ua.olex.sonyanc"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.6.1"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -38,8 +38,8 @@ android {
         getByName("release") {
             // Personal APK: optimized, installable, using the CI debug identity.
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = providers.gradleProperty("quickApk").orNull != "true"
+            isShrinkResources = providers.gradleProperty("quickApk").orNull != "true"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
