@@ -150,6 +150,7 @@ object Headphones {
         catch (e: Exception) { addLog("✗ ${e.message}"); return fail("Could not connect to the earbuds") }
         _status.value = Status.CONNECTED
         _error.value = null
+        startInfoLoop()
         return true
     }
     private fun fail(message: String): Boolean {
