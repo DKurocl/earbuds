@@ -1,4 +1,4 @@
-# WF-1000XM5 replacement audit — Hush 0.8.0
+# WF-1000XM5 replacement audit — Hush 0.9.0
 
 Goal: independent everyday control, with no Sony app, account, network permission, notification service or simulated settings.
 
@@ -32,7 +32,7 @@ Each control is read when opened. Writes are enabled only after the device retur
 | Automatic power off | Removed-from-ears / disabled implemented |
 | Call sidetone | Switch implemented, preserves reported volume fields |
 | Head gestures | Switch implemented for recognized reply |
-| Connection quality priority | Sound / stability implemented for recognized classic reply |
+| Connection quality priority | Sound / stability implemented for recognized classic reply, with subtype 00/02 inquiry fallback |
 | Voice guidance | Switch over the second command table; language preserved |
 | Guidance volume | Five levels implemented |
 | Firmware version | Read-only, validated length and characters |
@@ -69,3 +69,11 @@ Hush is not yet a complete replacement for firmware servicing, ear-tip measureme
 ## Visual refinements
 
 The two earbuds now use the same front-facing shot mirrored in layout, at equal size. No differently angled pair is cropped into the rings. The case uses the existing transparent photo. Dark background uses a Material container surface, action buttons use secondary-container colors, battery green is #43C465, and inactive/unknown states remain visually separate from current readings. ANC labels are compact and retain a fixed row height.
+
+## 0.9.0 verification and behavior
+
+The full CI path runs debug and release JVM tests, lint for both variants, debug/release assembly, Android UI test assembly, emulator UI tests, light/dark/large-text screenshots and an optimized release installation/smoke check. UI fixtures test rendering and interaction only, and stream tests test transport mechanics only. Neither establishes physical device compatibility. Actual run results are recorded separately after completion.
+
+Regression coverage includes fragmented/escaped frames, both command tables, ACK sequencing, simultaneous sends, wrong ACKs, timeout/reconnect, cancellation and blocked writes. Every exposed advanced choice is checked for valid payloads and preservation of unedited fields. Equalizer presets/bounds, codec, partial battery freshness, the one-tap settings route, every toggle and every dropdown are covered.
+
+Disconnected settings are invalidated immediately. Writes require a live session and recognized current state. Write readback is matched to return packets rather than notifications; independent setting reads no longer hold the global command mutex while awaiting payloads. Editing one touch field merges with the newest device values. Ambient touch aliases compare semantically. Noise commands superseded during connection are discarded before transmission.

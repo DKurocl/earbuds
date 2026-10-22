@@ -114,6 +114,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
     val battery by Headphones.battery.collectAsState()
     val batteryRefreshing by Headphones.batteryRefreshing.collectAsState()
     val batteryFresh by Headphones.batteryFresh.collectAsState()
+    val batteryParts by Headphones.batteryParts.collectAsState()
     val codec by Headphones.codec.collectAsState()
     val codecRefreshing by Headphones.codecRefreshing.collectAsState()
     var granted by remember { mutableStateOf(Headphones.hasPermission(ctx)) }
@@ -159,7 +160,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         }
     }
     HushScreen(status,nc,pending,fresh,error,battery,granted,saved!=null,
-        batteryRefreshing=batteryRefreshing,batteryFresh=batteryFresh,
+        batteryRefreshing=batteryRefreshing,batteryFresh=batteryFresh,batteryParts=batteryParts,
         codec=codec,codecRefreshing=codecRefreshing,onBattery={refreshInfo()},
         onConnection={openSheet("connection")},onEarbuds={openSheet("earbuds")},
         onMode={Headphones.request(it)},onSettings={openSheet("earbuds")},onEqualizer={openSheet("equalizer")},
@@ -202,7 +203,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                     SettingsRow(Glyph.TUNE,"Earbud settings",onClick={openSheet("earbuds")})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={openSheet("diagnostics")})
                 }
-                Text("Hush 0.8.1",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text("Hush 0.9.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -217,7 +218,7 @@ fun HushScreen(
     onPermission:()->Unit,onBluetooth:()->Unit,onPick:()->Unit,onEqualizer:()->Unit={},onEarbuds:()->Unit={},onConnection:()->Unit={},haptics:Boolean=true,
     batteryRefreshing:Boolean=false,batteryFresh:Boolean=true,onBattery:()->Unit={},
     codec:CodecProtocol.State?=null,codecRefreshing:Boolean=false,
-    deviceName:String="WF-1000XM5",onRename:()->Unit={},onDisconnect:()->Unit={},onAppSettings:()->Unit=onSettings,
+    deviceName:String="WF-1000XM5",onRename:()->Unit={},onDisconnect:()->Unit={},onAppSettings:()->Unit=onSettings,batteryParts:Set<Int> = if(batteryFresh) setOf(0,1,2) else emptySet(),
 ) {
     val cs=MaterialTheme.colorScheme
     val dark=isSystemInDarkTheme()
@@ -270,9 +271,9 @@ fun HushScreen(
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).clickable(enabled=ready,onClick=onBattery)
                         .semantics{contentDescription="Battery. Tap to refresh"},
                     horizontalArrangement=Arrangement.SpaceEvenly) {
-                    BatteryRing("Left",b.left,b.leftCharging,batteryFresh) {EarbudArt(Alignment.CenterStart)}
-                    BatteryRing("Case",b.case,b.caseCharging,batteryFresh) {CaseArt()}
-                    BatteryRing("Right",b.right,b.rightCharging,batteryFresh) {EarbudArt(Alignment.CenterEnd)}
+                    BatteryRing("Left",b.left,b.leftCharging,0 in batteryParts) {EarbudArt(Alignment.CenterStart)}
+                    BatteryRing("Case",b.case,b.caseCharging,2 in batteryParts) {CaseArt()}
+                    BatteryRing("Right",b.right,b.rightCharging,1 in batteryParts) {EarbudArt(Alignment.CenterEnd)}
                 }
 
                 // ---- big actions ----

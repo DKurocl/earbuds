@@ -39,18 +39,31 @@ object AdvancedSettings {
             GESTURES,QUALITY -> v.size==1 && v[0] in 0..1
             GUIDANCE_VOLUME -> v.size==1 && v[0] in listOf(254,255,0,1,2)
         }
-        fun set(values:List<Int>):ByteArray {
+        fun set(values:List<Int>,wireSubtype:Int=subtype):ByteArray {
+            require(wireSubtype==subtype || (this==QUALITY && wireSubtype==2))
             require(valid(values))
             val body=if(this==GUIDANCE) values.take(1) else values
-            return (listOf(getCode+2,subtype)+body).map{it.toByte()}.toByteArray()
+            return (listOf(getCode+2,wireSubtype)+body).map{it.toByte()}.toByteArray()
         }
     }
     fun parse(type:Int,p:ByteArray):Pair<Key,List<Int>>? {
         if(p.size<3) return null
         val op=p[0].toInt() and 255;val subtype=p[1].toInt() and 255
-        val key=Key.entries.firstOrNull{it.type.toInt()==type && it.subtype==subtype && op in listOf(it.getCode+1,it.getCode+3)} ?: return null
+        val key=Key.entries.firstOrNull{it.type.toInt()==type && (it.subtype==subtype || (it==Key.QUALITY && subtype==2)) && op in listOf(it.getCode+1,it.getCode+3)} ?: return null
         val value=p.drop(2).map{it.toInt() and 255}
         return if(key.valid(value)) key to value else null
+    }
+    fun patch(key:Key,current:List<Int>,index:Int,code:Int):List<Int>? {
+        if(!key.valid(current)) return null
+        val field=key.fields.firstOrNull{it.index==index} ?: return null
+        if(field.choices.none{it.code==code}) return null
+        return current.toMutableList().apply{this[index]=if(key==Key.TOUCH && code==0 && current.drop(1).contains(0x35)) 0x35 else code}
+            .takeIf{key.valid(it)}
+    }
+    fun equivalent(key:Key,left:List<Int>?,right:List<Int>):Boolean {
+        if(left==null) return false
+        fun canonical(v:List<Int>)=v.mapIndexed{i,n->if(key==Key.TOUCH && i>0 && n==0x35) 0 else n}
+        return canonical(left)==canonical(right)
     }
     fun firmware(p:ByteArray):String? {
         if(p.size<4 || p[0].toInt()!=5 || p[1].toInt()!=2 || (p[2].toInt() and 255)!=p.size-3) return null

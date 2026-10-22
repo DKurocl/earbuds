@@ -45,6 +45,8 @@ object Headphones {
     val batteryRefreshing=_batteryRefreshing.asStateFlow()
     private val _batteryFresh=MutableStateFlow(false)
     val batteryFresh=_batteryFresh.asStateFlow()
+    private val _batteryParts=MutableStateFlow<Set<Int>>(emptySet())
+    val batteryParts=_batteryParts.asStateFlow()
     private val _batteryNote=MutableStateFlow("Connect to read battery")
     val batteryNote=_batteryNote.asStateFlow()
     private val batteryLock=Mutex()
@@ -58,36 +60,48 @@ object Headphones {
     val codecRefreshing=_codecRefreshing.asStateFlow()
     private val codecLock=Mutex()
     @Volatile private var codecReply:CompletableDeferred<CodecProtocol.State?>?=null
-    private val conn = SonyConnection(scope, ::addLog, ::onPayload) {
-        _status.value = Status.DISCONNECTED
-        _fresh.value = false
-        _codec.value=null
-        codecReply?.complete(null)
-        _batteryFresh.value = false
-        _batteryNote.value = if(_battery.value!=null) "Last known levels" else "Connect to read battery"
-        featureReplies.values.forEach {it.complete(null)}
-        batteryReplies.values.forEach {it.complete(false)}
-    }
     private val _advanced=MutableStateFlow<Map<AdvancedSettings.Key,List<Int>>>(emptyMap())
     val advanced=_advanced.asStateFlow()
+    private val advancedInquiries=ConcurrentHashMap<AdvancedSettings.Key,Int>()
     private val advancedReplies=ConcurrentHashMap<AdvancedSettings.Key,CompletableDeferred<List<Int>?>>()
     private val advancedLocks=ConcurrentHashMap<AdvancedSettings.Key,Mutex>()
     private val _firmware=MutableStateFlow<String?>(null)
     val firmware=_firmware.asStateFlow()
     private val _equalizer = MutableStateFlow<EqualizerProtocol.State?>(null)
     val equalizer = _equalizer.asStateFlow()
-    @Volatile private var eqReply: CompletableDeferred<EqualizerProtocol.State>? = null
+    @Volatile private var eqReply: CompletableDeferred<EqualizerProtocol.State?>? = null
     @Volatile private var ncReply: Pair<SonyProtocol.NcState,CompletableDeferred<Boolean>>? = null
+    private val featureLocks=ConcurrentHashMap<DeviceSettingsProtocol.Feature,Mutex>()
+    private val equalizerLock=Mutex()
     private var infoJob: Job? = null
     @Volatile private var holders = 0
     private var idleJob: Job? = null
+
+    private val conn = SonyConnection(scope, ::addLog, ::onPayload) {
+        _status.value = Status.DISCONNECTED
+        _fresh.value = false
+        _codec.value=null
+        codecReply?.complete(null)
+        _batteryFresh.value = false
+        _batteryParts.value=emptySet()
+        _features.value=emptyMap()
+        _advanced.value=emptyMap()
+        advancedInquiries.clear()
+        _equalizer.value=null
+        advancedReplies.values.forEach{it.complete(null)}
+        eqReply?.complete(null)
+        ncReply?.second?.complete(false)
+        _batteryNote.value = if(_battery.value!=null) "Last known levels" else "Connect to read battery"
+        featureReplies.values.forEach {it.complete(null)}
+        batteryReplies.values.forEach {it.complete(false)}
+    }
 
     init {
         scope.launch {
             for (requested in requests) {
                 try {
                     delay(45)
-                    if(modeVersion.get()==requested.id) apply(requested.state){requested.delivered.complete(it)}
+                    if(modeVersion.get()==requested.id) apply(requested.state,requested.id){requested.delivered.complete(it)}
                 }
                 catch(e:CancellationException){throw e}
                 catch(e:Exception){addLog("✗ mode: ${e.message}");_error.value="Could not change mode. Try again."}
@@ -144,9 +158,11 @@ object Headphones {
         _status.value = Status.CONNECTING
         _fresh.value = false
         _batteryFresh.value=false
+        _batteryParts.value=emptySet()
         _codec.value=null
         _features.value=emptyMap()
         _advanced.value=emptyMap()
+        advancedInquiries.clear()
         _firmware.value=null
         _equalizer.value = null
         try {
@@ -168,14 +184,20 @@ object Headphones {
     }
 
     /** Drops the control link; the next action reconnects on demand. */
-    fun disconnect() { infoJob?.cancel();infoJob=null;scope.launch { lock.withLock { conn.close() } } }
+    @Synchronized private fun cancelModes() {
+        modeVersion.incrementAndGet()
+        activeRequest?.delivered?.complete(false)
+        activeRequest=null;_pending.value=null
+        while(true) {val old=requests.tryReceive().getOrNull() ?: break;old.delivered.complete(false)}
+    }
+    fun disconnect() { cancelModes();infoJob?.cancel();infoJob=null;scope.launch { lock.withLock { conn.close() } } }
 
     suspend fun connectAndSync(): Boolean = lock.withLock {
         if (!ensureConnectedLocked()) return@withLock false
         // Mode controls never wait behind speculative battery probes.
-        if (_pending.value == null) conn.send(SonyProtocol.NC_GET)
+        if (_pending.value == null && !conn.send(SonyProtocol.NC_GET)) return@withLock false
         startInfoLoop()
-        true
+        conn.connected
     }
 
     @Synchronized fun request(state: SonyProtocol.NcState): Deferred<Boolean> {
@@ -189,17 +211,19 @@ object Headphones {
         return request.delivered
     }
 
-    private suspend fun apply(state: SonyProtocol.NcState,onDelivered:(Boolean)->Unit): Boolean = lock.withLock {
+    private suspend fun apply(state: SonyProtocol.NcState,id:Long,onDelivered:(Boolean)->Unit): Boolean = lock.withLock {
         if (!ensureConnectedLocked()) {onDelivered(false);return@withLock false}
+        if(modeVersion.get()!=id) {onDelivered(false);return@withLock false}
         if(_fresh.value && _nc.value==state) {onDelivered(true);return@withLock true}
         var ok = conn.send(SonyProtocol.ncSet(state))
         // A cached socket can look connected after the earbuds have dropped it.
         // Reconnect once for the latest choice; never replay a superseded choice.
-        if(!ok && _pending.value==state && ensureConnectedLocked()) ok=conn.send(SonyProtocol.ncSet(state))
+        if(!ok && modeVersion.get()==id && ensureConnectedLocked() && modeVersion.get()==id) ok=conn.send(SonyProtocol.ncSet(state))
         if (ok) {
             setNc(state)
             onDelivered(true) // Widget lifetime depends on delivery, not an optional read-back.
             _fresh.value = false
+            if(modeVersion.get()!=id) return@withLock true
             val reply=CompletableDeferred<Boolean>()
             ncReply=state to reply
             try {
@@ -213,15 +237,18 @@ object Headphones {
     }
 
     suspend fun selectDevice(address: String, name: String?) = lock.withLock {
+        cancelModes()
         conn.close()
         Prefs.saveDevice(app, address, name)
         _nc.value = null
         _pending.value = null
         _battery.value=null
         _batteryFresh.value=false
+        _batteryParts.value=emptySet()
         _codec.value=null
         _features.value=emptyMap()
         _advanced.value=emptyMap()
+        advancedInquiries.clear()
         _firmware.value=null
         ModeWidget.refreshAll(app)
     }
@@ -237,7 +264,7 @@ object Headphones {
                 if(holders==0 || !conn.connected) break
                 if(SystemClock.elapsedRealtime()>=batteryDue) {
                     queryBattery()
-                    batteryDue=SystemClock.elapsedRealtime()+if(_batteryFresh.value) 30000L else 8000L
+                    batteryDue=SystemClock.elapsedRealtime()+if(_batteryParts.value.containsAll(setOf(0,1,2))) 30000L else 8000L
                 }
                 delay(8000)
             }
@@ -269,7 +296,7 @@ object Headphones {
             // 01 and 09 are both documented Sony V2 dual-battery inquiry formats.
             for(q in SonyProtocol.BATTERY_GETS) {
                 val family=if(q[1].toInt()==0x0A) 2 else 1
-                if(family==1 && received && _battery.value?.left!=null && _battery.value?.right!=null) continue
+                if(family==1 && received && _batteryParts.value.containsAll(setOf(0,1))) continue
                 if(withTimeoutOrNull(2200){while(_pending.value!=null) delay(60);true}!=true) continue
                 val reply=CompletableDeferred<Boolean>()
                 batteryReplies[family]=reply
@@ -291,65 +318,87 @@ object Headphones {
     }
 
     suspend fun readAdvanced(key:AdvancedSettings.Key):List<Int>? = advancedLocks.getOrPut(key){Mutex()}.withLock {
-        val reply=CompletableDeferred<List<Int>?>()
-        advancedReplies[key]=reply
-        try {
-            if(!lock.withLock {ensureConnectedLocked() && conn.send(key.get,key.type)}) return@withLock null
-            withTimeoutOrNull(1000){reply.await()}
-        } finally {advancedReplies.remove(key,reply)}
+        if(!lock.withLock {ensureConnectedLocked()}) return@withLock null
+        val inquiries=if(key==AdvancedSettings.Key.QUALITY) listOf(0,2) else listOf(key.subtype)
+        for(subtype in inquiries) {
+            val reply=CompletableDeferred<List<Int>?>()
+            advancedReplies[key]=reply
+            try {
+                if(!lock.withLock {conn.connected && conn.send(byteArrayOf(key.getCode.toByte(),subtype.toByte()),key.type)}) break
+                val value=withTimeoutOrNull(1000){reply.await()}
+                if(value!=null) return@withLock value
+            } finally {advancedReplies.remove(key,reply)}
+        }
+        null
     }
-    suspend fun writeAdvanced(key:AdvancedSettings.Key,values:List<Int>):Boolean = advancedLocks.getOrPut(key){Mutex()}.withLock {
-        if(key !in _advanced.value || !key.valid(values)) return@withLock false
+    suspend fun writeAdvancedField(key:AdvancedSettings.Key,index:Int,code:Int):Boolean = advancedLocks.getOrPut(key){Mutex()}.withLock {
         val reply=CompletableDeferred<List<Int>?>()
-        advancedReplies[key]=reply
         try {
-            val sent=lock.withLock {ensureConnectedLocked() && conn.send(key.set(values),key.type) && conn.send(key.get,key.type)}
-            sent && withTimeoutOrNull(1200){reply.await()}==values
+            val wanted=lock.withLock {
+                if(!conn.connected) return@withLock null
+                val current=_advanced.value[key] ?: return@withLock null
+                val next=AdvancedSettings.patch(key,current,index,code) ?: return@withLock null
+                val subtype=advancedInquiries[key] ?: key.subtype
+                if(!conn.send(key.set(next,subtype),key.type)) return@withLock null
+                advancedReplies[key]=reply
+                if(!conn.send(byteArrayOf(key.getCode.toByte(),subtype.toByte()),key.type)) return@withLock null
+                next
+            } ?: return@withLock false
+            AdvancedSettings.equivalent(key,withTimeoutOrNull(1200){reply.await()},wanted)
         } finally {advancedReplies.remove(key,reply)}
     }
     suspend fun readFirmware() = lock.withLock {if(ensureConnectedLocked()) conn.send(byteArrayOf(0x04,0x02)) else false}
     suspend fun powerOff():Boolean = lock.withLock {
+        cancelModes()
         if(!ensureConnectedLocked()) return@withLock false
         val delivered=conn.send(byteArrayOf(0x24,0x03,0x01))
         conn.close();delivered
     }
 
-    suspend fun readFeature(feature:DeviceSettingsProtocol.Feature):Boolean? = lock.withLock {
-        if(!ensureConnectedLocked()) return@withLock null
+    suspend fun readFeature(feature:DeviceSettingsProtocol.Feature):Boolean? = featureLocks.getOrPut(feature){Mutex()}.withLock {
         val reply=CompletableDeferred<Boolean?>()
-        featureReplies[feature]=reply
         try {
-            if(!conn.send(feature.get)) return@withLock null
-            withTimeoutOrNull(1400){reply.await()}
+            val sent=lock.withLock {
+                if(!ensureConnectedLocked()) return@withLock false
+                featureReplies[feature]=reply
+                conn.send(feature.get)
+            }
+            if(sent) withTimeoutOrNull(1400){reply.await()} else null
         } finally {featureReplies.remove(feature,reply)}
     }
-    suspend fun writeFeature(feature:DeviceSettingsProtocol.Feature,value:Boolean):Boolean = lock.withLock {
-        if(!ensureConnectedLocked() || feature !in _features.value) return@withLock false
-        if(!conn.send(feature.set(value))) return@withLock false
+    suspend fun writeFeature(feature:DeviceSettingsProtocol.Feature,value:Boolean):Boolean = featureLocks.getOrPut(feature){Mutex()}.withLock {
         val reply=CompletableDeferred<Boolean?>()
-        featureReplies[feature]=reply
         try {
-            if(!conn.send(feature.get)) return@withLock false
-            withTimeoutOrNull(1400){reply.await()}==value
+            val sent=lock.withLock {
+                if(!conn.connected || feature !in _features.value || !conn.send(feature.set(value))) return@withLock false
+                featureReplies[feature]=reply
+                conn.send(feature.get)
+            }
+            sent && withTimeoutOrNull(1400){reply.await()}==value
         } finally {featureReplies.remove(feature,reply)}
     }
-    suspend fun readEqualizer(): EqualizerProtocol.State? = lock.withLock {
-        if(!ensureConnectedLocked()) return@withLock null
-        val reply=CompletableDeferred<EqualizerProtocol.State>()
-        eqReply=reply
+    suspend fun readEqualizer():EqualizerProtocol.State? = equalizerLock.withLock {
+        val reply=CompletableDeferred<EqualizerProtocol.State?>()
         try {
-            if(!conn.send(EqualizerProtocol.get)) return@withLock null
-            withTimeoutOrNull(1400){reply.await()}
+            val sent=lock.withLock {
+                if(!ensureConnectedLocked()) return@withLock false
+                eqReply=reply
+                conn.send(EqualizerProtocol.get)
+            }
+            if(sent) withTimeoutOrNull(1400){reply.await()} else null
         } finally {if(eqReply===reply) eqReply=null}
     }
-    suspend fun writeEqualizer(preset:Int?=null,bands:List<Int>?=null):Boolean = lock.withLock {
-        if(!ensureConnectedLocked() || _equalizer.value==null) return@withLock false
-        val payload=if(bands!=null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
-        if(!conn.send(payload)) return@withLock false
-        val reply=CompletableDeferred<EqualizerProtocol.State>()
-        eqReply=reply
+    suspend fun writeEqualizer(preset:Int?=null,bands:List<Int>?=null):Boolean = equalizerLock.withLock {
+        val reply=CompletableDeferred<EqualizerProtocol.State?>()
         try {
-            if(!conn.send(EqualizerProtocol.get)) return@withLock false
+            val sent=lock.withLock {
+                if(!conn.connected || _equalizer.value==null) return@withLock false
+                val payload=if(bands!=null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
+                if(!conn.send(payload)) return@withLock false
+                eqReply=reply
+                conn.send(EqualizerProtocol.get)
+            }
+            if(!sent) return@withLock false
             val actual=withTimeoutOrNull(1400){reply.await()} ?: return@withLock false
             if(bands!=null) actual.preset==0xA0 && actual.bands==bands else actual.preset==preset
         } finally {if(eqReply===reply) eqReply=null}
@@ -363,8 +412,9 @@ object Headphones {
     private fun onPayload(type:Int,p: ByteArray) {
         if(type==SonyProtocol.TYPE_COMMAND.toInt()) AdvancedSettings.firmware(p)?.let {_firmware.value=it;return}
         AdvancedSettings.parse(type,p)?.let{(key,value)->
+            advancedInquiries[key]=p[1].toInt() and 255
             _advanced.update{it+(key to value)}
-            advancedReplies[key]?.complete(value)
+            if((p[0].toInt() and 255)==key.getCode+1) advancedReplies[key]?.complete(value)
             return
         }
         if(type!=SonyProtocol.TYPE_COMMAND.toInt()) return
@@ -375,10 +425,10 @@ object Headphones {
         }
         DeviceSettingsProtocol.parse(p)?.let{(feature,value)->
             _features.update{it+(feature to value)}
-            featureReplies[feature]?.complete(value)
+            if((p[0].toInt() and 255) in listOf(0xE7,0xF7)) featureReplies[feature]?.complete(value)
             return
         }
-        EqualizerProtocol.parse(p)?.let { _equalizer.value=it;eqReply?.complete(it);return }
+        EqualizerProtocol.parse(p)?.let { _equalizer.value=it;if((p[0].toInt() and 255)==0x57) eqReply?.complete(it);return }
         SonyProtocol.parseNc(p)?.let {
             setNc(it); _fresh.value = true
             ncReply?.takeIf{reply->reply.first==it}?.second?.complete(true)
@@ -387,7 +437,7 @@ object Headphones {
         SonyProtocol.parseBattery(p, _battery.value ?: SonyProtocol.Battery())?.let {
             val family=if(p[1].toInt()==0x0A) 2 else 1
             val hasValue=if(family==2) (p[2].toInt() and 255) in 1..100 else (p[2].toInt() and 255) in 1..100 || (p[4].toInt() and 255) in 1..100
-            if(hasValue) {_battery.value=it;_batteryFresh.value=true}
+            if(hasValue) {_battery.value=it;_batteryFresh.value=true;_batteryParts.update{parts->parts+SonyProtocol.liveBatteryParts(p)}}
             batteryReplies[family]?.complete(hasValue)
         }
     }
