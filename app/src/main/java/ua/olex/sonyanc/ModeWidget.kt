@@ -69,7 +69,6 @@ class ModeWidget : AppWidgetProvider() {
             Tile(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_icon,R.id.w_off_label,R.drawable.w_tile_end,R.drawable.w_icon_power_settings_new_on,R.drawable.w_icon_power_settings_new)
         )
         private fun mediumWidth(ctx:Context)=maxOf(240f,(54f*ctx.resources.configuration.fontScale+16f)*3f+16f)
-        private fun wideWidth(ctx:Context)=maxOf(310f,(54f*ctx.resources.configuration.fontScale+44f)*3f+16f)
 
         private fun showFailure(ctx:Context) {
             Handler(Looper.getMainLooper()).post {Toast.makeText(ctx,"Could not connect. Tap a mode to retry.",Toast.LENGTH_SHORT).show()}
@@ -87,8 +86,7 @@ class ModeWidget : AppWidgetProvider() {
                 val views=if(Build.VERSION.SDK_INT>=31) {
                     RemoteViews(mapOf(
                         SizeF(180f,64f) to viewsForSize(ctx,180f,current,busyMode),
-                        SizeF(mediumWidth(ctx),64f) to viewsForSize(ctx,mediumWidth(ctx),current,busyMode),
-                        SizeF(wideWidth(ctx),64f) to viewsForSize(ctx,wideWidth(ctx),current,busyMode)
+                        SizeF(mediumWidth(ctx),64f) to viewsForSize(ctx,mediumWidth(ctx),current,busyMode)
                     ))
                 } else {
                     val width=mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,300)
@@ -101,9 +99,7 @@ class ModeWidget : AppWidgetProvider() {
         /** The debug harness inflates these same RemoteViews at real launcher sizes. */
         internal fun viewsForSize(ctx:Context,width:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,interactive:Boolean=true):RemoteViews {
             val labels=width>=mediumWidth(ctx)
-            val wide=width>=wideWidth(ctx)
-            // LinearLayout.setOrientation is not remotable: use separate native layouts.
-            val v=RemoteViews(ctx.packageName,if(wide) R.layout.widget_modes else R.layout.widget_modes_stacked)
+            val v=RemoteViews(ctx.packageName,R.layout.widget_modes)
             val density=ctx.resources.displayMetrics.density
             for(tile in tiles) {
                 val mode=tile.mode
@@ -114,7 +110,7 @@ class ModeWidget : AppWidgetProvider() {
                 v.setTextColor(tile.label,ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
                 v.setTextViewText(tile.label,mode.short+if(applying) "…" else "")
                 v.setViewVisibility(tile.label,if(labels) View.VISIBLE else View.GONE)
-                v.setViewPadding(tile.label,if(wide) (6*density).toInt() else 0,if(wide) 0 else (2*density).toInt(),0,0)
+                v.setViewPadding(tile.label,0,(4*density).toInt(),0,0)
                 v.setContentDescription(tile.id,mode.label+if(applying) ", applying" else if(on) ", last used" else "")
                 if(interactive) {
                     val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
