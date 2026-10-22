@@ -145,12 +145,21 @@ jobs:
             adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER ua.olex.sonyanc > screens/launcher-activity.txt
             grep -q 'MainActivity' screens/launcher-activity.txt
             adb install -r release/app-release.apk
-            adb shell am start -W -n ua.olex.sonyanc/.MainActivity
+            adb shell am start -W -n ua.olex.sonyanc/.MainActivity > screens/release-startup.txt
             sleep 5
             adb exec-out screencap -p > screens/release-first-launch.png
             adb shell pidof ua.olex.sonyanc
             adb logcat -d -s AndroidRuntime:E > screens/crash.log
             ! grep -q "FATAL EXCEPTION" screens/crash.log
+            adb shell pm enable com.android.launcher3
+            adb shell input keyevent KEYCODE_HOME
+            sleep 2
+            adb shell dumpsys activity services ua.olex.sonyanc > screens/background-services.txt
+            ! grep -q 'ServiceRecord' screens/background-services.txt
+            adb shell dumpsys jobscheduler > screens/background-jobs.txt
+            ! grep -E 'JOB #.*ua\.olex\.sonyanc' screens/background-jobs.txt
+            adb shell dumpsys alarm > screens/background-alarms.txt
+            ! grep -E '(tag=|package=).*ua\.olex\.sonyanc' screens/background-alarms.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

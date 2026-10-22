@@ -37,7 +37,7 @@ class ModeWidget : AppWidgetProvider() {
         val pending=goAsync()
         val generation=latestTap.incrementAndGet()
         CoroutineScope(Dispatchers.IO).launch {
-            Headphones.hold()
+            Headphones.hold(foreground=false)
             try {
                 delay(70)
                 if(latestTap.get()!=generation) return@launch
@@ -51,7 +51,7 @@ class ModeWidget : AppWidgetProvider() {
                 if(latestTap.get()==generation) showFailure(ctx)
             } finally {
                 if(latestTap.get()==generation) {busyMode=null;refreshAll(ctx)}
-                Headphones.release(graceMs=1500)
+                Headphones.release(foreground=false)
                 pending.finish()
             }
         }

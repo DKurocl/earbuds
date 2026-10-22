@@ -40,20 +40,29 @@ class SonyConnection(
 
     @Volatile private var socket: MdrStream? = null
     private var reader: Job? = null
+    @Volatile private var connecting:BluetoothSocket?=null
+    @Volatile private var connectionEpoch=0L
     private val outputLock = Any()
     @Volatile private var seq = 0
     @Volatile private var pendingAck: CompletableDeferred<Boolean>? = null
     val connected get() = socket?.connected == true
     private val sendLock=Mutex()
 
-    suspend fun connect(device: BluetoothDevice): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(device: BluetoothDevice,stillNeeded:()->Boolean={true}): Boolean = withContext(Dispatchers.IO) {
+        if(!stillNeeded()) return@withContext false
         close(notify = false)
+        val expectedEpoch=connectionEpoch
         // The secure V2 service is verified on the owner's WF-1000XM5.
         // No slow attempts at unrelated XM3/SPP services.
         for (secure in listOf(true, false)) {
             currentCoroutineContext().ensureActive()
+            if(connectionEpoch!=expectedEpoch || !stillNeeded()) return@withContext false
             val candidate = if (secure) device.createRfcommSocketToServiceRecord(SONY_V2_UUID)
                 else device.createInsecureRfcommSocketToServiceRecord(SONY_V2_UUID)
+            val registered=synchronized(this@SonyConnection) {
+                if(connectionEpoch!=expectedEpoch || !stillNeeded()) false else {connecting=candidate;true}
+            }
+            if(!registered) {runCatching{candidate.close()};return@withContext false}
             // BluetoothSocket.connect is blocking: cancellation MUST close the socket.
             // A child of an independent scope also covers a cancelled caller/widget timeout.
             val caller = currentCoroutineContext().job
@@ -66,7 +75,11 @@ class SonyConnection(
                 candidate.connect()
                 currentCoroutineContext().ensureActive()
                 watchdog.cancel()
-                attach(BluetoothStream(candidate))
+                val installed=synchronized(this@SonyConnection) {
+                    if(connectionEpoch!=expectedEpoch || !stillNeeded()) false
+                    else {connecting=null;attach(BluetoothStream(candidate));true}
+                }
+                if(!installed) {runCatching{candidate.close()};return@withContext false}
                 log("✓ WF-1000XM5 · ${if (secure) "secure" else "insecure"} V2")
                 return@withContext true
             } catch (e: CancellationException) {
@@ -75,12 +88,12 @@ class SonyConnection(
             } catch (e: Exception) {
                 runCatching { candidate.close() }
                 log("✗ connect: ${e.message?.take(80)}")
-            } finally { watchdog.cancel() }
+            } finally {watchdog.cancel();if(connecting===candidate) connecting=null}
         }
         false
     }
 
-    internal fun attach(stream:MdrStream) {
+    @Synchronized internal fun attach(stream:MdrStream) {
         close(notify=false)
         socket=stream;seq=0
         startReader(stream)
@@ -168,12 +181,15 @@ class SonyConnection(
     }
 
     @Synchronized fun close(notify: Boolean = true) {
+        connectionEpoch++
+        val attempt=connecting;connecting=null
+        runCatching{attempt?.close()}
         val old = socket
         socket = null
         pendingAck?.complete(false)
         pendingAck = null
         reader?.cancel(); reader = null
         runCatching { old?.close() }
-        if (old != null && notify) onClosed()
+        if ((old != null || attempt!=null) && notify) onClosed()
     }
 }

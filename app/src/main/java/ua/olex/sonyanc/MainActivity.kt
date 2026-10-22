@@ -169,10 +169,10 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         onBluetooth={bluetooth()},onPick={openSheet("settings")},haptics=haptics,
         onAppSettings={openSheet("settings")},deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()})
     if(sheet!=null) ModalBottomSheet(sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
-        if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet)
-        else if(sheet=="deviceControls" || sheet=="earbuds") AdvancedSettingsSheet(::closeSheet,{openSheet("settings")})
+        if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet,startTick)
+        else if(sheet=="deviceControls" || sheet=="earbuds") AdvancedSettingsSheet(::closeSheet,{openSheet("settings")},startTick)
         else if(sheet=="diagnostics") Diagnostics(::closeSheet)
-        else if(sheet=="equalizer") EqualizerSheet(::closeSheet)
+        else if(sheet=="equalizer") EqualizerSheet(::closeSheet,startTick)
         else {
             Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 SheetHeader("Settings",::closeSheet)
@@ -536,13 +536,13 @@ private fun SheetHeader(title:String,onBack:()->Unit) {
 }
 
 @Composable
-private fun ConnectionSheet(status:Headphones.Status,codec:CodecProtocol.State?,busy:Boolean,onRefresh:()->Unit,onBluetooth:()->Unit,onBack:()->Unit) {
+private fun ConnectionSheet(status:Headphones.Status,codec:CodecProtocol.State?,busy:Boolean,onRefresh:()->Unit,onBluetooth:()->Unit,onBack:()->Unit,resumeTick:Int=0) {
     val cs=MaterialTheme.colorScheme
     val firmware by Headphones.firmware.collectAsState()
     val scope=rememberCoroutineScope()
     var turningOff by remember {mutableStateOf(false)}
     var confirmOff by remember {mutableStateOf(false)}
-    LaunchedEffect(Unit) {Headphones.readFirmware()}
+    LaunchedEffect(resumeTick) {Headphones.readFirmware()}
     if(confirmOff) AlertDialog(onDismissRequest={confirmOff=false},title={Text("Turn off earbuds?")},
         text={Text("Put them in the case and take them out to turn them on again.")},
         confirmButton={TextButton(onClick={confirmOff=false;scope.launch{turningOff=true;try{Headphones.powerOff()}finally{turningOff=false}}}) {Text("Turn off")}},
@@ -598,14 +598,14 @@ private fun Diagnostics(onBack:()->Unit) {
 }
 
 @Composable
-private fun EqualizerSheet(onBack:()->Unit) {
+private fun EqualizerSheet(onBack:()->Unit,resumeTick:Int=0) {
     val eq by Headphones.equalizer.collectAsState()
     val scope=rememberCoroutineScope()
     var busy by remember {mutableStateOf(true)}
     var message by remember {mutableStateOf<String?>(null)}
     var revision by remember {mutableIntStateOf(0)}
     fun load() {scope.launch {busy=true;message=null;try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false;revision++}}}
-    LaunchedEffect(Unit) {try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false;revision++}}
+    LaunchedEffect(resumeTick) {busy=true;message=null;try {if(Headphones.readEqualizer()==null) message="No equalizer response. Reconnect the earbuds and retry."} finally {busy=false;revision++}}
     fun update(preset:Int?=null,bands:List<Int>?=null) {scope.launch {busy=true;message=null;try {if(!Headphones.writeEqualizer(preset,bands)) message="Change not confirmed. Your earbuds may still use the previous setting."} finally {busy=false;revision++}}}
     Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
