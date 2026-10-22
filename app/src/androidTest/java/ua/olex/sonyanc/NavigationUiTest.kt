@@ -9,7 +9,7 @@ class NavigationUiTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     @Test fun productionGearOpensEarbudSettingsInOneTap() {
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Earbud settings").assertIsDisplayed()
+        compose.onAllNodesWithText("Earbud settings").onLast().assertIsDisplayed()
         compose.onNodeWithText("DSEE").assertIsDisplayed()
         compose.onNodeWithText("Device controls").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()

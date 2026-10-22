@@ -23,13 +23,15 @@ class DesignPreviewActivity : ComponentActivity() {
         val scene=intent.getStringExtra("scene") ?: "anc"
         setContent { AppTheme {
             if(scene=="settings") {
-                EarbudSettingsContent(mapOf(
+                Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.fillMaxSize().statusBarsPadding()) {EarbudSettingsContent(mapOf(
                     AdvancedSettings.Key.CHAT to listOf(0,1),AdvancedSettings.Key.CHAT_CONFIG to listOf(0,1),
                     AdvancedSettings.Key.SIDETONE to listOf(0,7,9),AdvancedSettings.Key.TOUCH to listOf(2,0,32),
                     AdvancedSettings.Key.CYCLE to listOf(1,53,1,0,1),AdvancedSettings.Key.GESTURES to listOf(0),
                     AdvancedSettings.Key.POWER to listOf(16,0),AdvancedSettings.Key.QUALITY to listOf(0),
                     AdvancedSettings.Key.GUIDANCE to listOf(0,1),AdvancedSettings.Key.GUIDANCE_VOLUME to listOf(0)),
-                    DeviceSettingsProtocol.Feature.entries.associateWith{true})
+                    DeviceSettingsProtocol.Feature.entries.associateWith{true})}
+                }
                 return@AppTheme
             }
             if(scene=="widgets") { WidgetGallery();return@AppTheme }

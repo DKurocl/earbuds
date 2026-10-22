@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="w_bg">#FF1D1B20</color>
-    <color name="w_title">#FFCAC4D0</color>
     <color name="w_on">#FFD0BCFF</color>
     <color name="w_on_text">#FF381E72</color>
     <color name="w_off">#FF332D41</color>

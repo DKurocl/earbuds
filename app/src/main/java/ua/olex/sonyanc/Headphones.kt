@@ -17,7 +17,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 
 /** One on-demand link shared by the screen and widget; no persistent service. */
-@SuppressLint("MissingPermission")
+// The only stored context is ctx.applicationContext; no Activity is retained.
+@SuppressLint("MissingPermission", "StaticFieldLeak")
 object Headphones {
     enum class Status { DISCONNECTED, CONNECTING, CONNECTED, FAILED }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
