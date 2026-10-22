@@ -44,3 +44,7 @@ wallpaper-driven through dynamic color.
 Prompt: Faithful transparent product cutout of the supplied silver Sony WF-1000XM5 closed case. Preserve rounded oblong geometry, silver ivory finish, lid seam, centered LED and subtle SONY mark. Improve clarity and neutral lighting; front view, entire case visible; no invented buttons, stand, scene or extra text.
 
 Earbuds use the existing transparent silver product asset with corrected rectangular clipping; no synthetic case drawing remains.
+
+## 0.8.1 settings navigation
+
+The main gear and Earbud settings row open one full-height sheet directly. DSEE, auto-pause and all additional device controls share this screen. Boolean settings are inline switches; multiple-choice settings show their current value in a directly tappable menu. No Device controls submenu, collapsed cards or manual Read setting step remains. Values load on entry; existing values are reused. App-only preferences remain available through the settings icon in the sheet and their main-screen row.
