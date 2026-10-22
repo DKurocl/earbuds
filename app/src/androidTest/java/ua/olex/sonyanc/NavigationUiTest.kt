@@ -4,6 +4,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertTrue
+import androidx.lifecycle.Lifecycle
 
 class NavigationUiTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
@@ -14,5 +16,11 @@ class NavigationUiTest {
         compose.onNodeWithText("Device controls").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Hush").assertIsDisplayed()
+    }    @Test fun leavingTheAppStopsConnectionOwnership() {
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        assertTrue("Connection or polling still owned after onStop",Headphones.idle)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.onNodeWithText("Hush").assertIsDisplayed()
     }
+
 }

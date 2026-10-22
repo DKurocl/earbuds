@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 
 /** All earbud controls are visible on entry; only actual choices open a menu. */
 @Composable
-fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
+fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={},resumeTick:Int=0) {
     val values by Headphones.advanced.collectAsState()
     val features by Headphones.features.collectAsState()
     val scope=rememberCoroutineScope()
@@ -42,7 +42,7 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
             }
         } finally {loading=emptySet();featureLoading=emptySet()}
     }
-    LaunchedEffect(Unit) {load()}
+    LaunchedEffect(resumeTick) {load()}
     fun update(key:AdvancedSettings.Key,index:Int,code:Int) {scope.launch {
         writing=key;message=null
         try {if(!Headphones.writeAdvancedField(key,index,code)) message="Change not confirmed. Refresh this setting."}

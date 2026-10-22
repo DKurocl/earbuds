@@ -77,3 +77,9 @@ The full CI path runs debug and release JVM tests, lint for both variants, debug
 Regression coverage includes fragmented/escaped frames, both command tables, ACK sequencing, simultaneous sends, wrong ACKs, timeout/reconnect, cancellation and blocked writes. Every exposed advanced choice is checked for valid payloads and preservation of unedited fields. Equalizer presets/bounds, codec, partial battery freshness, the one-tap settings route, every toggle and every dropdown are covered.
 
 Disconnected settings are invalidated immediately. Writes require a live session and recognized current state. Write readback is matched to return packets rather than notifications; independent setting reads no longer hold the global command mutex while awaiting payloads. Editing one touch field merges with the newest device values. Ambient touch aliases compare semantically. Noise commands superseded during connection are discarded before transmission.
+
+## Idle behavior
+
+There is no persistent service, alarm, scheduled worker or notification. Leaving the last foreground screen cancels polling and immediately closes the control socket, including an in-flight connection attempt. Late UI queries cannot reconnect without a live screen/action lease. Widgets and the optional Quick Settings tile acquire a separate short action lease; this never enables battery/codec polling, and the socket closes when that command finishes. Opening a sheet again after returning to the foreground refreshes its device state. Android may retain the process in its normal cache; this does not keep a control connection or polling loop running.
+
+Release builds use R8 and resource shrinking. CI checks lease ownership in unit/UI tests and checks the installed release's services, jobs and alarms after actually sending it to the home screen. It does not force-stop the process to manufacture an idle result.

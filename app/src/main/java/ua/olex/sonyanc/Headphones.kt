@@ -75,8 +75,8 @@ object Headphones {
     private val featureLocks=ConcurrentHashMap<DeviceSettingsProtocol.Feature,Mutex>()
     private val equalizerLock=Mutex()
     private var infoJob: Job? = null
-    @Volatile private var holders = 0
-    private var idleJob: Job? = null
+    private val usage=ConnectionUse()
+    val idle get()=!usage.active && !conn.connected && infoJob?.isActive!=true && _pending.value==null
 
     private val conn = SonyConnection(scope, ::addLog, ::onPayload) {
         _status.value = Status.DISCONNECTED
@@ -138,19 +138,15 @@ object Headphones {
     private fun savedDevice(): BluetoothDevice? = bondedDevices(app)
         .firstOrNull { it.address == Prefs.deviceAddress(app) }
 
-    @Synchronized fun hold() { holders++; idleJob?.cancel() }
-    @Synchronized fun release(graceMs: Long = 12000) {
-        holders = (holders - 1).coerceAtLeast(0)
-        if (holders == 0) {
-            idleJob?.cancel()
-            idleJob = scope.launch {
-                delay(graceMs)
-                lock.withLock { synchronized(this@Headphones) { if (holders == 0) conn.close() } }
-            }
-        }
+    @Synchronized fun hold(foreground:Boolean=true) {usage.acquire(foreground)}
+    @Synchronized fun release(foreground:Boolean=true) {
+        usage.release(foreground)
+        if(!usage.foreground) {infoJob?.cancel();infoJob=null}
+        if(!usage.active) {cancelModes();conn.close()}
     }
 
     private suspend fun ensureConnectedLocked(): Boolean {
+        if(!usage.active) return false
         if (conn.connected) return true
         if (!hasPermission(app)) return fail("Allow Bluetooth access")
         val adapter = app.getSystemService(BluetoothManager::class.java)?.adapter
@@ -167,12 +163,14 @@ object Headphones {
         _firmware.value=null
         _equalizer.value = null
         try {
-            if (!conn.connect(dev) || !conn.send(SonyProtocol.parseHex(SonyProtocol.INIT_HEX))) {
+            if (!conn.connect(dev){usage.active} || !conn.send(SonyProtocol.parseHex(SonyProtocol.INIT_HEX))) {
                 conn.close()
+                if(!usage.active) return false
                 return fail("Could not connect. Check that your earbuds are connected to this phone.")
             }
         } catch (e: CancellationException) { conn.close(); throw e }
         catch (e: Exception) { addLog("✗ ${e.message}"); return fail("Could not connect to the earbuds") }
+        if(!usage.active) {conn.close();return false}
         _status.value = Status.CONNECTED
         _error.value = null
         startInfoLoop()
@@ -253,16 +251,16 @@ object Headphones {
         _firmware.value=null
         ModeWidget.refreshAll(app)
     }
-    private fun startInfoLoop() {
-        if(infoJob?.isActive==true) return
+    @Synchronized private fun startInfoLoop() {
+        if(!usage.foreground || infoJob?.isActive==true) return
         infoJob=scope.launch {
             delay(400)
             var batteryDue=0L
-            while(holders>0 && conn.connected) {
-                while(_pending.value!=null && holders>0 && conn.connected) delay(100)
-                if(holders==0 || !conn.connected) break
+            while(usage.foreground && conn.connected) {
+                while(_pending.value!=null && usage.foreground && conn.connected) delay(100)
+                if(!usage.foreground || !conn.connected) break
                 queryCodec()
-                if(holders==0 || !conn.connected) break
+                if(!usage.foreground || !conn.connected) break
                 if(SystemClock.elapsedRealtime()>=batteryDue) {
                     queryBattery()
                     batteryDue=SystemClock.elapsedRealtime()+if(_batteryParts.value.containsAll(setOf(0,1,2))) 30000L else 8000L
