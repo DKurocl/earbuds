@@ -12,7 +12,7 @@ import java.util.UUID
 class SonyConnection(
     private val scope: CoroutineScope,
     private val log: (String) -> Unit,
-    private val onPayload: (ByteArray) -> Unit,
+    private val onPayload: (Int, ByteArray) -> Unit,
     private val onClosed: () -> Unit,
 ) {
     companion object {
@@ -62,13 +62,13 @@ class SonyConnection(
         false
     }
 
-    suspend fun send(payload: ByteArray): Boolean = withContext(Dispatchers.IO) {
+    suspend fun send(payload: ByteArray, type:Byte=SonyProtocol.TYPE_COMMAND): Boolean = withContext(Dispatchers.IO) {
         val s = socket ?: return@withContext false
         val ack = CompletableDeferred<Boolean>()
         pendingAck = ack
         try {
             synchronized(outputLock) {
-                s.outputStream.write(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, seq, payload))
+                s.outputStream.write(SonyProtocol.frame(type, seq, payload))
                 s.outputStream.flush()
             }
             log("→ ${SonyProtocol.hex(payload)}")
@@ -132,7 +132,7 @@ class SonyConnection(
             s.outputStream.flush()
         }
         log("← [%02X] %s".format(f.type, SonyProtocol.hex(f.payload)))
-        onPayload(f.payload)
+        onPayload(f.type,f.payload)
     }
 
     @Synchronized fun close(notify: Boolean = true) {
