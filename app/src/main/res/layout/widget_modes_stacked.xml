@@ -1,8 +1,6 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent">
-    <LinearLayout android:id="@android:id/background"
-        android:layout_width="match_parent" android:layout_height="64dp"
-        android:layout_gravity="center" android:orientation="horizontal"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="horizontal"
         android:background="@drawable/w_bg" android:padding="4dp">
         <LinearLayout android:id="@+id/w_anc"
             android:layout_width="0dp" android:layout_height="match_parent"
@@ -59,4 +57,3 @@
                 android:text="Off" />
         </LinearLayout>
     </LinearLayout>
-</FrameLayout>
