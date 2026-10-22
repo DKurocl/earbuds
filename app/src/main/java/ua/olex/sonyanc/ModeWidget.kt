@@ -6,6 +6,11 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.util.SizeF
+import android.view.View
+import android.widget.LinearLayout
 import android.os.Handler
 import android.os.Looper
 import android.widget.RemoteViews
@@ -20,6 +25,10 @@ import java.util.concurrent.atomic.AtomicLong
 /** Three controls only. A tap reconnects on demand; no persistent service or notification. */
 class ModeWidget : AppWidgetProvider() {
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) = render(ctx,mgr,ids)
+    override fun onAppWidgetOptionsChanged(ctx:Context,mgr:AppWidgetManager,id:Int,options:Bundle) {
+        super.onAppWidgetOptionsChanged(ctx,mgr,id,options)
+        render(ctx,mgr,intArrayOf(id))
+    }
 
     override fun onReceive(ctx: Context, intent: Intent) {
         super.onReceive(ctx,intent)
@@ -54,7 +63,14 @@ class ModeWidget : AppWidgetProvider() {
         private const val EXTRA_MODE="mode"
         private val latestTap=AtomicLong()
         @Volatile private var busyMode:SonyProtocol.Mode?=null
-        private val tiles=listOf(SonyProtocol.Mode.ANC to R.id.w_anc,SonyProtocol.Mode.AMBIENT to R.id.w_amb,SonyProtocol.Mode.OFF to R.id.w_off)
+        private data class Tile(val mode:SonyProtocol.Mode,val id:Int,val icon:Int,val label:Int,val normal:Int,val selectedIcon:Int,val normalIcon:Int)
+        private val tiles=listOf(
+            Tile(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_icon,R.id.w_anc_label,R.drawable.w_tile_start,R.drawable.w_icon_noise_control_off_on,R.drawable.w_icon_noise_control_off),
+            Tile(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_icon,R.id.w_amb_label,R.drawable.w_tile_middle,R.drawable.w_icon_hearing_on,R.drawable.w_icon_hearing),
+            Tile(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_icon,R.id.w_off_label,R.drawable.w_tile_end,R.drawable.w_icon_power_settings_new_on,R.drawable.w_icon_power_settings_new)
+        )
+        private fun mediumWidth(ctx:Context)=maxOf(240f,(54f*ctx.resources.configuration.fontScale+16f)*3f+16f)
+        private fun wideWidth(ctx:Context)=maxOf(310f,(54f*ctx.resources.configuration.fontScale+44f)*3f+16f)
 
         private fun showFailure(ctx:Context) {
             Handler(Looper.getMainLooper()).post {Toast.makeText(ctx,"Could not connect. Tap a mode to retry.",Toast.LENGTH_SHORT).show()}
@@ -67,26 +83,53 @@ class ModeWidget : AppWidgetProvider() {
         }
 
         private fun render(ctx:Context,mgr:AppWidgetManager,ids:IntArray) {
-            val v=RemoteViews(ctx.packageName,R.layout.widget_modes)
             val current=Prefs.lastNc(ctx)?.mode
-            for((mode,id) in tiles) {
-                val on=mode==current
-                val applying=mode==busyMode
-                v.setInt(id,"setBackgroundResource",if(on) R.drawable.w_tile_on else R.drawable.w_tile_off)
-                v.setTextColor(id,ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
-                v.setTextViewText(id,mode.short+if(applying) "…" else "")
-                v.setContentDescription(id,mode.label+if(applying) ", applying" else if(on) ", last used" else "")
-                val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
-                    val setup=Intent(ctx,MainActivity::class.java).putExtra("hush.mode",mode.name)
-                    PendingIntent.getActivity(ctx,mode.ordinal,setup,flags)
+            for(id in ids) {
+                val views=if(Build.VERSION.SDK_INT>=31) {
+                    RemoteViews(mapOf(
+                        SizeF(180f,64f) to viewsForSize(ctx,180f,current,busyMode),
+                        SizeF(mediumWidth(ctx),64f) to viewsForSize(ctx,mediumWidth(ctx),current,busyMode),
+                        SizeF(wideWidth(ctx),64f) to viewsForSize(ctx,wideWidth(ctx),current,busyMode)
+                    ))
                 } else {
-                    val set=Intent(ctx,ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE,mode.name)
-                    PendingIntent.getBroadcast(ctx,mode.ordinal,set,flags)
+                    val width=mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,300)
+                    viewsForSize(ctx,width.toFloat(),current,busyMode)
                 }
-                v.setOnClickPendingIntent(id,action)
+                mgr.updateAppWidget(id,views)
             }
-            mgr.updateAppWidget(ids,v)
+        }
+
+        /** The debug harness inflates these same RemoteViews at real launcher sizes. */
+        internal fun viewsForSize(ctx:Context,width:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,interactive:Boolean=true):RemoteViews {
+            val v=RemoteViews(ctx.packageName,R.layout.widget_modes)
+            val labels=width>=mediumWidth(ctx)
+            val wide=width>=wideWidth(ctx)
+            val density=ctx.resources.displayMetrics.density
+            for(tile in tiles) {
+                val mode=tile.mode
+                val on=mode==current
+                val applying=mode==pending
+                v.setInt(tile.id,"setBackgroundResource",if(on) R.drawable.w_tile_on else tile.normal)
+                v.setInt(tile.id,"setOrientation",if(wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL)
+                v.setImageViewResource(tile.icon,if(on) tile.selectedIcon else tile.normalIcon)
+                v.setTextColor(tile.label,ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
+                v.setTextViewText(tile.label,mode.short+if(applying) "…" else "")
+                v.setViewVisibility(tile.label,if(labels) View.VISIBLE else View.GONE)
+                v.setViewPadding(tile.label,if(wide) (6*density).toInt() else 0,if(wide) 0 else (2*density).toInt(),0,0)
+                v.setContentDescription(tile.id,mode.label+if(applying) ", applying" else if(on) ", last used" else "")
+                if(interactive) {
+                    val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
+                        val setup=Intent(ctx,MainActivity::class.java).putExtra("hush.mode",mode.name)
+                        PendingIntent.getActivity(ctx,mode.ordinal,setup,flags)
+                    } else {
+                        val set=Intent(ctx,ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE,mode.name)
+                        PendingIntent.getBroadcast(ctx,mode.ordinal,set,flags)
+                    }
+                    v.setOnClickPendingIntent(tile.id,action)
+                }
+            }
+            return v
         }
     }
 }

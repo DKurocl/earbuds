@@ -98,6 +98,18 @@ jobs:
             sleep 5
             adb exec-out screencap -p > screens/error-large-text.png
             adb shell am force-stop ua.olex.sonyanc
+            adb shell settings put system font_scale 1.0
+            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene widgets
+            sleep 3
+            adb exec-out screencap -p > screens/widgets-dark.png
+            adb shell am force-stop ua.olex.sonyanc
+            adb shell settings put system font_scale 1.3
+            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene widgets
+            sleep 3
+            adb exec-out screencap -p > screens/widgets-large-text.png
+            adb shell am force-stop ua.olex.sonyanc
+            adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER ua.olex.sonyanc > screens/launcher-activity.txt
+            grep -q 'MainActivity' screens/launcher-activity.txt
             adb install -r release/app-release.apk
             adb shell am start -W -n ua.olex.sonyanc/.MainActivity
             sleep 5
