@@ -12,7 +12,7 @@ The main screen (`HushScreen` in `MainActivity.kt`) follows that layout, top to 
    Colors: green (`#1E8E3E` light / `#6DD58C` dark), error at 20 % or below, outline when unknown,
    alpha .55 when the value is stale.
    Art: the left and right buds are cropped from `wf1000xm5_silver.webp`
-   (`ContentScale.Crop` + CenterStart/End). The case is drawn on a Canvas (`CaseArt`).
+   (`ContentScale.Crop` + CenterStart/End), without circular clipping. The case is a transparent photo cutout (`wf1000xm5_case.webp`).
    Tapping the row refreshes the battery.
 4. **Two big actions** (`BigAction`): a 76×56 dp pill in `secondary`/`onSecondary` with a label
    under it. The actions are Bluetooth settings and Connect/Disconnect.
@@ -30,9 +30,17 @@ wallpaper-driven through dynamic color.
 
 ## Not done yet (candidates)
 
-- Rename the device inline (pencil next to the name, as on Pixel).
+- Local display name is editable from the pencil next to the name and Settings. It does not change the Bluetooth broadcast name.
 - Touch-control customization screen ("Customize left/right" checklist of which modes
   press-and-hold cycles through). Needs the Sony V2 touch-function command to be probed first.
 - Ear-tip fit test. Sony has a protocol command for it, but it is unknown/unverified here.
 - 4th mode "Adaptive" (Sony's adaptive sound control) — protocol unknown.
-- Replace the drawn case with real artwork if a licensed asset is available.
+- Quick Settings tile cycles ANC → Ambient → Off through the same bounded command path as the widget. Add it from Settings on Android 13+, or the system tile editor.
+
+## 0.7.0 photo asset
+
+`app/src/main/res/drawable-nodpi/wf1000xm5_case.webp` was edited using the built-in image generation tool from the user-supplied closed-case photo, then alpha-cropped and resized for Android.
+
+Prompt: Faithful transparent product cutout of the supplied silver Sony WF-1000XM5 closed case. Preserve rounded oblong geometry, silver ivory finish, lid seam, centered LED and subtle SONY mark. Improve clarity and neutral lighting; front view, entire case visible; no invented buttons, stand, scene or extra text.
+
+Earbuds use the existing transparent silver product asset with corrected rectangular clipping; no synthetic case drawing remains.
