@@ -1,6 +1,6 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background"
         android:layout_width="match_parent" android:layout_height="match_parent"
-        android:orientation="horizontal"
+        android:orientation="horizontal" android:baselineAligned="false"
         android:background="@drawable/w_bg" android:paddingHorizontal="10dp" android:paddingVertical="8dp">
         <LinearLayout android:id="@+id/w_anc"
             android:layout_width="0dp" android:layout_height="match_parent"
@@ -18,7 +18,7 @@
                 android:includeFontPadding="false" android:singleLine="true"
                 android:importantForAccessibility="no"
                 android:textSize="13sp" android:textColor="@color/w_off_text"
-                android:text="ANC" />
+                android:text="@string/shortcut_anc" />
         </LinearLayout>
         <LinearLayout android:id="@+id/w_amb"
             android:layout_width="0dp" android:layout_height="match_parent"
@@ -36,7 +36,7 @@
                 android:includeFontPadding="false" android:singleLine="true"
                 android:importantForAccessibility="no"
                 android:textSize="13sp" android:textColor="@color/w_off_text"
-                android:text="Ambient" />
+                android:text="@string/shortcut_ambient" />
         </LinearLayout>
         <LinearLayout android:id="@+id/w_off"
             android:layout_width="0dp" android:layout_height="match_parent"
@@ -54,6 +54,6 @@
                 android:includeFontPadding="false" android:singleLine="true"
                 android:importantForAccessibility="no"
                 android:textSize="13sp" android:textColor="@color/w_off_text"
-                android:text="Off" />
+                android:text="@string/shortcut_off" />
         </LinearLayout>
     </LinearLayout>

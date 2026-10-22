@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
 
 /** All earbud controls are visible on entry; only actual choices open a menu. */
@@ -97,7 +98,14 @@ fun EarbudSettingsContent(
     }
 }
 
-@Composable private fun SettingRow(title:String,busy:Boolean,content:@Composable ()->Unit) {
+@Composable private fun SettingRow(title:String,busy:Boolean,stacked:Boolean=false,content:@Composable ()->Unit) {
+    if(stacked) {
+        Column(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            Text(title,style=MaterialTheme.typography.bodyLarge)
+            Box(Modifier.align(Alignment.End)) {if(busy) LoadingIndicator(Modifier.size(24.dp)) else content()}
+        }
+        return
+    }
         Row(Modifier.fillMaxWidth().heightIn(min=64.dp).padding(horizontal=16.dp,vertical=8.dp),
             verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             Text(title,style=MaterialTheme.typography.bodyLarge,modifier=Modifier.weight(1f))
@@ -113,17 +121,19 @@ fun EarbudSettingsContent(
     }
 @Composable private fun Control(key:AdvancedSettings.Key,value:List<Int>?,busy:Boolean,enabled:Boolean,update:(AdvancedSettings.Key,Int,Int)->Unit) {
         val cs=MaterialTheme.colorScheme
+        val largeFont=LocalDensity.current.fontScale>=1.3f
         key.fields.forEach {field ->
             val title=when(key) {
                 AdvancedSettings.Key.TOUCH -> "${field.label} touch control"
                 AdvancedSettings.Key.CHAT_CONFIG -> if(field.index==0) "Conversation sensitivity" else "Resume after conversation"
                 else -> key.title
             }
-            SettingRow(title,busy) {
+            val toggle=field.choices.size==2 && field.choices[0].label=="On"
+            SettingRow(title,busy,stacked=largeFont && !toggle) {
                 if(value==null) Text("Unavailable",style=MaterialTheme.typography.labelMedium,color=cs.onSurfaceVariant)
                 else {
                     val code=value[field.index].let{if(key==AdvancedSettings.Key.TOUCH && it==0x35) 0 else it}
-                    if(field.choices.size==2 && field.choices[0].label=="On") {
+                    if(toggle) {
                         Switch(checked=code==0,enabled=enabled,modifier=Modifier.semantics{contentDescription=title},onCheckedChange={checked->
                             update(key,field.index,if(checked) 0 else 1)
                         })

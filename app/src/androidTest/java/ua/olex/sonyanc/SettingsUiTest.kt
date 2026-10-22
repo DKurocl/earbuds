@@ -2,6 +2,8 @@ package ua.olex.sonyanc
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.junit4.createComposeRule
 import org.junit.Assert.*
 import org.junit.Rule
@@ -78,5 +80,19 @@ class SettingsUiTest {
         compose.onNodeWithText("Low").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Ambient sound level").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"5 of 20"))
         compose.onNodeWithContentDescription("Voice focus").performScrollTo().performClick().assertIsOn()
+    }    @Test fun largeFontChoicesArePlacedBelowTheirLabels() {
+        compose.setContent {
+            val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,1.5f)) {
+                AppTheme(dynamic=false) {EarbudSettingsContent(fixtures,DeviceSettingsProtocol.Feature.entries.associateWith{true})}
+            }
+        }
+        listOf("Left touch control","Right touch control","Automatic power off","Bluetooth quality","Voice guidance volume").forEach {title->
+            compose.onNodeWithContentDescription(title).performScrollTo()
+            val label=compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
+            val choice=compose.onNodeWithContentDescription(title).fetchSemanticsNode().boundsInRoot
+            assertTrue("$title value overlaps its label",label.bottom<=choice.top+1f)
+        }
     }
+
 }
