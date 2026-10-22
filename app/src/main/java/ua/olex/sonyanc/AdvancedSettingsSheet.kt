@@ -42,9 +42,9 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
         } finally {loading=emptySet();featureLoading=emptySet()}
     }
     LaunchedEffect(Unit) {load()}
-    fun update(key:AdvancedSettings.Key,value:List<Int>) {scope.launch {
+    fun update(key:AdvancedSettings.Key,index:Int,code:Int) {scope.launch {
         writing=key;message=null
-        try {if(!Headphones.writeAdvanced(key,value)) message="Change not confirmed. Refresh this setting."}
+        try {if(!Headphones.writeAdvancedField(key,index,code)) message="Change not confirmed. Refresh this setting."}
         finally {writing=null}
     }}
     fun changeBasic(feature:DeviceSettingsProtocol.Feature,wanted:Boolean) {scope.launch {
@@ -52,32 +52,45 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
         try {if(!Headphones.writeFeature(feature,wanted)) message="Change not confirmed. Refresh this setting."}
         finally {featureLoading=featureLoading-feature}
     }}
+    EarbudSettingsContent(values,features,loading,featureLoading,writing,message,onBack,onAppSettings,
+        onRefresh={scope.launch{load(true)}},onUpdate=::update,onBasic=::changeBasic)
+}
+
+/** UI-only state boundary: previews/tests never claim to emulate physical headphones. */
+@Composable
+fun EarbudSettingsContent(
+    values:Map<AdvancedSettings.Key,List<Int>>,features:Map<DeviceSettingsProtocol.Feature,Boolean>,
+    loading:Set<AdvancedSettings.Key> = emptySet(),featureLoading:Set<DeviceSettingsProtocol.Feature> = emptySet(),
+    writing:AdvancedSettings.Key? = null,message:String? = null,onBack:()->Unit={},onAppSettings:()->Unit={},
+    onRefresh:()->Unit={},onUpdate:(AdvancedSettings.Key,Int,Int)->Unit={_,_,_->},onBasic:(DeviceSettingsProtocol.Feature,Boolean)->Unit={_,_->}
+) {
+    val cs=MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             IconButton(onClick=onBack,modifier=Modifier.semantics{contentDescription="Back"}){HushIcon(Glyph.BACK)}
             Text("Earbud settings",style=MaterialTheme.typography.headlineSmall,modifier=Modifier.weight(1f))
-            IconButton(enabled=loading.isEmpty() && featureLoading.isEmpty() && writing==null,onClick={scope.launch{load(true)}},modifier=Modifier.semantics{contentDescription="Refresh settings"}) {HushIcon(Glyph.REFRESH)}
+            IconButton(enabled=loading.isEmpty() && featureLoading.isEmpty() && writing==null,onClick=onRefresh,modifier=Modifier.semantics{contentDescription="Refresh settings"}) {HushIcon(Glyph.REFRESH)}
             IconButton(onClick=onAppSettings,modifier=Modifier.semantics{contentDescription="App settings"}) {HushIcon(Glyph.SETTINGS)}
         }
         Group("Sound") {
-            Basic(DeviceSettingsProtocol.Feature.DSEE,features[DeviceSettingsProtocol.Feature.DSEE],DeviceSettingsProtocol.Feature.DSEE in featureLoading,featureLoading.isEmpty()) {wanted->changeBasic(DeviceSettingsProtocol.Feature.DSEE,wanted)}
-            Control(AdvancedSettings.Key.CHAT,values[AdvancedSettings.Key.CHAT],AdvancedSettings.Key.CHAT in loading || writing==AdvancedSettings.Key.CHAT,writing==null,::update)
-            Control(AdvancedSettings.Key.CHAT_CONFIG,values[AdvancedSettings.Key.CHAT_CONFIG],AdvancedSettings.Key.CHAT_CONFIG in loading || writing==AdvancedSettings.Key.CHAT_CONFIG,writing==null,::update)
-            Control(AdvancedSettings.Key.SIDETONE,values[AdvancedSettings.Key.SIDETONE],AdvancedSettings.Key.SIDETONE in loading || writing==AdvancedSettings.Key.SIDETONE,writing==null,::update)
+            Basic(DeviceSettingsProtocol.Feature.DSEE,features[DeviceSettingsProtocol.Feature.DSEE],DeviceSettingsProtocol.Feature.DSEE in featureLoading,featureLoading.isEmpty()) {wanted->onBasic(DeviceSettingsProtocol.Feature.DSEE,wanted)}
+            Control(AdvancedSettings.Key.CHAT,values[AdvancedSettings.Key.CHAT],AdvancedSettings.Key.CHAT in loading || writing==AdvancedSettings.Key.CHAT,writing==null,onUpdate)
+            Control(AdvancedSettings.Key.CHAT_CONFIG,values[AdvancedSettings.Key.CHAT_CONFIG],AdvancedSettings.Key.CHAT_CONFIG in loading || writing==AdvancedSettings.Key.CHAT_CONFIG,writing==null,onUpdate)
+            Control(AdvancedSettings.Key.SIDETONE,values[AdvancedSettings.Key.SIDETONE],AdvancedSettings.Key.SIDETONE in loading || writing==AdvancedSettings.Key.SIDETONE,writing==null,onUpdate)
         }
         Group("Controls") {
-            Control(AdvancedSettings.Key.TOUCH,values[AdvancedSettings.Key.TOUCH],AdvancedSettings.Key.TOUCH in loading || writing==AdvancedSettings.Key.TOUCH,writing==null,::update)
-            Control(AdvancedSettings.Key.CYCLE,values[AdvancedSettings.Key.CYCLE],AdvancedSettings.Key.CYCLE in loading || writing==AdvancedSettings.Key.CYCLE,writing==null,::update)
-            Control(AdvancedSettings.Key.GESTURES,values[AdvancedSettings.Key.GESTURES],AdvancedSettings.Key.GESTURES in loading || writing==AdvancedSettings.Key.GESTURES,writing==null,::update)
+            Control(AdvancedSettings.Key.TOUCH,values[AdvancedSettings.Key.TOUCH],AdvancedSettings.Key.TOUCH in loading || writing==AdvancedSettings.Key.TOUCH,writing==null,onUpdate)
+            Control(AdvancedSettings.Key.CYCLE,values[AdvancedSettings.Key.CYCLE],AdvancedSettings.Key.CYCLE in loading || writing==AdvancedSettings.Key.CYCLE,writing==null,onUpdate)
+            Control(AdvancedSettings.Key.GESTURES,values[AdvancedSettings.Key.GESTURES],AdvancedSettings.Key.GESTURES in loading || writing==AdvancedSettings.Key.GESTURES,writing==null,onUpdate)
         }
         Group("Playback & connection") {
-            Basic(DeviceSettingsProtocol.Feature.AUTO_PAUSE,features[DeviceSettingsProtocol.Feature.AUTO_PAUSE],DeviceSettingsProtocol.Feature.AUTO_PAUSE in featureLoading,featureLoading.isEmpty()) {wanted->changeBasic(DeviceSettingsProtocol.Feature.AUTO_PAUSE,wanted)}
-            Control(AdvancedSettings.Key.POWER,values[AdvancedSettings.Key.POWER],AdvancedSettings.Key.POWER in loading || writing==AdvancedSettings.Key.POWER,writing==null,::update)
-            Control(AdvancedSettings.Key.QUALITY,values[AdvancedSettings.Key.QUALITY],AdvancedSettings.Key.QUALITY in loading || writing==AdvancedSettings.Key.QUALITY,writing==null,::update)
+            Basic(DeviceSettingsProtocol.Feature.AUTO_PAUSE,features[DeviceSettingsProtocol.Feature.AUTO_PAUSE],DeviceSettingsProtocol.Feature.AUTO_PAUSE in featureLoading,featureLoading.isEmpty()) {wanted->onBasic(DeviceSettingsProtocol.Feature.AUTO_PAUSE,wanted)}
+            Control(AdvancedSettings.Key.POWER,values[AdvancedSettings.Key.POWER],AdvancedSettings.Key.POWER in loading || writing==AdvancedSettings.Key.POWER,writing==null,onUpdate)
+            Control(AdvancedSettings.Key.QUALITY,values[AdvancedSettings.Key.QUALITY],AdvancedSettings.Key.QUALITY in loading || writing==AdvancedSettings.Key.QUALITY,writing==null,onUpdate)
         }
         Group("Voice guidance") {
-            Control(AdvancedSettings.Key.GUIDANCE,values[AdvancedSettings.Key.GUIDANCE],AdvancedSettings.Key.GUIDANCE in loading || writing==AdvancedSettings.Key.GUIDANCE,writing==null,::update)
-            Control(AdvancedSettings.Key.GUIDANCE_VOLUME,values[AdvancedSettings.Key.GUIDANCE_VOLUME],AdvancedSettings.Key.GUIDANCE_VOLUME in loading || writing==AdvancedSettings.Key.GUIDANCE_VOLUME,writing==null,::update)
+            Control(AdvancedSettings.Key.GUIDANCE,values[AdvancedSettings.Key.GUIDANCE],AdvancedSettings.Key.GUIDANCE in loading || writing==AdvancedSettings.Key.GUIDANCE,writing==null,onUpdate)
+            Control(AdvancedSettings.Key.GUIDANCE_VOLUME,values[AdvancedSettings.Key.GUIDANCE_VOLUME],AdvancedSettings.Key.GUIDANCE_VOLUME in loading || writing==AdvancedSettings.Key.GUIDANCE_VOLUME,writing==null,onUpdate)
         }
         message?.let{Text(it,color=cs.error,style=MaterialTheme.typography.bodyMedium,modifier=Modifier.padding(12.dp))}
         Spacer(Modifier.height(24.dp))
@@ -98,7 +111,7 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
             else Switch(checked=value,enabled=enabled,modifier=Modifier.semantics{contentDescription=feature.title},onCheckedChange=onChange)
         }
     }
-@Composable private fun Control(key:AdvancedSettings.Key,value:List<Int>?,busy:Boolean,enabled:Boolean,update:(AdvancedSettings.Key,List<Int>)->Unit) {
+@Composable private fun Control(key:AdvancedSettings.Key,value:List<Int>?,busy:Boolean,enabled:Boolean,update:(AdvancedSettings.Key,Int,Int)->Unit) {
         val cs=MaterialTheme.colorScheme
         key.fields.forEach {field ->
             val title=when(key) {
@@ -112,7 +125,7 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
                     val code=value[field.index].let{if(key==AdvancedSettings.Key.TOUCH && it==0x35) 0 else it}
                     if(field.choices.size==2 && field.choices[0].label=="On") {
                         Switch(checked=code==0,enabled=enabled,modifier=Modifier.semantics{contentDescription=title},onCheckedChange={checked->
-                            update(key,value.toMutableList().apply{this[field.index]=if(checked) 0 else 1})
+                            update(key,field.index,if(checked) 0 else 1)
                         })
                     } else {
                         var menu by remember(key,field.index){mutableStateOf(false)}
@@ -123,7 +136,7 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={}) {
                             DropdownMenu(expanded=menu,onDismissRequest={menu=false}) {
                                 field.choices.forEach {choice -> DropdownMenuItem(text={Text(choice.label)},onClick={
                                     menu=false
-                                    update(key,value.toMutableList().apply{this[field.index]=choice.code})
+                                    update(key,field.index,choice.code)
                                 })}
                             }
                         }

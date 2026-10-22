@@ -126,6 +126,16 @@ object SonyProtocol {
         }
     }
 
+    /** Freshness belongs to each physical battery, not the whole merged snapshot. */
+    fun liveBatteryParts(p:ByteArray):Set<Int> {
+        if(parseBattery(p,Battery())==null) return emptySet()
+        return when(u(p[1])) {
+            0x01,0x09 -> buildSet {if(pct(p[2])!=null) add(0);if(pct(p[4])!=null) add(1)}
+            0x0A -> if(pct(p[2])!=null) setOf(2) else emptySet()
+            else -> emptySet()
+        }
+    }
+
     const val INIT_HEX = "00 00"
 }
 
