@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="w_bg">#FFF3EDF7</color>
-    <color name="w_on">#FF6750A4</color>
-    <color name="w_on_text">#FFFFFFFF</color>
-    <color name="w_off">#FFE8DEF8</color>
-    <color name="w_off_text">#FF1D192B</color>
-</resources>
-
