@@ -1,4 +1,4 @@
-# Hush 0.5.0
+# Hush 0.6.0
 
 A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 
@@ -116,3 +116,17 @@ white/silver WF-1000XM5 reference, with transparency and gold microphone detail.
 The prompt asks for faithful proportions, grey foam tips, no case/background/rings
 and a compact side-by-side product composition. It is a static identification image,
 not a 3D model. It is sized at 400×220 or smaller to keep decode and APK costs low.
+
+## Widget 0.6
+
+A 64 dp connected Material-style control rail with official rounded Material Symbols,
+wallpaper colors, ripple feedback and a capsule for the confirmed mode. It stays at
+64 dp when the launcher slot grows taller. Android 12+ gets responsive RemoteViews
+maps; older launchers update from widget options. Wide sizes use icon + label in a
+row, medium sizes stack them, compact sizes retain accessible icon-only targets.
+Breakpoints account for font scale. No app name, logo, codec or battery in the widget.
+The debug gallery inflates the production RemoteViews at 360/280/200 dp inside a
+104 dp launcher slot and checks large text; screenshots are included in visual checks.
+
+Widget glyphs are from [Google Material Symbols](https://github.com/google/material-design-icons),
+licensed under Apache 2.0. The SVG path coordinates are retained in native Android vectors.
