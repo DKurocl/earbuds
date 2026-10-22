@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -126,6 +127,13 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
             Headphones.queryBattery()
         }
     }}
+    var displayName by rememberSaveable { mutableStateOf(Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5") }
+    var renaming by rememberSaveable { mutableStateOf(false) }
+    var nameDraft by rememberSaveable { mutableStateOf("") }
+    if(renaming) AlertDialog(onDismissRequest={renaming=false},title={Text("Device name")},
+        text={OutlinedTextField(value=nameDraft,onValueChange={nameDraft=it.take(40)},singleLine=true,label={Text("Name")})},
+        confirmButton={TextButton(enabled=nameDraft.isNotBlank(),onClick={displayName=nameDraft.trim();Prefs.setDisplayName(ctx,displayName);renaming=false}) {Text("Save")}},
+        dismissButton={TextButton(onClick={renaming=false}) {Text("Cancel")}})
     var haptics by remember { mutableStateOf(Prefs.haptics(ctx)) }
     var devices by remember { mutableStateOf(emptyList<android.bluetooth.BluetoothDevice>()) }
     val permissionLauncher=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {granted=it}
@@ -157,7 +165,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         onConnect={scope.launch {Headphones.connectAndSync()}},
         onPermission={if(Build.VERSION.SDK_INT>=31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)},
         onBluetooth={bluetooth()},onPick={openSheet("settings")},haptics=haptics,
-        deviceName=Prefs.deviceName(ctx) ?: "WF-1000XM5",onDisconnect={Headphones.disconnect()})
+        deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()})
     if(sheet!=null) ModalBottomSheet(onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
         if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet)
         else if(sheet=="diagnostics") Diagnostics(::closeSheet)
@@ -173,6 +181,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                             scope.launch {Headphones.selectDevice(device.address,device.name);saved=device.address;sheet=null;Headphones.connectAndSync()}
                         },trailing={if(saved==device.address) HushIcon(Glyph.CHECK,color=MaterialTheme.colorScheme.primary) else HushIcon(Glyph.ARROW)})
                     }
+                    SettingsRow(Glyph.EARBUDS,"Device name",displayName,onClick={nameDraft=displayName;renaming=true})
                     SettingsRow(Glyph.BLUETOOTH,"Bluetooth settings",onClick={bluetooth()})
                 }
                 GroupLabel("APPEARANCE & FEEDBACK")
@@ -182,12 +191,17 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                 }
                 GroupLabel("TOOLS")
                 Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                    if(Build.VERSION.SDK_INT>=33) SettingsRow(Glyph.QUIET,"Add Quick Settings tile",onClick={
+                        ctx.getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
+                            ComponentName(ctx,NoiseTileService::class.java),"Noise control",
+                            android.graphics.drawable.Icon.createWithResource(ctx,R.drawable.w_icon_noise_control_off),ctx.mainExecutor) {}
+                    })
                     if(widgetManager.isRequestPinAppWidgetSupported) SettingsRow(Glyph.WIDGET,"Add home screen widget",onClick={pinWidget()})
                     SettingsRow(Glyph.EQ,"Equalizer",onClick={openSheet("equalizer")})
                     SettingsRow(Glyph.TUNE,"Earbud settings",onClick={openSheet("earbuds")})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={openSheet("diagnostics")})
                 }
-                Text("Hush 0.6.2",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text("Hush 0.7.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -202,7 +216,7 @@ fun HushScreen(
     onPermission:()->Unit,onBluetooth:()->Unit,onPick:()->Unit,onEqualizer:()->Unit={},onEarbuds:()->Unit={},onConnection:()->Unit={},haptics:Boolean=true,
     batteryRefreshing:Boolean=false,batteryFresh:Boolean=true,onBattery:()->Unit={},
     codec:CodecProtocol.State?=null,codecRefreshing:Boolean=false,
-    deviceName:String="WF-1000XM5",onDisconnect:()->Unit={},
+    deviceName:String="WF-1000XM5",onRename:()->Unit={},onDisconnect:()->Unit={},
 ) {
     val cs=MaterialTheme.colorScheme
     val dark=isSystemInDarkTheme()
@@ -225,11 +239,14 @@ fun HushScreen(
         }
     }) {insets ->
         Column(Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp),
-            verticalArrangement=Arrangement.spacedBy(28.dp)) {
+            verticalArrangement=Arrangement.spacedBy(22.dp)) {
 
             // ---- header: name + status ----
             Column(Modifier.fillMaxWidth().padding(top=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text(deviceName,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Medium,textAlign=TextAlign.Center)
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    Text(deviceName,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Medium,textAlign=TextAlign.Center,modifier=Modifier.weight(1f,false))
+                    IconButton(onClick=onRename,modifier=Modifier.size(40.dp).semantics{contentDescription="Rename device"}) {Icon(Icons.Rounded.Edit,contentDescription=null,modifier=Modifier.size(18.dp),tint=cs.onSurfaceVariant)}
+                }
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     val line=when(status) {
                         Headphones.Status.CONNECTED -> "Active"+(codec?.takeIf{it.isKnown}?.let{" · ${it.label}"} ?: "")
@@ -289,10 +306,10 @@ fun HushScreen(
                 Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
                     SectionLabel("More controls")
                     val rows=listOf(
-                        Triple(Glyph.EQ,"Sound","Equalizer presets and custom bands") to onEqualizer,
-                        Triple(Glyph.TUNE,"Earbud settings","DSEE, pause when removed") to onEarbuds,
+                        Triple(Glyph.EQ,"Equalizer","") to onEqualizer,
+                        Triple(Glyph.TUNE,"Earbud settings","") to onEarbuds,
                         Triple(Glyph.BLUETOOTH,"Connection","Codec · "+(if(ready) codec?.label ?: if(codecRefreshing) "reading…" else "—" else "—")) to onConnection,
-                        Triple(Glyph.SETTINGS,"App settings","Device, widget, appearance") to onSettings,
+                        Triple(Glyph.SETTINGS,"App settings","") to onSettings,
                     )
                     Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                         rows.forEachIndexed {i,(info,action)->
@@ -354,7 +371,7 @@ private fun BatteryRing(label:String,value:Int?,charging:Boolean,fresh:Boolean,a
                 drawArc(track,start,sweep,false,topLeft=inset,size=arcSize,style=Stroke(stroke,cap=StrokeCap.Round))
                 if(progress>0f) drawArc(color,start,sweep*progress,false,topLeft=inset,size=arcSize,style=Stroke(stroke,cap=StrokeCap.Round))
             }
-            Box(Modifier.size(58.dp),contentAlignment=Alignment.Center){art()}
+            Box(Modifier.size(64.dp),contentAlignment=Alignment.Center){art()}
             Surface(shape=CircleShape,color=if(value==null) track else color,modifier=Modifier.align(Alignment.TopCenter).size(26.dp)) {
                 Box(contentAlignment=Alignment.Center) {
                     Icon(when {
@@ -375,24 +392,14 @@ private fun BatteryRing(label:String,value:Int?,charging:Boolean,fresh:Boolean,a
 @Composable
 private fun EarbudArt(alignment:Alignment) {
     Image(painterResource(R.drawable.wf1000xm5_silver),contentDescription=null,contentScale=ContentScale.Crop,alignment=alignment,
-        modifier=Modifier.fillMaxSize().clip(CircleShape))
+        modifier=Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)))
 }
 
-/** Simple drawn charging case (no vendor artwork). */
+/** Transparent product artwork; shares the earbuds' silver finish. */
 @Composable
 private fun CaseArt() {
-    val cs=MaterialTheme.colorScheme
-    val body=cs.surfaceContainerHighest
-    val edge=cs.outline
-    Canvas(Modifier.fillMaxSize().padding(4.dp)) {
-        val w=size.width; val h=size.height*.72f
-        val top=(size.height-h)/2
-        val r=CornerRadius(h/2.2f,h/2.2f)
-        drawRoundRect(body,topLeft=Offset(0f,top),size=Size(w,h),cornerRadius=r)
-        drawRoundRect(edge,topLeft=Offset(0f,top),size=Size(w,h),cornerRadius=r,style=Stroke(1.2.dp.toPx()))
-        drawLine(edge,Offset(w*.06f,top+h*.42f),Offset(w*.94f,top+h*.42f),strokeWidth=1.dp.toPx())
-        drawCircle(edge,radius=1.6.dp.toPx(),center=Offset(w/2,top+h*.72f))
-    }
+    Image(painterResource(R.drawable.wf1000xm5_case),contentDescription=null,
+        contentScale=ContentScale.Fit,modifier=Modifier.fillMaxSize())
 }
 
 @Composable
@@ -447,7 +454,7 @@ private fun ListCard(glyph:Glyph,title:String,subtitle:String,index:Int,count:In
             HushIcon(glyph,color=cs.onSurface)
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 Text(title,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Medium)
-                Text(subtitle,style=MaterialTheme.typography.bodyMedium,color=cs.onSurfaceVariant)
+                if(subtitle.isNotBlank()) Text(subtitle,style=MaterialTheme.typography.bodyMedium,color=cs.onSurfaceVariant)
             }
         }
     }
