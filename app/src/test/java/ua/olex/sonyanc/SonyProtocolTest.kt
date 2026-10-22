@@ -52,7 +52,7 @@ class SonyProtocolTest {
         assertEquals(80,c.left)
         assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 02 50 00"),b))
         assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 09 50 00"),b))
-        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 09 FF 00 00 00"),b)!!.left)
+        assertEquals(80,SonyProtocol.parseBattery(SonyProtocol.parseHex("23 09 FF 00 00 00"),b)!!.left)
     }
     @Test fun equalizerUsesBoundedV2Bands() {
         val state=EqualizerProtocol.parse(SonyProtocol.parseHex("57 00 A0 06 14 0D 0C 0C 0D 0E"))!!
@@ -73,7 +73,7 @@ class SonyProtocolTest {
         val missing=SonyProtocol.parseBattery(SonyProtocol.parseHex("23 01 00 00 FF 00"),previous)!!
         assertNull(missing.left)
         assertNull(missing.right)
-        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 01 50 02 50 00"),previous))
+        assertNull(SonyProtocol.parseBattery(SonyProtocol.parseHex("23 01 50 04 50 00"),previous))
         assertEquals(listOf("22 01","22 09","22 0A"),SonyProtocol.BATTERY_GETS.map{SonyProtocol.hex(it)})
     }
     @Test fun featureBooleansUseTheirOwnSonyPolarity() {
@@ -82,7 +82,8 @@ class SonyProtocolTest {
         assertEquals("E8 01 01",SonyProtocol.hex(dsee.set(true)))
         assertEquals("F8 01 00",SonyProtocol.hex(pause.set(true)))
         assertEquals(dsee to true,DeviceSettingsProtocol.parse(SonyProtocol.parseHex("E7 01 01")))
-        assertEquals(pause to true,DeviceSettingsProtocol.parse(SonyProtocol.parseHex("27 01 00")))
+        assertNull(DeviceSettingsProtocol.parse(SonyProtocol.parseHex("27 01 00")))
+        assertEquals("F6 01",SonyProtocol.hex(pause.get))
         assertEquals(pause to false,DeviceSettingsProtocol.parse(SonyProtocol.parseHex("F9 01 01")))
         listOf("E7 02 01","E7 01 FF","E7 01 01 00","27 01","26 01 00").forEach {
             assertNull(it,DeviceSettingsProtocol.parse(SonyProtocol.parseHex(it)))

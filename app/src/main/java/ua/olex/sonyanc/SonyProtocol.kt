@@ -117,11 +117,11 @@ object SonyProtocol {
     fun parseBattery(p: ByteArray, old: Battery): Battery? {
         if (p.size < 4 || u(p[0]) !in listOf(0x23, 0x25)) return null
         return when (u(p[1])) {
-            0x01, 0x09 -> if (p.size >= 6 && u(p[3]) in 0..1 && u(p[5]) in 0..1)
-                old.copy(left = pct(p[2]), leftCharging = p[3].toInt() == 1,
-                    right = pct(p[4]), rightCharging = p[5].toInt() == 1) else null
-            0x0A -> if (p.size >= 4 && u(p[3]) in 0..1)
-                old.copy(case = pct(p[2]), caseCharging = p[3].toInt() == 1) else null
+            0x01, 0x09 -> if (p.size >= 6 && u(p[3]) in listOf(0,1,2,3,255) && u(p[5]) in listOf(0,1,2,3,255))
+                old.copy(left = pct(p[2]) ?: old.left, leftCharging = p[3].toInt() == 1,
+                    right = pct(p[4]) ?: old.right, rightCharging = p[5].toInt() == 1) else null
+            0x0A -> if (p.size >= 4 && u(p[3]) in listOf(0,1,2,3,255))
+                old.copy(case = pct(p[2]) ?: old.case, caseCharging = p[3].toInt() == 1) else null
             else -> null
         }
     }

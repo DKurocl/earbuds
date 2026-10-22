@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.BatteryUnknown
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -168,9 +169,10 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()})
     if(sheet!=null) ModalBottomSheet(onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
         if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet)
+        else if(sheet=="deviceControls") AdvancedSettingsSheet(::closeSheet)
         else if(sheet=="diagnostics") Diagnostics(::closeSheet)
         else if(sheet=="equalizer") EqualizerSheet(::closeSheet)
-        else if(sheet=="earbuds") EarbudSettingsSheet(::closeSheet)
+        else if(sheet=="earbuds") EarbudSettingsSheet(::closeSheet,{openSheet("deviceControls")})
         else {
             Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 SheetHeader("Settings",::closeSheet)
@@ -201,7 +203,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                     SettingsRow(Glyph.TUNE,"Earbud settings",onClick={openSheet("earbuds")})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={openSheet("diagnostics")})
                 }
-                Text("Hush 0.7.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text("Hush 0.8.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -220,7 +222,7 @@ fun HushScreen(
 ) {
     val cs=MaterialTheme.colorScheme
     val dark=isSystemInDarkTheme()
-    val background=if(dark) cs.surface else cs.surfaceContainer
+    val background=if(dark) cs.surfaceContainerLow else cs.surfaceContainer
     val card=if(dark) cs.surfaceContainerHigh else cs.surfaceContainerLowest
     val state=pending ?: nc
     val ready=status==Headphones.Status.CONNECTED
@@ -345,8 +347,8 @@ private fun SectionLabel(text:String) {
 private fun BatteryRing(label:String,value:Int?,charging:Boolean,fresh:Boolean,art:@Composable ()->Unit) {
     val cs=MaterialTheme.colorScheme
     val dark=isSystemInDarkTheme()
-    val good=if(dark) Color(0xFF6DD58C) else Color(0xFF1E8E3E)
-    val onGood=if(dark) Color(0xFF00391C) else Color.White
+    val good=if(dark) Color(0xFF43C465) else Color(0xFF1E8E3E)
+    val onGood=if(dark) Color(0xFF0B5427) else Color.White
     val (ringColor,chipContent)=when {
         value==null -> cs.outlineVariant to cs.onSurfaceVariant
         value<=20 -> cs.error to cs.onError
@@ -371,7 +373,7 @@ private fun BatteryRing(label:String,value:Int?,charging:Boolean,fresh:Boolean,a
                 drawArc(track,start,sweep,false,topLeft=inset,size=arcSize,style=Stroke(stroke,cap=StrokeCap.Round))
                 if(progress>0f) drawArc(color,start,sweep*progress,false,topLeft=inset,size=arcSize,style=Stroke(stroke,cap=StrokeCap.Round))
             }
-            Box(Modifier.size(64.dp),contentAlignment=Alignment.Center){art()}
+            Box(Modifier.size(54.dp),contentAlignment=Alignment.Center){art()}
             Surface(shape=CircleShape,color=if(value==null) track else color,modifier=Modifier.align(Alignment.TopCenter).size(26.dp)) {
                 Box(contentAlignment=Alignment.Center) {
                     Icon(when {
@@ -391,8 +393,8 @@ private fun BatteryRing(label:String,value:Int?,charging:Boolean,fresh:Boolean,a
 /** One bud cropped out of the product shot (left or right half). */
 @Composable
 private fun EarbudArt(alignment:Alignment) {
-    Image(painterResource(R.drawable.wf1000xm5_silver),contentDescription=null,contentScale=ContentScale.Crop,alignment=alignment,
-        modifier=Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)))
+    Image(painterResource(R.drawable.wf1000xm5_silver),contentDescription=null,contentScale=ContentScale.Crop,alignment=Alignment.CenterEnd,
+        modifier=Modifier.fillMaxSize().graphicsLayer{scaleX=if(alignment==Alignment.CenterStart) 1f else -1f}.clip(RoundedCornerShape(4.dp)))
 }
 
 /** Transparent product artwork; shares the earbuds' silver finish. */
@@ -406,9 +408,9 @@ private fun CaseArt() {
 private fun BigAction(glyph:Glyph,label:String,enabled:Boolean=true,onClick:()->Unit) {
     val cs=MaterialTheme.colorScheme
     Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Surface(onClick=onClick,enabled=enabled,shape=RoundedCornerShape(50),color=cs.secondary,contentColor=cs.onSecondary,
+        Surface(onClick=onClick,enabled=enabled,shape=RoundedCornerShape(50),color=cs.secondaryContainer,contentColor=cs.onSecondaryContainer,
             modifier=Modifier.size(width=76.dp,height=56.dp).semantics{contentDescription=label}) {
-            Box(contentAlignment=Alignment.Center){HushIcon(glyph,Modifier.size(26.dp),if(enabled) cs.onSecondary else cs.onSecondary.copy(alpha=.5f))}
+            Box(contentAlignment=Alignment.Center){HushIcon(glyph,Modifier.size(26.dp),if(enabled) cs.onSecondaryContainer else cs.onSecondaryContainer.copy(alpha=.5f))}
         }
         Text(label,style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium)
     }
@@ -437,7 +439,7 @@ private fun ModeSegment(mode:Mode,index:Int,count:Int,selected:Boolean,applying:
             if(applying) LoadingIndicator(Modifier.size(28.dp),color=fg)
             else HushIcon(when(mode){Mode.ANC->Glyph.QUIET;Mode.AMBIENT->Glyph.AMBIENT;Mode.OFF->Glyph.OFF},Modifier.size(26.dp),fg)
         }
-        Text(mode.label,style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium,textAlign=TextAlign.Center,maxLines=2)
+        Text(mode.short,style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium,textAlign=TextAlign.Center,maxLines=2)
     }
 }
 
@@ -536,6 +538,15 @@ private fun SheetHeader(title:String,onBack:()->Unit) {
 @Composable
 private fun ConnectionSheet(status:Headphones.Status,codec:CodecProtocol.State?,busy:Boolean,onRefresh:()->Unit,onBluetooth:()->Unit,onBack:()->Unit) {
     val cs=MaterialTheme.colorScheme
+    val firmware by Headphones.firmware.collectAsState()
+    val scope=rememberCoroutineScope()
+    var turningOff by remember {mutableStateOf(false)}
+    var confirmOff by remember {mutableStateOf(false)}
+    LaunchedEffect(Unit) {Headphones.readFirmware()}
+    if(confirmOff) AlertDialog(onDismissRequest={confirmOff=false},title={Text("Turn off earbuds?")},
+        text={Text("Put them in the case and take them out to turn them on again.")},
+        confirmButton={TextButton(onClick={confirmOff=false;scope.launch{turningOff=true;try{Headphones.powerOff()}finally{turningOff=false}}}) {Text("Turn off")}},
+        dismissButton={TextButton(onClick={confirmOff=false}) {Text("Cancel")}})
     Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SheetHeader("Connection",onBack)
         Surface(shape=RoundedCornerShape(24.dp),color=cs.surfaceContainer,modifier=Modifier.fillMaxWidth()) {
@@ -554,7 +565,9 @@ private fun ConnectionSheet(status:Headphones.Status,codec:CodecProtocol.State?,
             if(busy) LoadingIndicator(Modifier.size(24.dp)) else HushIcon(Glyph.REFRESH,color=cs.onSecondaryContainer)
             Spacer(Modifier.width(8.dp));Text(if(busy) "Refreshing…" else if(status==Headphones.Status.CONNECTED) "Refresh" else "Reconnect")
         }
-        SettingsRow(Glyph.BLUETOOTH,"Bluetooth settings",onClick=onBluetooth)
+        firmware?.let {SettingsRow(Glyph.INFO,"Firmware",it)}
+        SettingsRow(Glyph.BLUETOOTH,"Android Bluetooth settings","Multipoint · spatial audio · LE Audio",onClick=onBluetooth)
+        if(status==Headphones.Status.CONNECTED) OutlinedButton(enabled=!turningOff,onClick={confirmOff=true},modifier=Modifier.fillMaxWidth()) {Text("Turn off earbuds")}
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -565,7 +578,7 @@ private fun Diagnostics(onBack:()->Unit) {
     val scope=rememberCoroutineScope()
     val clipboard=LocalClipboardManager.current
     var querying by remember {mutableStateOf(false)}
-    Column(Modifier.padding(horizontal=24.dp).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SheetHeader("Diagnostics",onBack)
         Text("Close Sony Sound Connect if it is using the Bluetooth control connection.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -636,7 +649,7 @@ private fun EqualizerSheet(onBack:()->Unit) {
 }
 
 @Composable
-private fun EarbudSettingsSheet(onBack:()->Unit) {
+private fun EarbudSettingsSheet(onBack:()->Unit,onMore:()->Unit) {
     val values by Headphones.features.collectAsState()
     val scope=rememberCoroutineScope()
     var loading by remember {mutableStateOf(emptySet<DeviceSettingsProtocol.Feature>())}
@@ -648,7 +661,7 @@ private fun EarbudSettingsSheet(onBack:()->Unit) {
         }
     }
     LaunchedEffect(Unit) {load()}
-    Column(Modifier.padding(horizontal=24.dp).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SheetHeader("Earbud settings",onBack)
         DeviceSettingsProtocol.Feature.entries.forEach {feature ->
             val value=values[feature]
@@ -666,6 +679,7 @@ private fun EarbudSettingsSheet(onBack:()->Unit) {
                 })
         }
         message?.let {Text(it,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.error)}
+        SettingsRow(Glyph.TUNE,"Device controls",onClick=onMore)
         OutlinedButton(enabled=loading.isEmpty(),onClick={scope.launch{load()}}) {Text("Refresh settings")}
         Spacer(Modifier.height(24.dp))
     }
