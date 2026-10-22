@@ -19,7 +19,7 @@ class DesignPreviewActivity : ComponentActivity() {
                 nc=state,pending=null,fresh=true,
                 error=if(scene=="error") "Could not connect. Check that your earbuds are connected to this phone." else null,
                 battery=SonyProtocol.Battery(82,79,56,rightCharging=true),granted=scene!="permission",hasDevice=true,
-                onMode={state=it},onSettings={},onConnect={},onPermission={},onBluetooth={},onPick={})
+                codec=CodecProtocol.State(0x10),onMode={state=it},onSettings={},onConnect={},onPermission={},onBluetooth={},onPick={})
         } }
     }
 }
