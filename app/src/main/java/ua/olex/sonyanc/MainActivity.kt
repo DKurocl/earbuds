@@ -162,17 +162,16 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         batteryRefreshing=batteryRefreshing,batteryFresh=batteryFresh,
         codec=codec,codecRefreshing=codecRefreshing,onBattery={refreshInfo()},
         onConnection={openSheet("connection")},onEarbuds={openSheet("earbuds")},
-        onMode={Headphones.request(it)},onSettings={openSheet("settings")},onEqualizer={openSheet("equalizer")},
+        onMode={Headphones.request(it)},onSettings={openSheet("earbuds")},onEqualizer={openSheet("equalizer")},
         onConnect={scope.launch {Headphones.connectAndSync()}},
         onPermission={if(Build.VERSION.SDK_INT>=31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)},
         onBluetooth={bluetooth()},onPick={openSheet("settings")},haptics=haptics,
-        deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()})
-    if(sheet!=null) ModalBottomSheet(onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
+        onAppSettings={openSheet("settings")},deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()})
+    if(sheet!=null) ModalBottomSheet(sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
         if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet)
-        else if(sheet=="deviceControls") AdvancedSettingsSheet(::closeSheet)
+        else if(sheet=="deviceControls" || sheet=="earbuds") AdvancedSettingsSheet(::closeSheet,{openSheet("settings")})
         else if(sheet=="diagnostics") Diagnostics(::closeSheet)
         else if(sheet=="equalizer") EqualizerSheet(::closeSheet)
-        else if(sheet=="earbuds") EarbudSettingsSheet(::closeSheet,{openSheet("deviceControls")})
         else {
             Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 SheetHeader("Settings",::closeSheet)
@@ -203,7 +202,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                     SettingsRow(Glyph.TUNE,"Earbud settings",onClick={openSheet("earbuds")})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={openSheet("diagnostics")})
                 }
-                Text("Hush 0.8.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text("Hush 0.8.1",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -218,7 +217,7 @@ fun HushScreen(
     onPermission:()->Unit,onBluetooth:()->Unit,onPick:()->Unit,onEqualizer:()->Unit={},onEarbuds:()->Unit={},onConnection:()->Unit={},haptics:Boolean=true,
     batteryRefreshing:Boolean=false,batteryFresh:Boolean=true,onBattery:()->Unit={},
     codec:CodecProtocol.State?=null,codecRefreshing:Boolean=false,
-    deviceName:String="WF-1000XM5",onRename:()->Unit={},onDisconnect:()->Unit={},
+    deviceName:String="WF-1000XM5",onRename:()->Unit={},onDisconnect:()->Unit={},onAppSettings:()->Unit=onSettings,
 ) {
     val cs=MaterialTheme.colorScheme
     val dark=isSystemInDarkTheme()
@@ -311,7 +310,7 @@ fun HushScreen(
                         Triple(Glyph.EQ,"Equalizer","") to onEqualizer,
                         Triple(Glyph.TUNE,"Earbud settings","") to onEarbuds,
                         Triple(Glyph.BLUETOOTH,"Connection","Codec · "+(if(ready) codec?.label ?: if(codecRefreshing) "reading…" else "—" else "—")) to onConnection,
-                        Triple(Glyph.SETTINGS,"App settings","") to onSettings,
+                        Triple(Glyph.SETTINGS,"App settings","") to onAppSettings,
                     )
                     Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                         rows.forEachIndexed {i,(info,action)->
@@ -644,43 +643,6 @@ private fun EqualizerSheet(onBack:()->Unit) {
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun EarbudSettingsSheet(onBack:()->Unit,onMore:()->Unit) {
-    val values by Headphones.features.collectAsState()
-    val scope=rememberCoroutineScope()
-    var loading by remember {mutableStateOf(emptySet<DeviceSettingsProtocol.Feature>())}
-    var message by remember {mutableStateOf<String?>(null)}
-    suspend fun load() {
-        for(feature in DeviceSettingsProtocol.Feature.entries) {
-            loading=loading+feature
-            try {Headphones.readFeature(feature)} finally {loading=loading-feature}
-        }
-    }
-    LaunchedEffect(Unit) {load()}
-    Column(Modifier.padding(horizontal=24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        SheetHeader("Earbud settings",onBack)
-        DeviceSettingsProtocol.Feature.entries.forEach {feature ->
-            val value=values[feature]
-            SettingsRow(if(feature==DeviceSettingsProtocol.Feature.DSEE) Glyph.EQ else Glyph.EARBUDS,feature.title,
-                subtitle=if(feature in loading) "Reading…" else if(value==null) "No device response" else null,
-                trailing={
-                    Switch(checked=value ?: false,enabled=value!=null && feature !in loading,
-                        modifier=Modifier.semantics{contentDescription=feature.title},onCheckedChange={wanted->
-                            scope.launch {
-                                loading=loading+feature;message=null
-                                try {if(!Headphones.writeFeature(feature,wanted)) message="The earbuds did not confirm the change."}
-                                finally {loading=loading-feature}
-                            }
-                        })
-                })
-        }
-        message?.let {Text(it,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.error)}
-        SettingsRow(Glyph.TUNE,"Device controls",onClick=onMore)
-        OutlinedButton(enabled=loading.isEmpty(),onClick={scope.launch{load()}}) {Text("Refresh settings")}
         Spacer(Modifier.height(24.dp))
     }
 }
