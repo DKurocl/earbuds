@@ -1,4 +1,4 @@
-# Hush 0.4.0
+# Hush 0.5.0
 
 A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 
@@ -7,7 +7,10 @@ A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 Material 3 Expressive theme and motion scheme, native morphing toggle buttons,
 expressive loading indicator, official rounded Material icons, wallpaper colors,
 optional haptics and a minimal rounded h adaptive and themed app icon. A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
-identifies the device; no decorative hero, slogans or idle animation. The primary screen is noise control.
+identifies the device; no decorative hero, slogans or idle animation. A compact device card combines battery and the reported audio codec.
+Fixed-width mode targets sit above quick access to EQ and earbud settings.
+The ambient panel uses a compact layout; connection details and sheet back buttons
+keep secondary actions within reach.
 The expressive dependency is deliberately pinned to `material3:1.4.0-alpha18`,
 which exposes the public expressive APIs, rather than the stable 1.4.0 that removed them.
 
@@ -20,10 +23,18 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
 - On-demand equalizer: read-back gate, known Sony presets, Clear Bass + five bands.
   Writes use the V2 custom layout and are verified by reading actual state.
 - Read-backed DSEE and pause-on-removal controls, with verified writes.
+- Current codec reported directly by Sony V2 (`12 02`, replies `13 02` / notifications `15 02`).
+  SBC/AAC/LDAC and other known Sony values are decoded; unknown codes stay unknown.
+  No hidden Android APIs, preferred-codec inference, invented bitrate or sample rate.
+  Changes update via notifications and foreground polling; closing the link clears the codec.
 - Device selection, reconnect, home-screen widget and launcher ANC/Ambient/Off shortcuts.
+  The widget waits for command delivery rather than optional read-back completion,
+  reconnects once after a stale-socket write failure and can retry from the widget.
+  Missing pairing/permission opens the app for setup.
 - Wallpaper colors and haptics switches; copyable bounded diagnostics.
 - Minimal home screen without repeated mode captions; interruptible shape/width motion,
   top-anchored ambient transitions and last-choice-wins mode requests.
+  Mode targets keep their width during switching; battery no longer pushes controls down.
 
 ## Running without Sony Sound Connect
 
@@ -77,7 +88,7 @@ GitHub Actions → **Build APK**. Artifacts:
 - **Hush-visual-check** — emulator screenshots (does not gate delivery of the built APK).
 
 Unit tests cover recorded NC payloads, escaping, malformed frames, checksums, battery
-layout validation, unavailable battery values, feature switch polarity and EQ bounds. Both debug and optimized release are built.
+layout validation, unavailable battery values, feature switch polarity, codec response validation and EQ bounds. Both debug and optimized release are built.
 Release uses ephemeral Android debug signing for private use. No private signing key is
 stored in the repo or Actions cache; different CI builds may require reinstalling.
 
@@ -93,6 +104,9 @@ Locally: Java 17, Android SDK 35, Gradle 8.11.1, then
 5. Open EQ, select a preset, adjust each band and reopen to verify actual read-back.
 6. Add widget; test with the app closed, Bluetooth off and earbuds in the case.
 7. Confirm the same behavior with Sound Connect uninstalled.
+8. Play audio and compare the codec with Android's connected-device/developer codec display.
+   Reconnect, switch codec in Android and confirm Hush updates; unknown must never imply LDAC.
+9. Tap the device card, refresh connection information and use Back between settings sheets.
 
 ## Product artwork
 

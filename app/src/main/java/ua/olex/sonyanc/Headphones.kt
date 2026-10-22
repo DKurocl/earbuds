@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
@@ -36,9 +37,10 @@ object Headphones {
     val battery = _battery.asStateFlow()
     private val _log = MutableStateFlow<List<String>>(emptyList())
     val log = _log.asStateFlow()
-    private data class ModeRequest(val id:Long,val state:SonyProtocol.NcState)
+    private data class ModeRequest(val id:Long,val state:SonyProtocol.NcState,val delivered:CompletableDeferred<Boolean>)
     private val modeVersion=AtomicLong()
-    private val requests = Channel<ModeRequest>(Channel.CONFLATED)
+    private val requests = Channel<ModeRequest>(Channel.CONFLATED,onUndeliveredElement={it.delivered.complete(false)})
+    private var activeRequest:ModeRequest?=null
     private val _batteryRefreshing=MutableStateFlow(false)
     val batteryRefreshing=_batteryRefreshing.asStateFlow()
     private val _batteryFresh=MutableStateFlow(false)
@@ -50,9 +52,17 @@ object Headphones {
     private val _features=MutableStateFlow<Map<DeviceSettingsProtocol.Feature,Boolean>>(emptyMap())
     val features=_features.asStateFlow()
     private val featureReplies=ConcurrentHashMap<DeviceSettingsProtocol.Feature,CompletableDeferred<Boolean?>>()
+    private val _codec=MutableStateFlow<CodecProtocol.State?>(null)
+    val codec=_codec.asStateFlow()
+    private val _codecRefreshing=MutableStateFlow(false)
+    val codecRefreshing=_codecRefreshing.asStateFlow()
+    private val codecLock=Mutex()
+    @Volatile private var codecReply:CompletableDeferred<CodecProtocol.State?>?=null
     private val conn = SonyConnection(scope, ::addLog, ::onPayload) {
         _status.value = Status.DISCONNECTED
         _fresh.value = false
+        _codec.value=null
+        codecReply?.complete(null)
         _batteryFresh.value = false
         _batteryNote.value = if(_battery.value!=null) "Last known levels" else "Connect to read battery"
         featureReplies.values.forEach {it.complete(null)}
@@ -71,11 +81,14 @@ object Headphones {
             for (requested in requests) {
                 try {
                     delay(45)
-                    if(modeVersion.get()==requested.id) apply(requested.state)
+                    if(modeVersion.get()==requested.id) apply(requested.state){requested.delivered.complete(it)}
                 }
                 catch(e:CancellationException){throw e}
                 catch(e:Exception){addLog("✗ mode: ${e.message}");_error.value="Could not change mode. Try again."}
-                finally {if(modeVersion.get()==requested.id) _pending.value=null}
+                finally {
+                    requested.delivered.complete(false)
+                    synchronized(this@Headphones) {if(modeVersion.get()==requested.id) {_pending.value=null;activeRequest=null}}
+                }
             }
         }
     }
@@ -125,6 +138,7 @@ object Headphones {
         _status.value = Status.CONNECTING
         _fresh.value = false
         _batteryFresh.value=false
+        _codec.value=null
         _features.value=emptyMap()
         _equalizer.value = null
         try {
@@ -152,28 +166,37 @@ object Headphones {
         true
     }
 
-    fun request(state: SonyProtocol.NcState) {
-        if(_pending.value==state || (_pending.value==null && _fresh.value && _nc.value==state && conn.connected)) return
+    @Synchronized fun request(state: SonyProtocol.NcState): Deferred<Boolean> {
+        activeRequest?.takeIf{_pending.value==state && it.state==state}?.let{return it.delivered}
+        if(_pending.value==null && _fresh.value && _nc.value==state && conn.connected) return CompletableDeferred(true)
         _error.value=null
-        val id=modeVersion.incrementAndGet()
+        val request=ModeRequest(modeVersion.incrementAndGet(),state,CompletableDeferred())
         _pending.value=state
-        requests.trySend(ModeRequest(id,state))
+        activeRequest=request
+        requests.trySend(request)
+        return request.delivered
     }
 
-    suspend fun apply(state: SonyProtocol.NcState): Boolean = lock.withLock {
-        if (!ensureConnectedLocked()) return@withLock false
-        if(_fresh.value && _nc.value==state) return@withLock true
-        val ok = conn.send(SonyProtocol.ncSet(state))
+    private suspend fun apply(state: SonyProtocol.NcState,onDelivered:(Boolean)->Unit): Boolean = lock.withLock {
+        if (!ensureConnectedLocked()) {onDelivered(false);return@withLock false}
+        if(_fresh.value && _nc.value==state) {onDelivered(true);return@withLock true}
+        var ok = conn.send(SonyProtocol.ncSet(state))
+        // A cached socket can look connected after the earbuds have dropped it.
+        // Reconnect once for the latest choice; never replay a superseded choice.
+        if(!ok && _pending.value==state && ensureConnectedLocked()) ok=conn.send(SonyProtocol.ncSet(state))
         if (ok) {
-            setNc(state) // Only ACKed state becomes the last known widget state.
-            // ACK acknowledges delivery; a read-back provides actual device state.
+            setNc(state)
+            onDelivered(true) // Widget lifetime depends on delivery, not an optional read-back.
             _fresh.value = false
             val reply=CompletableDeferred<Boolean>()
             ncReply=state to reply
             try {
                 if(conn.send(SonyProtocol.NC_GET)) withTimeoutOrNull(900){reply.await()}
             } finally {if(ncReply?.second===reply) ncReply=null}
-        } else _error.value = "The earbuds did not confirm the command. Try again."
+        } else {
+            onDelivered(false)
+            _error.value = "The earbuds did not confirm the command. Try again."
+        }
         ok
     }
 
@@ -184,6 +207,7 @@ object Headphones {
         _pending.value = null
         _battery.value=null
         _batteryFresh.value=false
+        _codec.value=null
         _features.value=emptyMap()
         ModeWidget.refreshAll(app)
     }
@@ -191,13 +215,35 @@ object Headphones {
         if(infoJob?.isActive==true) return
         infoJob=scope.launch {
             delay(400)
+            var batteryDue=0L
             while(holders>0 && conn.connected) {
-                // A mode change postpones polling; it never permanently cancels it.
                 while(_pending.value!=null && holders>0 && conn.connected) delay(100)
                 if(holders==0 || !conn.connected) break
-                queryBattery()
-                delay(if(_batteryFresh.value) 30000 else 8000)
+                queryCodec()
+                if(holders==0 || !conn.connected) break
+                if(SystemClock.elapsedRealtime()>=batteryDue) {
+                    queryBattery()
+                    batteryDue=SystemClock.elapsedRealtime()+if(_batteryFresh.value) 30000L else 8000L
+                }
+                delay(8000)
             }
+        }
+    }
+
+    suspend fun queryCodec():CodecProtocol.State? = codecLock.withLock {
+        _codecRefreshing.value=true
+        val reply=CompletableDeferred<CodecProtocol.State?>()
+        try {
+            if(withTimeoutOrNull(2200){while(_pending.value!=null) delay(60);true}!=true) return@withLock null
+            codecReply=reply
+            val sent=lock.withLock {ensureConnectedLocked() && conn.send(CodecProtocol.get)}
+            if(!sent) return@withLock null
+            withTimeoutOrNull(900){reply.await()}
+        } catch(e:CancellationException){throw e}
+        catch(e:Exception){addLog("✗ codec: ${e.message}");null}
+        finally {
+            if(codecReply===reply) codecReply=null
+            _codecRefreshing.value=false
         }
     }
 
@@ -277,6 +323,11 @@ object Headphones {
         ModeWidget.clearNote(app)
     }
     private fun onPayload(p: ByteArray) {
+        CodecProtocol.parse(p)?.let {
+            _codec.value=it
+            codecReply?.complete(it)
+            return
+        }
         DeviceSettingsProtocol.parse(p)?.let{(feature,value)->
             _features.update{it+(feature to value)}
             featureReplies[feature]?.complete(value)

@@ -7,12 +7,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -41,18 +39,15 @@ class ModeWidget : AppWidgetProvider() {
                 note = "Applying…"
                 refreshAll(ctx)
                 val base = Headphones.pending.value ?: Headphones.nc.value ?: SonyProtocol.NcState(mode)
-                Headphones.request(base.copy(mode=mode))
-                val ok=withTimeoutOrNull(8_000) {
-                    Headphones.pending.first{it==null}
-                    Headphones.status.value==Headphones.Status.CONNECTED && Headphones.nc.value?.mode==mode
-                } ?: false
+                val receipt=Headphones.request(base.copy(mode=mode))
+                val ok=withTimeoutOrNull(8_500) {receipt.await()} ?: false
                 if(latestTap.get()==generation) {
-                    note = if(ok) null else "Open Hush to reconnect"
+                    note = if(ok) null else "Could not connect · tap a mode to retry"
                     refreshAll(ctx)
                 }
             } catch (e: Exception) {
                 if(latestTap.get()==generation) {
-                    note = "Open Hush to reconnect"
+                    note = "Could not connect · tap a mode to retry"
                     refreshAll(ctx)
                 }
             } finally {
@@ -86,15 +81,18 @@ class ModeWidget : AppWidgetProvider() {
         private fun render(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_modes)
             val current = Prefs.lastNc(ctx)?.mode
-            v.setTextViewText(R.id.w_title, note ?: if (Prefs.deviceAddress(ctx) == null) "Hush · tap to set up" else "Hush · WF-1000XM5 · last known mode")
+            v.setTextViewText(R.id.w_title, note ?: if (Prefs.deviceAddress(ctx) == null) "Hush · tap to set up" else "Hush · last used")
 
             for ((mode, id) in tiles) {
                 val on = mode == current
                 v.setInt(id, "setBackgroundResource", if (on) R.drawable.w_tile_on else R.drawable.w_tile_off)
                 v.setTextColor(id, ctx.getColor(if (on) R.color.w_on_text else R.color.w_off_text))
                 val i = Intent(ctx, ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE, mode.name)
-                v.setOnClickPendingIntent(id, PendingIntent.getBroadcast(
-                    ctx, mode.ordinal, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
+                    val setup=Intent(ctx,MainActivity::class.java).putExtra("hush.mode",mode.name)
+                    PendingIntent.getActivity(ctx,mode.ordinal,setup,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                } else PendingIntent.getBroadcast(ctx,mode.ordinal,i,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                v.setOnClickPendingIntent(id,action)
             }
             val open = Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             v.setOnClickPendingIntent(R.id.w_title, PendingIntent.getActivity(
