@@ -159,6 +159,9 @@ object Headphones {
         return false
     }
 
+    /** Drops the control link; the next action reconnects on demand. */
+    fun disconnect() { scope.launch { lock.withLock { conn.close() } } }
+
     suspend fun connectAndSync(): Boolean = lock.withLock {
         if (!ensureConnectedLocked()) return@withLock false
         // Mode controls never wait behind speculative battery probes.

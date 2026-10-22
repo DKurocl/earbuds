@@ -29,6 +29,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.BatteryUnknown
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -143,7 +156,8 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         onMode={Headphones.request(it)},onSettings={openSheet("settings")},onEqualizer={openSheet("equalizer")},
         onConnect={scope.launch {Headphones.connectAndSync()}},
         onPermission={if(Build.VERSION.SDK_INT>=31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)},
-        onBluetooth={bluetooth()},onPick={openSheet("settings")},haptics=haptics)
+        onBluetooth={bluetooth()},onPick={openSheet("settings")},haptics=haptics,
+        deviceName=Prefs.deviceName(ctx) ?: "WF-1000XM5",onDisconnect={Headphones.disconnect()})
     if(sheet!=null) ModalBottomSheet(onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
         if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet)
         else if(sheet=="diagnostics") Diagnostics(::closeSheet)
@@ -180,6 +194,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
     }
 }
 
+/** Pixel-Buds-style screen: centered device header, battery rings, big actions, connected mode group, grouped list. */
 @Composable
 fun HushScreen(
     status:Headphones.Status,nc:NcState?,pending:NcState?,fresh:Boolean,error:String?,battery:SonyProtocol.Battery?,
@@ -187,55 +202,106 @@ fun HushScreen(
     onPermission:()->Unit,onBluetooth:()->Unit,onPick:()->Unit,onEqualizer:()->Unit={},onEarbuds:()->Unit={},onConnection:()->Unit={},haptics:Boolean=true,
     batteryRefreshing:Boolean=false,batteryFresh:Boolean=true,onBattery:()->Unit={},
     codec:CodecProtocol.State?=null,codecRefreshing:Boolean=false,
+    deviceName:String="WF-1000XM5",onDisconnect:()->Unit={},
 ) {
     val cs=MaterialTheme.colorScheme
+    val dark=isSystemInDarkTheme()
+    val background=if(dark) cs.surface else cs.surfaceContainer
+    val card=if(dark) cs.surfaceContainerHigh else cs.surfaceContainerLowest
     val state=pending ?: nc
+    val ready=status==Headphones.Status.CONNECTED
     val feedback=LocalHapticFeedback.current
     fun choose(value:NcState) {
         if(haptics) feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         onMode(value)
     }
-    Scaffold(containerColor=cs.surface,topBar={
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal=24.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically) {
-            HushMark(Modifier.size(36.dp));Spacer(Modifier.width(10.dp))
-            Text("Hush",fontSize=28.sp,fontWeight=FontWeight.SemiBold,letterSpacing=(-.8).sp,modifier=Modifier.weight(1f))
-            FilledTonalIconButton(onClick=onSettings,modifier=Modifier.size(48.dp).semantics{contentDescription="Settings"}) {
-                HushIcon(Glyph.TUNE,color=cs.onSecondaryContainer)
+    Scaffold(containerColor=background,topBar={
+        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start=24.dp,end=12.dp,top=8.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically) {
+            HushMark(Modifier.size(28.dp));Spacer(Modifier.width(10.dp))
+            Text("Hush",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
+            IconButton(onClick=onSettings,modifier=Modifier.size(48.dp).semantics{contentDescription="Settings"}) {
+                HushIcon(Glyph.SETTINGS,color=cs.onSurfaceVariant)
             }
         }
     }) {insets ->
-        Column(Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
-            DeviceCard(status,codec,battery,hasDevice && granted,batteryFresh,batteryRefreshing || (codecRefreshing && codec==null),
-                onConnection,if(status==Headphones.Status.CONNECTED) onBattery else onConnect)
+        Column(Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=20.dp),
+            verticalArrangement=Arrangement.spacedBy(28.dp)) {
+
+            // ---- header: name + status ----
+            Column(Modifier.fillMaxWidth().padding(top=12.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                Text(deviceName,style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Medium,textAlign=TextAlign.Center)
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    val line=when(status) {
+                        Headphones.Status.CONNECTED -> "Active"+(codec?.takeIf{it.isKnown}?.let{" · ${it.label}"} ?: "")
+                        Headphones.Status.CONNECTING -> "Connecting…"
+                        Headphones.Status.FAILED -> "Not connected"
+                        Headphones.Status.DISCONNECTED -> "Disconnected"
+                    }
+                    Text(line,style=MaterialTheme.typography.bodyLarge,color=cs.onSurfaceVariant,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
+                    if(status==Headphones.Status.CONNECTING || batteryRefreshing) LoadingIndicator(Modifier.size(20.dp))
+                }
+            }
+
             if(!granted) {
-                SetupCard("Bluetooth access", "Allow Hush to connect to your WF-1000XM5.","Allow Bluetooth",Glyph.BLUETOOTH,onPermission)
+                SetupCard("Bluetooth access","Allow Hush to connect to your WF-1000XM5.","Allow Bluetooth",Glyph.BLUETOOTH,onPermission)
             } else if(!hasDevice) {
                 SetupCard("Connect your earbuds","Pair WF-1000XM5 in Android Bluetooth settings.","Select device",Glyph.EARBUDS,onPick)
             } else {
-                Column {
-                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                        Text("Noise control",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold,letterSpacing=(-1.1).sp,modifier=Modifier.weight(1f))
-                        if(pending!=null) LoadingIndicator(Modifier.size(32.dp))
-                    }
-                    Spacer(Modifier.height(18.dp))
-                    Row(Modifier.fillMaxWidth().selectableGroup(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                        Mode.entries.forEach {mode ->
-                            ModeControl(mode,state?.mode==mode,Modifier.weight(1f)) {choose((state ?: NcState(mode)).copy(mode=mode))}
+                // ---- battery rings ----
+                val b=battery ?: SonyProtocol.Battery()
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).clickable(enabled=ready,onClick=onBattery)
+                        .semantics{contentDescription="Battery. Tap to refresh"},
+                    horizontalArrangement=Arrangement.SpaceEvenly) {
+                    BatteryRing("Left",b.left,b.leftCharging,batteryFresh) {EarbudArt(Alignment.CenterStart)}
+                    BatteryRing("Case",b.case,b.caseCharging,batteryFresh) {CaseArt()}
+                    BatteryRing("Right",b.right,b.rightCharging,batteryFresh) {EarbudArt(Alignment.CenterEnd)}
+                }
+
+                // ---- big actions ----
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+                    BigAction(Glyph.BLUETOOTH,"Bluetooth",onClick=onBluetooth)
+                    if(ready) BigAction(Glyph.CLOSE,"Disconnect",onClick=onDisconnect)
+                    else BigAction(Glyph.REFRESH,if(status==Headphones.Status.CONNECTING) "Connecting…" else "Connect",
+                        enabled=status!=Headphones.Status.CONNECTING,onClick=onConnect)
+                }
+
+                // ---- active noise control ----
+                Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
+                    SectionLabel("Active noise control")
+                    Row(Modifier.fillMaxWidth().selectableGroup(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Mode.entries.forEachIndexed {index,mode ->
+                            ModeSegment(mode,index,Mode.entries.size,state?.mode==mode,pending?.mode==mode,Modifier.weight(1f)) {
+                                choose((state ?: NcState(mode)).copy(mode=mode))
+                            }
                         }
                     }
-
-                AnimatedVisibility(state?.mode==Mode.AMBIENT,enter=expandVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),expandFrom=Alignment.Top)+fadeIn(),exit=shrinkVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),shrinkTowards=Alignment.Top)+fadeOut()) {
-                    Column {
-                        Spacer(Modifier.height(24.dp))
-                        AmbientPanel((state ?: NcState(Mode.AMBIENT)).copy(mode=Mode.AMBIENT),::choose)
+                    AnimatedVisibility(state?.mode==Mode.AMBIENT,
+                        enter=expandVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),expandFrom=Alignment.Top)+fadeIn(),
+                        exit=shrinkVertically(animationSpec=MaterialTheme.motionScheme.defaultSpatialSpec(),shrinkTowards=Alignment.Top)+fadeOut()) {
+                        Column {
+                            Spacer(Modifier.height(4.dp))
+                            AmbientPanel((state ?: NcState(Mode.AMBIENT)).copy(mode=Mode.AMBIENT),card,::choose)
+                        }
                     }
                 }
-                }
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                    QuickControl(Glyph.EQ,"Equalizer",Modifier.weight(1f),onEqualizer)
-                    QuickControl(Glyph.TUNE,"Earbud settings",Modifier.weight(1f),onEarbuds)
+
+                // ---- more controls ----
+                Column(verticalArrangement=Arrangement.spacedBy(14.dp)) {
+                    SectionLabel("More controls")
+                    val rows=listOf(
+                        Triple(Glyph.EQ,"Sound","Equalizer presets and custom bands") to onEqualizer,
+                        Triple(Glyph.TUNE,"Earbud settings","DSEE, pause when removed") to onEarbuds,
+                        Triple(Glyph.BLUETOOTH,"Connection","Codec · "+(if(ready) codec?.label ?: if(codecRefreshing) "reading…" else "—" else "—")) to onConnection,
+                        Triple(Glyph.SETTINGS,"App settings","Device, widget, appearance") to onSettings,
+                    )
+                    Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                        rows.forEachIndexed {i,(info,action)->
+                            ListCard(info.first,info.second,info.third,i,rows.size,card,action)
+                        }
+                    }
                 }
             }
+
             AnimatedVisibility(error!=null,enter=fadeIn()+expandVertically(),exit=fadeOut()+shrinkVertically()) {
                 Surface(shape=RoundedCornerShape(24.dp),color=cs.errorContainer) {
                     Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -253,85 +319,147 @@ fun HushScreen(
 }
 
 @Composable
-private fun DeviceCard(status:Headphones.Status,codec:CodecProtocol.State?,battery:SonyProtocol.Battery?,showBattery:Boolean,
-    batteryFresh:Boolean,busy:Boolean,onDetails:()->Unit,onRefresh:()->Unit) {
+private fun SectionLabel(text:String) {
+    Text(text,style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(start=8.dp))
+}
+
+/** Ring with a status chip in the top gap, like Pixel's device details. */
+@Composable
+private fun BatteryRing(label:String,value:Int?,charging:Boolean,fresh:Boolean,art:@Composable ()->Unit) {
     val cs=MaterialTheme.colorScheme
-    val ready=status==Headphones.Status.CONNECTED
-    Surface(onClick=onDetails,shape=RoundedCornerShape(28.dp),color=cs.surfaceContainerLow,modifier=Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                Image(painterResource(R.drawable.wf1000xm5_silver),contentDescription="Silver WF-1000XM5 earbuds",contentScale=ContentScale.Fit,modifier=Modifier.width(64.dp).height(52.dp))
-                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text("WF-1000XM5",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
-                    Text(when(status){Headphones.Status.CONNECTED->"Connected";Headphones.Status.CONNECTING->"Connecting…";Headphones.Status.FAILED->"Connection failed";else->"Disconnected"},
-                        style=MaterialTheme.typography.bodySmall,color=cs.onSurfaceVariant)
-                    Text("Codec · "+if(ready) codec?.label.orEmpty().ifEmpty{"—"} else "—",
-                        style=MaterialTheme.typography.labelMedium,color=if(ready && codec?.isKnown==true) cs.primary else cs.onSurfaceVariant,
-                        modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
-                }
-                IconButton(onClick=onRefresh,enabled=!busy && status!=Headphones.Status.CONNECTING,
-                    modifier=Modifier.semantics{contentDescription=if(ready) "Refresh device information" else "Reconnect"}) {
-                    if(busy || status==Headphones.Status.CONNECTING) LoadingIndicator(Modifier.size(26.dp))
-                    else HushIcon(Glyph.REFRESH,color=cs.onSurfaceVariant)
+    val dark=isSystemInDarkTheme()
+    val good=if(dark) Color(0xFF6DD58C) else Color(0xFF1E8E3E)
+    val onGood=if(dark) Color(0xFF00391C) else Color.White
+    val (ringColor,chipContent)=when {
+        value==null -> cs.outlineVariant to cs.onSurfaceVariant
+        value<=20 -> cs.error to cs.onError
+        else -> good to onGood
+    }
+    val color=if(fresh || value==null) ringColor else ringColor.copy(alpha=.55f)
+    val track=cs.surfaceContainerHighest
+    val progress by animateFloatAsState((value ?: 0)/100f,animationSpec=tween(700,easing=FastOutSlowInEasing),label="battery $label")
+    Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp),
+        modifier=Modifier.semantics(mergeDescendants=true) {
+            contentDescription="$label battery"
+            stateDescription=(value?.let{"$it percent"} ?: "Unavailable")+if(charging) ", charging" else if(!fresh && value!=null) ", last known" else ""
+        }) {
+        Box(Modifier.size(100.dp),contentAlignment=Alignment.Center) {
+            Canvas(Modifier.fillMaxSize().padding(top=6.dp,start=6.dp,end=6.dp,bottom=6.dp)) {
+                val stroke=6.dp.toPx()
+                val gap=44f
+                val start=-90f+gap/2
+                val sweep=360f-gap
+                val inset=Offset(stroke/2,stroke/2)
+                val arcSize=Size(size.width-stroke,size.height-stroke)
+                drawArc(track,start,sweep,false,topLeft=inset,size=arcSize,style=Stroke(stroke,cap=StrokeCap.Round))
+                if(progress>0f) drawArc(color,start,sweep*progress,false,topLeft=inset,size=arcSize,style=Stroke(stroke,cap=StrokeCap.Round))
+            }
+            Box(Modifier.size(58.dp),contentAlignment=Alignment.Center){art()}
+            Surface(shape=CircleShape,color=if(value==null) track else color,modifier=Modifier.align(Alignment.TopCenter).size(26.dp)) {
+                Box(contentAlignment=Alignment.Center) {
+                    Icon(when {
+                        value==null -> Icons.Rounded.BatteryUnknown
+                        charging -> Icons.Rounded.BatteryChargingFull
+                        value<=20 -> Icons.Rounded.BatteryAlert
+                        else -> Icons.Rounded.BatteryFull
+                    },contentDescription=null,tint=chipContent,modifier=Modifier.size(16.dp))
                 }
             }
-            if(showBattery) {
-                val b=battery ?: SonyProtocol.Battery()
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    listOf(Triple("L",b.left,b.leftCharging),Triple("R",b.right,b.rightCharging),Triple("Case",b.case,b.caseCharging)).forEach {(name,value,charging)->
-                        val label=when(name){"L"->"Left";"R"->"Right";else->name}
-                        Surface(shape=RoundedCornerShape(16.dp),color=cs.surfaceContainerHigh,modifier=Modifier.weight(1f).semantics(mergeDescendants=true) {
-                            contentDescription="$label battery";stateDescription=(value?.let{"$it percent"} ?: "Unavailable")+if(charging) ", charging" else if(!batteryFresh && value!=null) ", last known" else ""
-                        }) {
-                            Column(Modifier.padding(horizontal=10.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                                Row(verticalAlignment=Alignment.CenterVertically) {
-                                    Text(name,style=MaterialTheme.typography.labelMedium,color=cs.onSurfaceVariant,modifier=Modifier.weight(1f))
-                                    if(charging) Icon(Icons.Rounded.BatteryChargingFull,contentDescription=null,modifier=Modifier.size(14.dp),tint=cs.onSurfaceVariant)
-                                }
-                                Text(value?.let{"$it%"} ?: "—",style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.SemiBold,
-                                    color=if(value!=null && value<=20) cs.error else if(batteryFresh) cs.onSurface else cs.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
+        }
+        Text("$label: "+(value?.let{"$it%"} ?: "—"),style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium,
+            color=if(value!=null && value<=20) cs.error else cs.onSurface)
+    }
+}
+
+/** One bud cropped out of the product shot (left or right half). */
+@Composable
+private fun EarbudArt(alignment:Alignment) {
+    Image(painterResource(R.drawable.wf1000xm5_silver),contentDescription=null,contentScale=ContentScale.Crop,alignment=alignment,
+        modifier=Modifier.fillMaxSize().clip(CircleShape))
+}
+
+/** Simple drawn charging case (no vendor artwork). */
+@Composable
+private fun CaseArt() {
+    val cs=MaterialTheme.colorScheme
+    val body=cs.surfaceContainerHighest
+    val edge=cs.outline
+    Canvas(Modifier.fillMaxSize().padding(4.dp)) {
+        val w=size.width; val h=size.height*.72f
+        val top=(size.height-h)/2
+        val r=CornerRadius(h/2.2f,h/2.2f)
+        drawRoundRect(body,topLeft=Offset(0f,top),size=Size(w,h),cornerRadius=r)
+        drawRoundRect(edge,topLeft=Offset(0f,top),size=Size(w,h),cornerRadius=r,style=Stroke(1.2.dp.toPx()))
+        drawLine(edge,Offset(w*.06f,top+h*.42f),Offset(w*.94f,top+h*.42f),strokeWidth=1.dp.toPx())
+        drawCircle(edge,radius=1.6.dp.toPx(),center=Offset(w/2,top+h*.72f))
+    }
+}
+
+@Composable
+private fun BigAction(glyph:Glyph,label:String,enabled:Boolean=true,onClick:()->Unit) {
+    val cs=MaterialTheme.colorScheme
+    Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        Surface(onClick=onClick,enabled=enabled,shape=RoundedCornerShape(50),color=cs.secondary,contentColor=cs.onSecondary,
+            modifier=Modifier.size(width=76.dp,height=56.dp).semantics{contentDescription=label}) {
+            Box(contentAlignment=Alignment.Center){HushIcon(glyph,Modifier.size(26.dp),if(enabled) cs.onSecondary else cs.onSecondary.copy(alpha=.5f))}
+        }
+        Text(label,style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium)
+    }
+}
+
+/** Connected button group segment: outer corners round, inner corners tight; selected morphs to a full pill. */
+@Composable
+private fun ModeSegment(mode:Mode,index:Int,count:Int,selected:Boolean,applying:Boolean,modifier:Modifier,onClick:()->Unit) {
+    val cs=MaterialTheme.colorScheme
+    val interaction=remember {MutableInteractionSource()}
+    val pressed by interaction.collectIsPressedAsState()
+    val spec=spring<androidx.compose.ui.unit.Dp>(dampingRatio=Spring.DampingRatioMediumBouncy,stiffness=Spring.StiffnessMediumLow)
+    val outer=32.dp; val inner=10.dp
+    fun target(isOuter:Boolean)=when {pressed -> 14.dp; selected -> outer; isOuter -> outer; else -> inner}
+    val start by animateDpAsState(target(index==0),spec,label="start")
+    val end by animateDpAsState(target(index==count-1),spec,label="end")
+    val bg by animateColorAsState(if(selected) cs.primary else cs.surfaceContainerHighest,tween(200),label="bg")
+    val fg by animateColorAsState(if(selected) cs.onPrimary else cs.onSurfaceVariant,tween(200),label="fg")
+    Column(modifier,horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.fillMaxWidth().height(64.dp)
+            .clip(RoundedCornerShape(topStart=start,bottomStart=start,topEnd=end,bottomEnd=end))
+            .background(bg)
+            .selectable(selected=selected,interactionSource=interaction,indication=ripple(),role=Role.RadioButton,onClick=onClick)
+            .semantics{contentDescription=mode.label},
+            contentAlignment=Alignment.Center) {
+            if(applying) LoadingIndicator(Modifier.size(28.dp),color=fg)
+            else HushIcon(when(mode){Mode.ANC->Glyph.QUIET;Mode.AMBIENT->Glyph.AMBIENT;Mode.OFF->Glyph.OFF},Modifier.size(26.dp),fg)
+        }
+        Text(mode.label,style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.Medium,textAlign=TextAlign.Center,maxLines=2)
+    }
+}
+
+/** Grouped list item: big radius on the outside of the group, small radius between items. */
+@Composable
+private fun ListCard(glyph:Glyph,title:String,subtitle:String,index:Int,count:Int,color:Color,onClick:()->Unit) {
+    val cs=MaterialTheme.colorScheme
+    val big=24.dp; val small=4.dp
+    val shape=RoundedCornerShape(
+        topStart=if(index==0) big else small,topEnd=if(index==0) big else small,
+        bottomStart=if(index==count-1) big else small,bottomEnd=if(index==count-1) big else small)
+    Surface(onClick=onClick,shape=shape,color=color,modifier=Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal=20.dp,vertical=18.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(20.dp)) {
+            HushIcon(glyph,color=cs.onSurface)
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                Text(title,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Medium)
+                Text(subtitle,style=MaterialTheme.typography.bodyMedium,color=cs.onSurfaceVariant)
             }
         }
     }
 }
 
 @Composable
-private fun QuickControl(glyph:Glyph,title:String,modifier:Modifier,onClick:()->Unit) {
-    val cs=MaterialTheme.colorScheme
-    Surface(onClick=onClick,shape=RoundedCornerShape(22.dp),color=cs.surfaceContainer,modifier=modifier) {
-        Column(Modifier.padding(16.dp).heightIn(min=52.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            HushIcon(glyph,color=cs.onSurfaceVariant)
-            Text(title,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.Medium)
-        }
-    }
-}
-
-@Composable
-private fun ModeControl(mode:Mode,selected:Boolean,modifier:Modifier,onClick:()->Unit) {
-    val cs=MaterialTheme.colorScheme
-    val contentColor by animateColorAsState(if(selected) cs.onPrimary else cs.onSurface,animationSpec=tween(180),label="mode content")
-    ToggleButton(checked=selected,onCheckedChange={onClick()},modifier=modifier.heightIn(min=96.dp).semantics{role=Role.RadioButton;this.selected=selected;contentDescription=mode.label},
-        shapes=ToggleButtonDefaults.shapes(shape=RoundedCornerShape(36.dp),pressedShape=RoundedCornerShape(16.dp),checkedShape=RoundedCornerShape(22.dp)),
-        colors=ToggleButtonDefaults.toggleButtonColors(containerColor=cs.surfaceContainerHigh,contentColor=cs.onSurface,checkedContainerColor=cs.primary,checkedContentColor=cs.onPrimary),
-        elevation=null,contentPadding=PaddingValues(horizontal=4.dp,vertical=16.dp)) {
-        Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            HushIcon(when(mode){Mode.ANC->Glyph.QUIET;Mode.AMBIENT->Glyph.AMBIENT;Mode.OFF->Glyph.OFF},Modifier.size(28.dp),contentColor)
-            Text(mode.short,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold,color=contentColor)
-        }
-    }
-}
-
-@Composable
-private fun AmbientPanel(state:NcState,onChange:(NcState)->Unit) {
+private fun AmbientPanel(state:NcState,color:Color,onChange:(NcState)->Unit) {
     val cs=MaterialTheme.colorScheme
     var level by remember {mutableFloatStateOf(state.level.toFloat())}
     var dragging by remember {mutableStateOf(false)}
     LaunchedEffect(state.level,dragging) {if(!dragging) level=state.level.toFloat()}
-    Surface(shape=RoundedCornerShape(28.dp),color=cs.surfaceContainer,modifier=Modifier.fillMaxWidth()) {
+    Surface(shape=RoundedCornerShape(24.dp),color=color,modifier=Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) {
                 Text("Ambient level",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
