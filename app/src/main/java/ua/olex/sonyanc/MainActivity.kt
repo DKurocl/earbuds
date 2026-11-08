@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -193,7 +194,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                     SettingsRow(Glyph.TUNE,"Earbud settings",onClick={openSheet("earbuds")})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={openSheet("diagnostics")})
                 }
-                Text("Hush 0.9.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text(stringResource(R.string.app_name)+" "+remember{ctx.packageManager.getPackageInfo(ctx.packageName,0).versionName.orEmpty()},style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -224,7 +225,7 @@ fun HushScreen(
     Scaffold(containerColor=background,topBar={
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start=24.dp,end=12.dp,top=8.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically) {
             HushMark(Modifier.size(28.dp));Spacer(Modifier.width(10.dp))
-            Text("Hush",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
+            Text(stringResource(R.string.app_name),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f))
             IconButton(onClick=onSettings,modifier=Modifier.size(48.dp).semantics{contentDescription="Settings"}) {
                 HushIcon(Glyph.SETTINGS,color=cs.onSurfaceVariant)
             }
@@ -252,7 +253,7 @@ fun HushScreen(
             }
 
             if(!granted) {
-                SetupCard("Bluetooth access","Allow Hush to connect to your WF-1000XM5.","Allow Bluetooth",Glyph.BLUETOOTH,onPermission)
+                SetupCard("Bluetooth access","Allow Earbuds to connect to your WF-1000XM5.","Allow Bluetooth",Glyph.BLUETOOTH,onPermission)
             } else if(!hasDevice) {
                 SetupCard("Connect your earbuds","Pair WF-1000XM5 in Android Bluetooth settings.","Select device",Glyph.EARBUDS,onPick)
             } else {

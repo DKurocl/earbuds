@@ -3,8 +3,8 @@
 Reference: Pixel "Device details" for Pixel Buds (Android Bluetooth settings).
 The main screen (`HushScreen` in `MainActivity.kt`) follows that layout, top to bottom:
 
-1. **Top bar**: Hush mark and "Hush" on the left, settings icon on the right.
-   The CI visual check greps for the text "Hush", so keep it.
+1. **Top bar**: case mark and "Earbuds" on the left, settings icon on the right.
+   The CI visual check greps for the text "Earbuds", so keep it.
 2. **Header**, centered: device name (`headlineMedium`). Under it a status line:
    "Active · LDAC" / "Connecting…" / "Not connected", plus a small `LoadingIndicator` while busy.
 3. **Battery rings**: Left · Case · Right (`BatteryRing`). Each is a 100 dp ring with a 6 dp stroke
