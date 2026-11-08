@@ -5,7 +5,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: hush-${{ github.ref }}
+  group: earbuds-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -37,24 +37,24 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Hush-checks
+          name: Earbuds-checks
           path: |
             app/build/reports/
             app/build/test-results/
             build.log
       - uses: actions/upload-artifact@v4
         with:
-          name: Hush-debug
+          name: Earbuds-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
-          name: Hush-install
+          name: Earbuds-install
           path: app/build/outputs/apk/release/*.apk
       - uses: actions/upload-artifact@v4
         if: "!contains(github.event.head_commit.message, '[quick-apk]')"
         with:
-          name: Hush-ui-tests
+          name: Earbuds-ui-tests
           path: app/build/outputs/apk/androidTest/debug/*.apk
   visual-check:
     if: "!contains(github.event.head_commit.message, '[quick-apk]')"
@@ -68,15 +68,15 @@ jobs:
           java-version: 17
       - uses: actions/download-artifact@v4
         with:
-          name: Hush-debug
+          name: Earbuds-debug
           path: apk
       - uses: actions/download-artifact@v4
         with:
-          name: Hush-install
+          name: Earbuds-install
           path: release
       - uses: actions/download-artifact@v4
         with:
-          name: Hush-ui-tests
+          name: Earbuds-ui-tests
           path: uitests
       - name: Enable KVM
         run: |
@@ -105,7 +105,7 @@ jobs:
             sleep 5
             adb shell uiautomator dump /sdcard/hush.xml
             adb pull /sdcard/hush.xml screens/anc.xml
-            grep -q 'text="Hush"' screens/anc.xml
+            grep -q 'text="Earbuds"' screens/anc.xml
             ! grep -q 'responding' screens/anc.xml
             adb exec-out screencap -p > screens/anc-light.png
             adb shell am force-stop ua.olex.sonyanc
@@ -163,6 +163,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Hush-visual-check
+          name: Earbuds-visual-check
           overwrite: true
           path: screens/

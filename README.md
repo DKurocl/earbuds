@@ -1,12 +1,12 @@
-# Hush 0.6.0
+# Earbuds
 
-A personal, offline **Sony WF-1000XM5** controller for Android. English only.
+Formerly Hush. A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 
 ## Interface
 
 Material 3 Expressive theme and motion scheme, native morphing toggle buttons,
 expressive loading indicator, official rounded Material icons, wallpaper colors,
-optional haptics and a minimal rounded h adaptive and themed app icon. A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
+optional haptics and an adaptive, themed app icon of the WF-1000XM5 case traced from a photo (see docs/icon). A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
 identifies the device; no decorative hero, slogans or idle animation. A compact device card combines battery and the reported audio codec.
 Fixed-width mode targets sit above quick access to EQ and earbud settings.
 The ambient panel uses a compact layout; connection details and sheet back buttons
@@ -39,15 +39,15 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
 
 ## Running without Sony Sound Connect
 
-Hush connects directly to the paired WF-1000XM5 over RFCOMM V2. It does not call,
+Earbuds connects directly to the paired WF-1000XM5 over RFCOMM V2. It does not call,
 query, launch or depend on the Sony app, its accounts, telemetry or online services.
-Pairing remains Android's responsibility. Hush remembers the device address in its
+Pairing remains Android's responsibility. Earbuds remembers the device address in its
 own preferences. On each connection it reads current settings rather than resetting
 the earbuds or overwriting an existing EQ on launch.
 
 **Firmware updates are not implemented.** Sony's supported update procedure uses
 Sound Connect. Removing it also removes its phone-side integrations such as location
-based adaptive routines and Sony account features; Hush intentionally does not clone
+based adaptive routines and Sony account features; Earbuds intentionally does not clone
 those. Bluetooth audio, calls and Android codec/device settings are handled by Android.
 
 Do not confuse protocol support with a hardware test: NC switching was previously
@@ -83,10 +83,10 @@ EQ preset set `58 00 <preset> 00`; custom set `58 00 A0 06 <six offset values>`.
 
 GitHub Actions → **Build APK**. Artifacts:
 
-- **Hush-install** — optimized installable personal APK.
-- **Hush-debug** — debug APK, including a read-only UI preview activity absent from release.
-- **Hush-checks** — unit test, lint and build reports.
-- **Hush-visual-check** — emulator screenshots (does not gate delivery of the built APK).
+- **Earbuds-install** — optimized installable personal APK.
+- **Earbuds-debug** — debug APK, including a read-only UI preview activity absent from release.
+- **Earbuds-checks** — unit test, lint and build reports.
+- **Earbuds-visual-check** — emulator screenshots (does not gate delivery of the built APK).
 
 Unit tests cover recorded NC payloads, escaping, malformed frames, checksums, battery
 layout validation, unavailable battery values, feature switch polarity, codec response validation and EQ bounds. Both debug and optimized release are built.
@@ -98,7 +98,7 @@ Locally: Java 17, Android SDK 35, Gradle 8.11.1, then
 
 ## Owner check
 
-1. Pair and connect WF-1000XM5 in Android; open Hush and allow Bluetooth.
+1. Pair and connect WF-1000XM5 in Android; open Earbuds and allow Bluetooth.
 2. Tap ANC/Ambient/Off rapidly; final choice must match the audible mode.
 3. Verify ambient 0/12/20 and voice focus; reopen after less/more than 12 s.
 4. Check L/R/case readings; unavailable case/earbud data must remain unknown.
@@ -106,7 +106,7 @@ Locally: Java 17, Android SDK 35, Gradle 8.11.1, then
 6. Add widget; test with the app closed, Bluetooth off and earbuds in the case.
 7. Confirm the same behavior with Sound Connect uninstalled.
 8. Play audio and compare the codec with Android's connected-device/developer codec display.
-   Reconnect, switch codec in Android and confirm Hush updates; unknown must never imply LDAC.
+   Reconnect, switch codec in Android and confirm Earbuds updates; unknown must never imply LDAC.
 9. Tap the device card, refresh connection information and use Back between settings sheets.
 
 ## Product artwork

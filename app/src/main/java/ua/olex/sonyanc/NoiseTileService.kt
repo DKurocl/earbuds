@@ -31,7 +31,7 @@ class NoiseTileService : TileService() {
     override fun onClick() {
         super.onClick()
         if(!Headphones.hasPermission(this) || Prefs.deviceAddress(this)==null) {
-            qsTile?.apply {if(Build.VERSION.SDK_INT>=29) subtitle="Set up Hush first";updateTile()}
+            qsTile?.apply {if(Build.VERSION.SDK_INT>=29) subtitle="Set up Earbuds first";updateTile()}
             return
         }
         val current=(Headphones.state.value.shownNc ?: Prefs.lastNc(this))?.mode
