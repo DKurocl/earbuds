@@ -28,6 +28,8 @@ data class DeviceState(
     val ncConfirmed: Boolean = false,
     val error: String? = null,
     val battery: SonyProtocol.Battery? = null,
+    /** Wall-clock time of the last real battery reading (also restored from the previous session). */
+    val batterySeenAt: Long? = null,
     /** Parts (0 left, 1 right, 2 case) whose level was read on this connection. */
     val liveBatteryParts: Set<Int> = emptySet(),
     val batteryRefreshing: Boolean = false,
@@ -153,7 +155,9 @@ object Headphones {
     @Synchronized fun init(ctx: Context) {
         if (!::app.isInitialized) {
             app = ctx.applicationContext
-            _state.update { it.copy(nc = Prefs.lastNc(app)) }
+            // Show the last known levels at once; they stay dimmed until the earbuds answer.
+            val battery = Prefs.lastBattery(app)
+            _state.update { it.copy(nc = Prefs.lastNc(app), battery = battery?.first, batterySeenAt = battery?.second) }
         }
     }
 
@@ -274,6 +278,17 @@ object Headphones {
         return request.delivered
     }
 
+    /**
+     * Applies a scene: noise control first (it is what the user hears change), then the
+     * equalizer preset if the scene has one. True only when every part was confirmed.
+     */
+    suspend fun applyScene(scene: Scene): Boolean {
+        val delivered = request(scene.target(_state.value.shownNc)).await()
+        val preset = scene.eqPreset ?: return delivered
+        if (_equalizer.value == null && readEqualizer() == null) return false
+        return delivered && (_equalizer.value?.preset == preset || writeEqualizer(preset = preset))
+    }
+
     private suspend fun apply(state: SonyProtocol.NcState, id: Long, onDelivered: (Boolean) -> Unit): Boolean = lock.withLock {
         if (!ensureConnectedLocked() || modeVersion.get() != id) { onDelivered(false); return@withLock false }
         _state.value.let { if (it.ncConfirmed && it.nc == state) { onDelivered(true); return@withLock true } }
@@ -304,6 +319,7 @@ object Headphones {
         cancelModes()
         conn.close()
         Prefs.saveDevice(app, address, name)
+        Prefs.clearBattery(app)
         _state.value = DeviceState()
         clearDeviceSettings()
         ModeWidget.refreshAll(app)
@@ -332,6 +348,7 @@ object Headphones {
             var codecDue = 0L
             var batteryDue = 0L
             var batteryRetry = 8_000L
+            var equalizerAsked = false
             while (usage.foreground && conn.connected) {
                 _state.first { it.pending == null || !it.connected }
                 if (!usage.foreground || !conn.connected) break
@@ -339,6 +356,9 @@ object Headphones {
                     queryCodec()
                     codecDue = now() + if (codecPushed) 120_000L else 30_000L
                 }
+                if (!usage.foreground || !conn.connected) break
+                // One equalizer read per connection, so Home and scenes know the current preset.
+                if (_equalizer.value == null && !equalizerAsked) { equalizerAsked = true; readEqualizer() }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= batteryDue) {
                     queryBattery()
@@ -500,9 +520,13 @@ object Headphones {
         val live = SonyProtocol.liveBatteryParts(p)
         if (batteryFamily(p) != null) {
             if (op == 0x25) batteryPushed = true
-            if (live.isNotEmpty()) _state.update {
-                val merged = SonyProtocol.parseBattery(p, it.battery ?: SonyProtocol.Battery()) ?: it.battery
-                it.copy(battery = merged, liveBatteryParts = it.liveBatteryParts + live)
+            if (live.isNotEmpty()) {
+                val now = System.currentTimeMillis()
+                val updated = _state.updateAndGet {
+                    val merged = SonyProtocol.parseBattery(p, it.battery ?: SonyProtocol.Battery()) ?: it.battery
+                    it.copy(battery = merged, batterySeenAt = now, liveBatteryParts = it.liveBatteryParts + live)
+                }
+                updated.battery?.let { Prefs.saveBattery(app, it, now) }
             }
         }
     }

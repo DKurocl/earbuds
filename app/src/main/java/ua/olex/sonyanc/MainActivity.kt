@@ -39,9 +39,11 @@ import ua.olex.sonyanc.SonyProtocol.NcState
 class MainActivity : ComponentActivity() {
     private val startTick = mutableIntStateOf(0)
     private val shortcutMode = mutableStateOf<Mode?>(null)
+    private val shortcutScene = mutableStateOf<String?>(null)
 
     private fun consumeIntent(intent: Intent?) {
         shortcutMode.value = intent?.getStringExtra("hush.mode")?.let { name -> runCatching { Mode.valueOf(name) }.getOrNull() }
+        shortcutScene.value = intent?.getStringExtra(SceneShortcuts.EXTRA)
     }
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); consumeIntent(intent) }
@@ -54,7 +56,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             var dynamic by remember { mutableStateOf(Prefs.dynamicColor(this)) }
             AppTheme(dynamic) {
-                App(startTick.intValue, dynamic, shortcutMode.value, { shortcutMode.value = null }) { dynamic = it; Prefs.setDynamicColor(this, it) }
+                App(
+                    startTick.intValue, dynamic, shortcutMode.value, { shortcutMode.value = null },
+                    shortcutScene.value, { shortcutScene.value = null },
+                ) { dynamic = it; Prefs.setDynamicColor(this, it) }
             }
         }
     }
@@ -68,7 +73,10 @@ private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS }
 
 @SuppressLint("MissingPermission")
 @Composable
-fun App(startTick: Int, dynamic: Boolean, shortcutMode: Mode? = null, onShortcutConsumed: () -> Unit = {}, onDynamic: (Boolean) -> Unit) {
+fun App(
+    startTick: Int, dynamic: Boolean, shortcutMode: Mode? = null, onShortcutConsumed: () -> Unit = {},
+    shortcutScene: String? = null, onSceneConsumed: () -> Unit = {}, onDynamic: (Boolean) -> Unit,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val device by Headphones.state.collectAsStateWithLifecycle()
@@ -124,6 +132,45 @@ fun App(startTick: Int, dynamic: Boolean, shortcutMode: Mode? = null, onShortcut
         displayName = it; Prefs.setDisplayName(ctx, it); renaming = false
     }
 
+    // ---- scenes ----
+    var scenes by remember { mutableStateOf(Prefs.scenes(ctx)) }
+    var editingScene by remember { mutableStateOf<Scene?>(null) }
+    var creatingScene by remember { mutableStateOf(false) }
+    fun storeScenes(list: List<Scene>) { scenes = list; Prefs.saveScenes(ctx, list); SceneShortcuts.update(ctx, list) }
+    LaunchedEffect(Unit) { SceneShortcuts.update(ctx, scenes) }
+    fun applyScene(scene: Scene) {
+        SceneShortcuts.reportUsed(ctx, scene)
+        scope.launch { if (!Headphones.applyScene(scene)) show("Couldn't fully apply ${scene.name}. Check that your earbuds are connected.") }
+    }
+    LaunchedEffect(shortcutScene, granted, saved) {
+        val scene = scenes.firstOrNull { it.id == shortcutScene } ?: return@LaunchedEffect
+        if (granted && saved != null) { applyScene(scene); onSceneConsumed() }
+    }
+    /** What "save current" would capture right now. */
+    fun captured(name: String, id: String, includeEq: Boolean) = Scene(
+        id, name, device.shownNc ?: NcState(Mode.ANC), if (includeEq) equalizer?.preset else null,
+    )
+    if (creatingScene || editingScene != null) {
+        val editing = editingScene
+        SceneDialog(
+            editing, current = captured("", "", false).summary, eqName = equalizer?.let { EqualizerProtocol.presets[it.preset] },
+            onDismiss = { creatingScene = false; editingScene = null },
+            onSave = { name, recapture, includeEq ->
+                val updated = when {
+                    editing == null -> captured(name, "s${System.currentTimeMillis()}", includeEq)
+                    recapture -> captured(name, editing.id, includeEq)
+                    else -> editing.copy(name = name)
+                }
+                storeScenes(if (editing == null) scenes + updated else scenes.map { if (it.id == editing.id) updated else it })
+                creatingScene = false; editingScene = null
+            },
+            onDelete = {
+                storeScenes(scenes.filterNot { it.id == editing?.id })
+                editingScene = null
+            },
+        )
+    }
+
     CompositionLocalProvider(LocalMessages provides show) {
         Box(Modifier.fillMaxSize()) {
             AnimatedContent(
@@ -159,14 +206,29 @@ fun App(startTick: Int, dynamic: Boolean, shortcutMode: Mode? = null, onShortcut
                         deviceName = displayName, onRename = { renaming = true }, onDisconnect = { Headphones.disconnect() },
                         onAppSettings = { open(Page.APP) }, batteryParts = device.liveBatteryParts,
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
+                        batterySeenAt = device.batterySeenAt, scenes = scenes, equalizer = equalizer,
+                        onScene = ::applyScene, onSaveScene = { creatingScene = true }, onEditScene = { editingScene = it },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
                     Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) }, startTick)
                     Page.DEVICE -> {
                         var turningOff by remember { mutableStateOf(false) }
-                        LaunchedEffect(startTick) { Headphones.readFirmware() }
+                        val advanced by Headphones.advanced.collectAsStateWithLifecycle()
+                        LaunchedEffect(startTick) {
+                            Headphones.readFirmware()
+                            Headphones.readAdvanced(AdvancedSettings.Key.QUALITY)
+                        }
+                        // "Stable connection" keeps the earbuds off LDAC; say so only when it matters.
+                        val ldacBlocked = device.connected && advanced[AdvancedSettings.Key.QUALITY]?.firstOrNull() == 1 && device.codec?.code != 0x10
                         DeviceInfoContent(
                             displayName, device.status, device.codec, device.firmware,
+                            ldacBlocked = ldacBlocked,
+                            onPreferQuality = {
+                                scope.launch {
+                                    val ok = Headphones.writeAdvancedField(AdvancedSettings.Key.QUALITY, 0, 0)
+                                    show(if (ok) "Sound quality preferred. LDAC can be used after the earbuds reconnect." else "Change not confirmed. Try again.")
+                                }
+                            },
                             refreshing = device.codecRefreshing || device.batteryRefreshing || turningOff,
                             onBack = ::back, onRefresh = ::refreshInfo, onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                             onTurnOff = {

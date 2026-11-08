@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 fun DeviceInfoContent(
     deviceName: String, status: Headphones.Status, codec: CodecProtocol.State?, firmware: String?,
     refreshing: Boolean, onBack: () -> Unit = {}, onRefresh: () -> Unit = {}, onBluetooth: () -> Unit = {},
-    onDiagnostics: () -> Unit = {}, onTurnOff: () -> Unit = {},
+    onDiagnostics: () -> Unit = {}, onTurnOff: () -> Unit = {}, ldacBlocked: Boolean = false, onPreferQuality: () -> Unit = {},
 ) {
     var confirmOff by remember { mutableStateOf(false) }
     val connected = status == Headphones.Status.CONNECTED
@@ -40,6 +40,16 @@ fun DeviceInfoContent(
             item { InfoRow(it, Glyph.EARBUDS, deviceName, statusText(status)) }
             item { InfoRow(it, Glyph.EQ, "Audio codec", if (connected) codec?.label ?: if (refreshing) "Reading…" else "Not reported" else "—") }
             item { InfoRow(it, Glyph.INFO, "Firmware", if (connected) firmware ?: "Reading…" else "—") }
+        }
+        if (ldacBlocked) Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("LDAC is turned off by a setting", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(
+                    "Bluetooth quality is set to Stable connection, so the earbuds won't use LDAC. Prefer sound quality if your phone stays close.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                TextButton(onClick = onPreferQuality, modifier = Modifier.align(androidx.compose.ui.Alignment.End)) { Text("Prefer sound quality") }
+            }
         }
         ListGroup {
             item { NavRow(it, Glyph.BLUETOOTH, "Android Bluetooth settings", "Pairing, multipoint, spatial audio, LE Audio", onClick = onBluetooth) }

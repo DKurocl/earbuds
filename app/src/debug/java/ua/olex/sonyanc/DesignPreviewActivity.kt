@@ -39,7 +39,7 @@ private fun Scene(scene: String) {
         "settings-loading" -> EarbudSettingsContent(emptyMap(), emptyMap(), AdvancedSettings.Key.entries.toSet(), DeviceSettingsProtocol.Feature.entries.toSet())
         "equalizer" -> EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)
         "equalizer-preset" -> EqualizerContent(EqualizerProtocol.State(0x16, emptyList()), busy = false, unavailable = false)
-        "info" -> DeviceInfoContent("WF-1000XM5", Headphones.Status.CONNECTED, CodecProtocol.State(0x10), "2.0.1", refreshing = false)
+        "info" -> DeviceInfoContent("WF-1000XM5", Headphones.Status.CONNECTED, CodecProtocol.State(0x02), "2.0.1", refreshing = false, ldacBlocked = true)
         "app" -> AppSettingsContent(
             listOf(PairedDevice("00:11", "WF-1000XM5")), "00:11", "WF-1000XM5", dynamicColor = true, haptics = true,
             canAddTile = true, canPinWidget = true, version = "1.0.0",
@@ -55,6 +55,7 @@ private fun Scene(scene: String) {
                 battery = SonyProtocol.Battery(82, 79, 56, rightCharging = true), granted = scene != "permission", hasDevice = true,
                 codec = CodecProtocol.State(0x10), onMode = { state = it }, onSettings = {}, onConnect = {}, onPermission = {},
                 onBluetooth = {}, onPick = {}, equalizerPreset = "Custom",
+                scenes = Scenes.defaults, onScene = { state = it.target(state) },
             )
         }
     }

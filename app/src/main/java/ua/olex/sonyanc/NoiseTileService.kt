@@ -16,11 +16,12 @@ class NoiseTileService : TileService() {
         Headphones.init(this)
         listening?.cancel()
         listening=CoroutineScope(Dispatchers.Main).launch {
-            // Only the shown mode and link status matter; battery/codec updates are skipped.
-            Headphones.state.map {it.shownNc?.mode to it.connected}.distinctUntilChanged().collect {(mode,connected) ->
+            // Mode, link and the emptier earbud's level; codec and other updates are skipped.
+            Headphones.state.map {Triple(it.shownNc?.mode,it.connected,it.battery?.let{b->listOfNotNull(b.left,b.right).minOrNull()})}
+                .distinctUntilChanged().collect {(mode,connected,level) ->
                 qsTile?.apply {
                     label="Noise control"
-                    if(Build.VERSION.SDK_INT>=29) subtitle=mode?.short ?: "Tap to connect"
+                    if(Build.VERSION.SDK_INT>=29) subtitle=(mode?.short ?: "Tap to connect")+(level?.let{" · $it%"} ?: "")
                     this.state=if(connected && mode!=SonyProtocol.Mode.OFF) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
                     contentDescription="Noise control, "+(mode?.label ?: "not connected")
                     updateTile()

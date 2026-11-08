@@ -15,6 +15,8 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
 
 ## Daily controls
 
+- Scenes: one-tap setups of noise mode, ambient level, voice focus and EQ preset; also as launcher shortcuts.
+- Estimated listening time left (earbuds and case) and the last battery reading shown at launch.
 - ANC / Ambient / Off; choices queue while connecting and rapid taps are conflated.
 - Ambient level 0–20, Low/Medium/High shortcuts and voice focus.
 - Battery L/R/case, read after the primary NC sync without speculative protocol families.

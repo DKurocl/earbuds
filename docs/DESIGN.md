@@ -1,4 +1,4 @@
-# Earbuds design (1.0)
+# Earbuds design (1.1)
 
 Reference: Pixel Buds device details and Android 16 Settings. The app should read like a
 Google app on a Pixel: wallpaper colors, Google Sans, grouped lists, large collapsing titles,
@@ -31,6 +31,7 @@ predictive back.
 | Page | Content |
 |---|---|
 | Home (`HomeScreen.kt`) | App bar (case mark, "Earbuds", gear → Earbud settings). Device name with rename, status line ("Connected · LDAC"). Error banner. Battery rings L / case / R with a chip in the ring gap, large percentage and label (tap to refresh). Bluetooth and Connect/Disconnect pills. Noise control: connected button group, Ambient panel (level, presets, voice focus). More controls: Equalizer, Earbud settings, Device info, App settings. |
+| Scenes (on Home) | One-tap sound setups: noise mode, ambient level, voice focus and optionally an EQ preset. Defaults Focus, Commute, Conversation; "Save current" captures the sound; long-press edits, re-captures or deletes. The card matching the earbuds is highlighted. The first two are also launcher shortcuts. |
 | Equalizer | Preset chips. Custom: five vertical bands (drag or tap, TalkBack adjustable) over a response curve, Clear Bass slider, Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; Android Bluetooth settings; Diagnostics; Turn off earbuds (confirmation). |
@@ -41,6 +42,18 @@ The CI visual check greps the home screen for the text "Earbuds", so keep it in 
 `DesignPreviewActivity` (debug only) renders every page from fixtures:
 `anc`, `ambient`, `error`, `permission`, `settings`, `settings-loading`, `equalizer`,
 `equalizer-preset`, `info`, `app`, `diagnostics`, `widgets`.
+
+## Small things that do real work
+
+- **Listening time**: under the rings, "About 6 h 10 min of listening · case adds 8 h 50 min",
+  from Sony's rated life for the current mode (8 h with ANC or ambient, 12 h off, case two
+  charges). The emptier earbud decides. An estimate; LDAC and volume shorten it.
+- **Instant start**: the last battery reading is stored and shown at launch, dimmed, with
+  "Last seen 5 min ago", until the earbuds answer.
+- **LDAC hint**: Device info reads Bluetooth quality; when it is Stable connection and the codec
+  is not LDAC, a card explains why and switches to sound quality in one tap.
+- **Quick Settings tile** subtitle shows the mode and the emptier earbud's level.
+- Launcher shortcuts use mode icons; scene shortcuts report use so the launcher ranks them.
 
 ## Icon
 
