@@ -43,7 +43,7 @@ class ModeWidget : AppWidgetProvider() {
                 if(latestTap.get()!=generation) return@launch
                 busyMode=mode
                 refreshAll(ctx)
-                val base=Headphones.pending.value ?: Headphones.nc.value ?: SonyProtocol.NcState(mode)
+                val base=Headphones.state.value.shownNc ?: SonyProtocol.NcState(mode)
                 val receipt=Headphones.request(base.copy(mode=mode))
                 val ok=withTimeoutOrNull(8500){receipt.await()} ?: false
                 if(latestTap.get()==generation && !ok) showFailure(ctx)

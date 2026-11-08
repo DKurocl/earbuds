@@ -36,6 +36,7 @@ class SonyConnection(
 ) {
     companion object {
         val SONY_V2_UUID: UUID = UUID.fromString("956C7B26-D49A-4BA8-B03F-B17D393CB6E2")
+        private const val CONNECT_TIMEOUT_MS = 2400L
     }
 
     @Volatile private var socket: MdrStream? = null
@@ -63,18 +64,19 @@ class SonyConnection(
                 if(connectionEpoch!=expectedEpoch || !stillNeeded()) false else {connecting=candidate;true}
             }
             if(!registered) {runCatching{candidate.close()};return@withContext false}
-            // BluetoothSocket.connect is blocking: cancellation MUST close the socket.
-            // A child of an independent scope also covers a cancelled caller/widget timeout.
-            val caller = currentCoroutineContext().job
-            val watchdog = scope.launch {
-                var elapsed = 0
-                while (caller.isActive && elapsed < 2400) { delay(50); elapsed += 50 }
-                runCatching { candidate.close() }
-            }
+            // BluetoothSocket.connect blocks and ignores coroutine cancellation, so it runs
+            // in the independent scope and the caller waits with a deadline. A timeout or a
+            // cancelled caller closes the socket, which makes the blocked connect throw.
+            val attempt = scope.async(Dispatchers.IO) { runCatching { candidate.connect() } }
             try {
-                candidate.connect()
+                val result = withTimeoutOrNull(CONNECT_TIMEOUT_MS) { attempt.await() }
+                if (result == null) {
+                    runCatching { candidate.close() }
+                    log("✗ connect: no answer in ${CONNECT_TIMEOUT_MS} ms")
+                    continue
+                }
+                result.exceptionOrNull()?.let { throw it }
                 currentCoroutineContext().ensureActive()
-                watchdog.cancel()
                 val installed=synchronized(this@SonyConnection) {
                     if(connectionEpoch!=expectedEpoch || !stillNeeded()) false
                     else {connecting=null;attach(BluetoothStream(candidate));true}
@@ -88,7 +90,7 @@ class SonyConnection(
             } catch (e: Exception) {
                 runCatching { candidate.close() }
                 log("✗ connect: ${e.message?.take(80)}")
-            } finally {watchdog.cancel();if(connecting===candidate) connecting=null}
+            } finally {if(connecting===candidate) connecting=null}
         }
         false
     }
@@ -104,12 +106,11 @@ class SonyConnection(
             val s=socket ?: return@withContext false
             val ack=CompletableDeferred<Boolean>()
             pendingAck=ack
-            // Closing the stream bounds both a blocking write and an absent ACK.
-            val caller=currentCoroutineContext().job
-            val watchdog=scope.launch(Dispatchers.IO) {
-                var elapsed=0L
-                while(caller.isActive && elapsed<ackTimeoutMs) {delay(20);elapsed+=20}
-                if(socket===s && pendingAck===ack) close()
+            // One timer bounds both a blocked write and a missing ACK: closing the stream
+            // unblocks the write and completes the ACK with false.
+            val watchdog=scope.launch {
+                delay(ackTimeoutMs)
+                if(socket===s && pendingAck===ack && !ack.isCompleted) {log("✗ ACK timeout; closing link");close()}
             }
             try {
                 synchronized(outputLock) {
@@ -117,9 +118,7 @@ class SonyConnection(
                     s.output.flush()
                 }
                 log("→ [%02X] %s".format(type,SonyProtocol.hex(payload)))
-                val ok=withTimeoutOrNull(ackTimeoutMs){ack.await()}==true
-                if(!ok && socket===s) {log("✗ ACK timeout; closing link");close()}
-                ok
+                ack.await()
             } catch(e:CancellationException) {
                 if(socket===s) close()
                 throw e
