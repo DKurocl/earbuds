@@ -37,7 +37,7 @@ fun AdvancedSettingsSheet(onBack:()->Unit,onAppSettings:()->Unit={},resumeTick:I
             if(!Headphones.connectAndSync()) return
             for(feature in basic) try {Headphones.readFeature(feature)} finally {featureLoading=featureLoading-feature}
             for(key in keys) {
-                if(Headphones.status.value!=Headphones.Status.CONNECTED) break
+                if(!Headphones.state.value.connected) break
                 try {Headphones.readAdvanced(key)} finally {loading=loading-key}
             }
         } finally {loading=emptySet();featureLoading=emptySet()}

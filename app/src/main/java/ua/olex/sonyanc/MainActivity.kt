@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import ua.olex.sonyanc.SonyProtocol.Mode
@@ -106,29 +107,15 @@ fun AppTheme(dynamic:Boolean=true,content:@Composable ()->Unit) {
 fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed:()->Unit={},onDynamic:(Boolean)->Unit) {
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
-    val status by Headphones.status.collectAsState()
-    val nc by Headphones.nc.collectAsState()
-    val pending by Headphones.pending.collectAsState()
-    val fresh by Headphones.fresh.collectAsState()
-    val error by Headphones.error.collectAsState()
-    val battery by Headphones.battery.collectAsState()
-    val batteryRefreshing by Headphones.batteryRefreshing.collectAsState()
-    val batteryFresh by Headphones.batteryFresh.collectAsState()
-    val batteryParts by Headphones.batteryParts.collectAsState()
-    val codec by Headphones.codec.collectAsState()
-    val codecRefreshing by Headphones.codecRefreshing.collectAsState()
+    val device by Headphones.state.collectAsStateWithLifecycle()
+    val status=device.status
     var granted by remember { mutableStateOf(Headphones.hasPermission(ctx)) }
     var saved by remember { mutableStateOf(Prefs.deviceAddress(ctx)) }
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     var sheetParent by rememberSaveable { mutableStateOf<String?>(null) }
     fun openSheet(name:String) {sheetParent=sheet;sheet=name}
     fun closeSheet() {sheet=sheetParent;sheetParent=null}
-    fun refreshInfo() {scope.launch {
-        if(Headphones.status.value==Headphones.Status.CONNECTED || Headphones.connectAndSync()) {
-            Headphones.queryCodec()
-            Headphones.queryBattery()
-        }
-    }}
+    fun refreshInfo() {scope.launch {Headphones.refreshInfo()}}
     var displayName by rememberSaveable { mutableStateOf(Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5") }
     var renaming by rememberSaveable { mutableStateOf(false) }
     var nameDraft by rememberSaveable { mutableStateOf("") }
@@ -155,12 +142,15 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
     }
     LaunchedEffect(shortcutMode,granted,saved) {
         if(shortcutMode!=null && granted && saved!=null) {
-            Headphones.request((Headphones.nc.value ?: NcState(shortcutMode)).copy(mode=shortcutMode))
+            Headphones.request((Headphones.state.value.nc ?: NcState(shortcutMode)).copy(mode=shortcutMode))
             onShortcutConsumed()
         }
     }
-    HushScreen(status,nc,pending,fresh,error,battery,granted,saved!=null,
-        batteryRefreshing=batteryRefreshing,batteryFresh=batteryFresh,batteryParts=batteryParts,
+    val codec=device.codec
+    val codecRefreshing=device.codecRefreshing
+    val batteryRefreshing=device.batteryRefreshing
+    HushScreen(status,device.nc,device.pending,device.ncConfirmed,device.error,device.battery,granted,saved!=null,
+        batteryRefreshing=batteryRefreshing,batteryFresh=device.liveBatteryParts.isNotEmpty(),batteryParts=device.liveBatteryParts,
         codec=codec,codecRefreshing=codecRefreshing,onBattery={refreshInfo()},
         onConnection={openSheet("connection")},onEarbuds={openSheet("earbuds")},
         onMode={Headphones.request(it)},onSettings={openSheet("earbuds")},onEqualizer={openSheet("equalizer")},
@@ -538,7 +528,7 @@ private fun SheetHeader(title:String,onBack:()->Unit) {
 @Composable
 private fun ConnectionSheet(status:Headphones.Status,codec:CodecProtocol.State?,busy:Boolean,onRefresh:()->Unit,onBluetooth:()->Unit,onBack:()->Unit,resumeTick:Int=0) {
     val cs=MaterialTheme.colorScheme
-    val firmware by Headphones.firmware.collectAsState()
+    val firmware=Headphones.state.collectAsStateWithLifecycle().value.firmware
     val scope=rememberCoroutineScope()
     var turningOff by remember {mutableStateOf(false)}
     var confirmOff by remember {mutableStateOf(false)}

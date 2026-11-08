@@ -5,8 +5,8 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** Uses the widget's bounded reconnect and acknowledgement path, without opening the app. */
 class NoiseTileService : TileService() {
@@ -16,14 +16,13 @@ class NoiseTileService : TileService() {
         Headphones.init(this)
         listening?.cancel()
         listening=CoroutineScope(Dispatchers.Main).launch {
-            combine(Headphones.nc,Headphones.pending,Headphones.status) {state,pending,status ->
-                Triple(state,pending,status)
-            }.collect {(state,pending,status) ->
+            // Only the shown mode and link status matter; battery/codec updates are skipped.
+            Headphones.state.map {it.shownNc?.mode to it.connected}.distinctUntilChanged().collect {(mode,connected) ->
                 qsTile?.apply {
                     label="Noise control"
-                    if(Build.VERSION.SDK_INT>=29) subtitle=(pending ?: state)?.mode?.short ?: "Tap to connect"
-                    this.state=if(status==Headphones.Status.CONNECTED && (pending ?: state)?.mode!=SonyProtocol.Mode.OFF) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-                    contentDescription="Noise control, "+((pending ?: state)?.mode?.label ?: "not connected")
+                    if(Build.VERSION.SDK_INT>=29) subtitle=mode?.short ?: "Tap to connect"
+                    this.state=if(connected && mode!=SonyProtocol.Mode.OFF) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+                    contentDescription="Noise control, "+(mode?.label ?: "not connected")
                     updateTile()
                 }
             }
@@ -35,7 +34,7 @@ class NoiseTileService : TileService() {
             qsTile?.apply {if(Build.VERSION.SDK_INT>=29) subtitle="Set up Hush first";updateTile()}
             return
         }
-        val current=(Headphones.pending.value ?: Headphones.nc.value ?: Prefs.lastNc(this))?.mode
+        val current=(Headphones.state.value.shownNc ?: Prefs.lastNc(this))?.mode
         val next=when(current) {
             SonyProtocol.Mode.ANC -> SonyProtocol.Mode.AMBIENT
             SonyProtocol.Mode.AMBIENT -> SonyProtocol.Mode.OFF
