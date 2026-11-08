@@ -1,50 +1,53 @@
-# Main screen design — Pixel Buds style
+# Earbuds design (1.0)
 
-Reference: Pixel "Device details" for Pixel Buds (Android Bluetooth settings).
-The main screen (`HushScreen` in `MainActivity.kt`) follows that layout, top to bottom:
+Reference: Pixel Buds device details and Android 16 Settings. The app should read like a
+Google app on a Pixel: wallpaper colors, Google Sans, grouped lists, large collapsing titles,
+predictive back.
 
-1. **Top bar**: case mark and "Earbuds" on the left, settings icon on the right.
-   The CI visual check greps for the text "Earbuds", so keep it.
-2. **Header**, centered: device name (`headlineMedium`). Under it a status line:
-   "Active · LDAC" / "Connecting…" / "Not connected", plus a small `LoadingIndicator` while busy.
-3. **Battery rings**: Left · Case · Right (`BatteryRing`). Each is a 100 dp ring with a 6 dp stroke
-   and a 44° gap at the top. A 26 dp round chip with a battery icon sits in that gap.
-   Colors: green (`#1E8E3E` light / `#6DD58C` dark), error at 20 % or below, outline when unknown,
-   alpha .55 when the value is stale.
-   Art: the left and right buds are cropped from `wf1000xm5_silver.webp`
-   (`ContentScale.Crop` + CenterStart/End), without circular clipping. The case is a transparent photo cutout (`wf1000xm5_case.webp`).
-   Tapping the row refreshes the battery.
-4. **Two big actions** (`BigAction`): a 76×56 dp pill in `secondary`/`onSecondary` with a label
-   under it. The actions are Bluetooth settings and Connect/Disconnect.
-5. **"Active noise control"**: a connected button group (`ModeSegment`) with 3 segments, 64 dp tall,
-   4 dp gaps and the icon inside. Outer corners are 32 dp, inner corners 10 dp. The selected segment
-   morphs to a full pill in `primary`, and a pressed segment goes to 14 dp corners (spring, medium bouncy).
-   Each label sits under its segment. While applying, the segment icon becomes a `LoadingIndicator`.
-   In Ambient mode, the `AmbientPanel` card (level slider, presets, voice focus) expands below.
-6. **"More controls"**: a grouped list (`ListCard`) with 24 dp outer and 4 dp inner corners and 2 dp
-   gaps. Rows: Sound (EQ sheet), Earbud settings, Connection (codec), App settings.
+## Foundations (`Theme.kt`, `Components.kt`)
 
-Surfaces: the background is `surfaceContainer` (light) / `surface` (dark). Cards are
-`surfaceContainerLowest` (light) / `surfaceContainerHigh` (dark). The look stays neutral and
-wallpaper-driven through dynamic color.
+- **Color**: dynamic color by default; a blue fallback scheme matches the icon. Page background
+  is `surfaceContainer` (light) / `surfaceContainerLow` (dark); cards one step up
+  (`surfaceContainerLowest` / `surfaceContainerHigh`). See `Surfaces`.
+- **Type**: Pixel phones expose Google Sans as system families (`google-sans-flex`,
+  `google-sans`, `google-sans-text`). The theme uses them when present, otherwise the default
+  sans. No font files are bundled.
+- **Motion**: `MotionScheme.expressive()`. Page changes slide and fade; the system back gesture
+  shrinks the page and follows the finger before it pops (`PredictiveBackHandler`,
+  `enableOnBackInvokedCallback`).
+- **Lists**: `ListGroup` + rows. Group corners are 24 dp outside and 4 dp between items, 2 dp
+  gaps, a primary-colored section title. Rows are at least 64 dp: icon, title, summary.
+  - `SwitchRow`: the whole row toggles. A setting the earbuds did not report says
+    "Not available" and is not toggleable at all.
+  - `ChoiceRow`: shows the current value; opens a radio dialog (`ChoiceDialog`).
+  - Loading shows "Reading…" in the row and one indicator in the top bar; a row spinner
+    appears only while that one setting is being written.
+- **Pages**: `PageScaffold` = `LargeTopAppBar` that collapses on scroll, back arrow, actions.
+- **Messages**: write failures appear as a snackbar (`LocalMessages`); link problems as a
+  banner under the device header (`ErrorBanner`).
 
-## Not done yet (candidates)
+## Pages
 
-- Local display name is editable from the pencil next to the name and Settings. It does not change the Bluetooth broadcast name.
-- Touch-control customization screen ("Customize left/right" checklist of which modes
-  press-and-hold cycles through). Needs the Sony V2 touch-function command to be probed first.
-- Ear-tip fit test. Sony has a protocol command for it, but it is unknown/unverified here.
-- 4th mode "Adaptive" (Sony's adaptive sound control) — protocol unknown.
-- Quick Settings tile cycles ANC → Ambient → Off through the same bounded command path as the widget. Add it from Settings on Android 13+, or the system tile editor.
+| Page | Content |
+|---|---|
+| Home (`HomeScreen.kt`) | App bar (case mark, "Earbuds", gear → Earbud settings). Device name with rename, status line ("Connected · LDAC"). Error banner. Battery rings L / case / R with a chip in the ring gap, large percentage and label (tap to refresh). Bluetooth and Connect/Disconnect pills. Noise control: connected button group, Ambient panel (level, presets, voice focus). More controls: Equalizer, Earbud settings, Device info, App settings. |
+| Equalizer | Preset chips. Custom: five vertical bands (drag or tap, TalkBack adjustable) over a response curve, Clear Bass slider, Reset. Fixed presets offer "Use Custom". |
+| Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
+| Device info | Status, codec, firmware; Android Bluetooth settings; Diagnostics; Turn off earbuds (confirmation). |
+| App settings | Paired WF-1000XM5 selection, display name, wallpaper colors, haptics, Quick Settings tile, widget, diagnostics, version. |
+| Diagnostics | Command log with copy and clear. |
 
-## 0.7.0 photo asset
+The CI visual check greps the home screen for the text "Earbuds", so keep it in the app bar.
+`DesignPreviewActivity` (debug only) renders every page from fixtures:
+`anc`, `ambient`, `error`, `permission`, `settings`, `settings-loading`, `equalizer`,
+`equalizer-preset`, `info`, `app`, `diagnostics`, `widgets`.
 
-`app/src/main/res/drawable-nodpi/wf1000xm5_case.webp` was edited using the built-in image generation tool from the user-supplied closed-case photo, then alpha-cropped and resized for Android.
+## Icon
 
-Prompt: Faithful transparent product cutout of the supplied silver Sony WF-1000XM5 closed case. Preserve rounded oblong geometry, silver ivory finish, lid seam, centered LED and subtle SONY mark. Improve clarity and neutral lighting; front view, entire case visible; no invented buttons, stand, scene or extra text.
+`docs/icon`: the case outline is measured from a photo (`silhouette.py`), smoothed
+(`casepath.py`) and written as adaptive icon layers (`make_icon.py`). The launcher layers are
+scaled to 76 % so the case sits on Google's icon keylines rather than filling the safe zone.
 
-Earbuds use the existing transparent silver product asset with corrected rectangular clipping; no synthetic case drawing remains.
+## Not done yet (needs captures from the real earbuds first)
 
-## 0.8.1 settings navigation
-
-The main gear and Earbud settings row open one full-height sheet directly. DSEE, auto-pause and all additional device controls share this screen. Boolean settings are inline switches; multiple-choice settings show their current value in a directly tappable menu. No Device controls submenu, collapsed cards or manual Read setting step remains. Values load on entry; existing values are reused. App-only preferences remain available through the settings icon in the sheet and their main-screen row.
+- Ear-tip fit test, in-ear detection status, Adaptive Sound Control.

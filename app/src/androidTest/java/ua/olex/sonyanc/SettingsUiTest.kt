@@ -38,7 +38,7 @@ class SettingsUiTest {
     @Test fun allBooleanControlsAreImmediatelyEditable() {
         content()
         listOf("DSEE","Speak-to-Chat","Hear my voice in calls","Head gestures","Pause when removed","Voice guidance").forEach {title ->
-            compose.onNodeWithContentDescription(title).performScrollTo().assertIsOn().performClick().assertIsOff()
+            compose.onNodeWithText(title).performScrollTo().assertIsOn().performClick().assertIsOff()
         }
         compose.onNodeWithText("Device controls").assertDoesNotExist()
         compose.onNodeWithText("Read setting").assertDoesNotExist()
@@ -54,7 +54,7 @@ class SettingsUiTest {
             AdvancedSettings.Key.QUALITY to listOf("Bluetooth quality"),
             AdvancedSettings.Key.GUIDANCE_VOLUME to listOf("Voice guidance volume"))
         titles.forEach {(key,labels)->key.fields.forEachIndexed {i,field->field.choices.forEach {choice->
-            compose.onNodeWithContentDescription(labels[i]).performScrollTo().performClick()
+            compose.onNodeWithText(labels[i]).performScrollTo().performClick()
             compose.onAllNodesWithText(choice.label).onLast().performClick()
             compose.runOnIdle {assertEquals(Triple(key,field.index,choice.code),last)}
         }}}
@@ -80,7 +80,8 @@ class SettingsUiTest {
         compose.onNodeWithText("Low").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Ambient sound level").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"5 of 20"))
         compose.onNodeWithContentDescription("Voice focus").performScrollTo().performClick().assertIsOn()
-    }    @Test fun largeFontChoicesArePlacedBelowTheirLabels() {
+    }
+    @Test fun largeFontValuesStayBelowTheirLabels() {
         compose.setContent {
             val density=LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density,1.5f)) {
@@ -88,11 +89,17 @@ class SettingsUiTest {
             }
         }
         listOf("Left touch control","Right touch control","Automatic power off","Bluetooth quality","Voice guidance volume").forEach {title->
-            compose.onNodeWithContentDescription(title).performScrollTo()
-            val label=compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
-            val choice=compose.onNodeWithContentDescription(title).fetchSemanticsNode().boundsInRoot
-            assertTrue("$title value overlaps its label",label.bottom<=choice.top+1f)
+            compose.onNodeWithText(title).performScrollTo()
+            val label=compose.onNode(hasText(title),useUnmergedTree=true).fetchSemanticsNode()
+            val value=label.parent!!.children.first {it.id!=label.id && it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text)}
+            assertTrue("$title value overlaps its label",label.boundsInRoot.bottom<=value.boundsInRoot.top+1f)
         }
     }
-
+    @Test fun choiceDialogShowsTheCurrentValueAndCancels() {
+        content()
+        compose.onNodeWithText("Bluetooth quality").performScrollTo().performClick()
+        compose.onNode(hasText("Sound quality") and isSelectable()).assertIsSelected()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Cancel").assertDoesNotExist()
+    }
 }

@@ -133,6 +133,13 @@ jobs:
             adb exec-out screencap -p > screens/settings-scrolled.png
             adb shell am force-stop ua.olex.sonyanc
             adb shell settings put system font_scale 1.0
+            for scene in equalizer info app diagnostics; do
+              adb shell am force-stop ua.olex.sonyanc
+              adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene $scene
+              sleep 3
+              adb exec-out screencap -p > screens/$scene-dark.png
+            done
+            adb shell am force-stop ua.olex.sonyanc
             adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene widgets
             sleep 3
             adb exec-out screencap -p > screens/widgets-dark.png

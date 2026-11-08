@@ -4,13 +4,12 @@ Formerly Hush. A personal, offline **Sony WF-1000XM5** controller for Android. E
 
 ## Interface
 
-Material 3 Expressive theme and motion scheme, native morphing toggle buttons,
-expressive loading indicator, official rounded Material icons, wallpaper colors,
-optional haptics and an adaptive, themed app icon of the WF-1000XM5 case traced from a photo (see docs/icon). A compact transparent silver WF-1000XM5 product cutout based on the owner’s reference
-identifies the device; no decorative hero, slogans or idle animation. A compact device card combines battery and the reported audio codec.
-Fixed-width mode targets sit above quick access to EQ and earbud settings.
-The ambient panel uses a compact layout; connection details and sheet back buttons
-keep secondary actions within reach.
+Pixel-style: wallpaper colors, Google Sans on Pixel phones, Material 3 Expressive motion,
+full-screen pages with large collapsing titles and the predictive back gesture, Android 16
+style grouped lists, and an adaptive themed icon of the WF-1000XM5 case traced from a photo.
+Pages: Home, Equalizer, Earbud settings, Device info, App settings, Diagnostics.
+See [docs/DESIGN.md](docs/DESIGN.md).
+
 The expressive dependency is deliberately pinned to `material3:1.4.0-alpha18`,
 which exposes the public expressive APIs, rather than the stable 1.4.0 that removed them.
 
