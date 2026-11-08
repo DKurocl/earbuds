@@ -42,5 +42,5 @@ fun HushIcon(glyph: Glyph, modifier: Modifier = Modifier, color: Color = Materia
 
 @Composable
 fun HushMark(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary) {
-    Icon(painterResource(R.drawable.ic_hush_mark),contentDescription=null,tint=color,modifier=modifier.size(32.dp))
+    Icon(painterResource(R.drawable.ic_case_mark),contentDescription=null,tint=color,modifier=modifier.size(32.dp))
 }

@@ -1,15 +1,15 @@
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
-    <shortcut android:shortcutId="anc" android:icon="@drawable/ic_hush_mono" android:shortcutShortLabel="@string/shortcut_anc">
+    <shortcut android:shortcutId="anc" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_anc">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="ua.olex.sonyanc" android:targetClass="ua.olex.sonyanc.MainActivity">
             <extra android:name="hush.mode" android:value="ANC" />
         </intent>
     </shortcut>
-    <shortcut android:shortcutId="ambient" android:icon="@drawable/ic_hush_mono" android:shortcutShortLabel="@string/shortcut_ambient">
+    <shortcut android:shortcutId="ambient" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_ambient">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="ua.olex.sonyanc" android:targetClass="ua.olex.sonyanc.MainActivity">
             <extra android:name="hush.mode" android:value="AMBIENT" />
         </intent>
     </shortcut>
-    <shortcut android:shortcutId="off" android:icon="@drawable/ic_hush_mono" android:shortcutShortLabel="@string/shortcut_off">
+    <shortcut android:shortcutId="off" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_off">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="ua.olex.sonyanc" android:targetClass="ua.olex.sonyanc.MainActivity">
             <extra android:name="hush.mode" android:value="OFF" />
         </intent>
