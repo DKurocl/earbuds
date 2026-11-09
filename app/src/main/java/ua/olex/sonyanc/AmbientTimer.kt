@@ -27,7 +27,11 @@ object AmbientTimer {
         ctx, 7, Intent(ctx, AmbientTimerReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    /** Remembers where to return, arms the alarm and switches to Ambient with the user's level. */
+    /**
+     * Remembers where to return, arms the alarm and switches to Ambient with the user's level.
+     * USE_EXACT_ALARM is held and canScheduleExactAlarms() is checked; lint only knows SCHEDULE_EXACT_ALARM.
+     */
+    @android.annotation.SuppressLint("MissingPermission")
     fun start(ctx: Context, minutes: Int, from: SonyProtocol.NcState) {
         val until = System.currentTimeMillis() + minutes * 60_000L
         val back = if (from.mode == SonyProtocol.Mode.AMBIENT) SonyProtocol.Mode.ANC else from.mode
