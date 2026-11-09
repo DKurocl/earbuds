@@ -23,12 +23,16 @@
                     android:layout_width="44dp" android:layout_height="44dp" android:layout_gravity="center"
                     android:background="@drawable/w_disc" android:scaleType="fitCenter"
                     android:importantForAccessibility="no" android:src="@drawable/wf1000xm5_bud" />
+                <ImageView android:id="@+id/w_left_charge"
+                    android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="top|center_horizontal"
+                    android:background="@drawable/w_badge" android:padding="3dp" android:scaleType="fitCenter"
+                    android:importantForAccessibility="no" android:src="@drawable/w_icon_bolt" android:visibility="gone" />
             </FrameLayout>
             <TextView android:id="@+id/w_left_value"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:paddingTop="6dp" android:fontFamily="google-sans-text-medium" android:includeFontPadding="false"
                 android:singleLine="true" android:textSize="15sp" android:textColor="@color/w_off_text"
-                android:drawablePadding="2dp" android:gravity="center_vertical" android:text="@string/w_unknown" />
+                android:gravity="center_vertical" android:text="@string/w_unknown" />
             <TextView android:id="@+id/w_left_label"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:paddingTop="2dp" android:fontFamily="google-sans-text" android:includeFontPadding="false"
@@ -49,12 +53,16 @@
                     android:layout_width="44dp" android:layout_height="44dp" android:layout_gravity="center"
                     android:background="@drawable/w_disc" android:scaleType="fitCenter"
                     android:importantForAccessibility="no" android:src="@drawable/wf1000xm5_case" />
+                <ImageView android:id="@+id/w_case_charge"
+                    android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="top|center_horizontal"
+                    android:background="@drawable/w_badge" android:padding="3dp" android:scaleType="fitCenter"
+                    android:importantForAccessibility="no" android:src="@drawable/w_icon_bolt" android:visibility="gone" />
             </FrameLayout>
             <TextView android:id="@+id/w_case_value"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:paddingTop="6dp" android:fontFamily="google-sans-text-medium" android:includeFontPadding="false"
                 android:singleLine="true" android:textSize="15sp" android:textColor="@color/w_off_text"
-                android:drawablePadding="2dp" android:gravity="center_vertical" android:text="@string/w_unknown" />
+                android:gravity="center_vertical" android:text="@string/w_unknown" />
             <TextView android:id="@+id/w_case_label"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:paddingTop="2dp" android:fontFamily="google-sans-text" android:includeFontPadding="false"
@@ -75,12 +83,16 @@
                     android:layout_width="44dp" android:layout_height="44dp" android:layout_gravity="center"
                     android:background="@drawable/w_disc" android:scaleType="fitCenter"
                     android:importantForAccessibility="no" android:src="@drawable/wf1000xm5_bud_mirrored" />
+                <ImageView android:id="@+id/w_right_charge"
+                    android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="top|center_horizontal"
+                    android:background="@drawable/w_badge" android:padding="3dp" android:scaleType="fitCenter"
+                    android:importantForAccessibility="no" android:src="@drawable/w_icon_bolt" android:visibility="gone" />
             </FrameLayout>
             <TextView android:id="@+id/w_right_value"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:paddingTop="6dp" android:fontFamily="google-sans-text-medium" android:includeFontPadding="false"
                 android:singleLine="true" android:textSize="15sp" android:textColor="@color/w_off_text"
-                android:drawablePadding="2dp" android:gravity="center_vertical" android:text="@string/w_unknown" />
+                android:gravity="center_vertical" android:text="@string/w_unknown" />
             <TextView android:id="@+id/w_right_label"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:paddingTop="2dp" android:fontFamily="google-sans-text" android:includeFontPadding="false"

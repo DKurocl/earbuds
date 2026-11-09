@@ -35,7 +35,6 @@ class ModeWidget : AppWidgetProvider() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
         super.onReceive(ctx,intent)
-        if(intent.action==ACTION_SCENE) return applyScene(ctx,intent.getStringExtra(EXTRA_SCENE))
         if(intent.action!=ACTION_SET) return
         val mode=intent.getStringExtra(EXTRA_MODE)?.let {runCatching{SonyProtocol.Mode.valueOf(it)}.getOrNull()} ?: return
         Headphones.init(ctx)
@@ -62,34 +61,8 @@ class ModeWidget : AppWidgetProvider() {
         }
     }
 
-    /** A scene chip on the dashboard: same verified path as in the app, under a short lease. */
-    private fun applyScene(ctx:Context,id:String?) {
-        val scene=Prefs.scenes(ctx).firstOrNull{it.id==id} ?: return
-        Headphones.init(ctx)
-        val pending=goAsync()
-        val generation=latestTap.incrementAndGet()
-        CoroutineScope(Dispatchers.IO).launch {
-            Headphones.hold(foreground=false)
-            try {
-                SceneShortcuts.reportUsed(ctx,scene)
-                busyMode=scene.nc.mode
-                refreshAll(ctx)
-                val ok=withTimeoutOrNull(8500){Headphones.applyScene(scene)} ?: false
-                if(latestTap.get()==generation && !ok) showFailure(ctx)
-            } catch(e:Exception) {
-                if(latestTap.get()==generation) showFailure(ctx)
-            } finally {
-                if(latestTap.get()==generation) {busyMode=null;refreshAll(ctx)}
-                Headphones.release(foreground=false)
-                pending.finish()
-            }
-        }
-    }
-
     companion object {
         private const val ACTION_SET="ua.olex.sonyanc.SET_MODE"
-        private const val ACTION_SCENE="ua.olex.sonyanc.APPLY_SCENE"
-        private const val EXTRA_SCENE="scene"
         private const val EXTRA_MODE="mode"
         private const val DIM_ALPHA=97 // 38 %, Material's disabled-content opacity
         private val latestTap=AtomicLong()
@@ -126,11 +99,11 @@ class ModeWidget : AppWidgetProvider() {
         /** The exact views for one widget size. The debug gallery and the picker preview use this too. */
         internal fun viewsFor(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,
                               interactive:Boolean=true,linked:Boolean?=Prefs.linked(ctx),
-                              battery:Pair<SonyProtocol.Battery,Long>?=Prefs.lastBattery(ctx),scenes:List<Scene> = Prefs.scenes(ctx)):RemoteViews {
+                              battery:Pair<SonyProtocol.Battery,Long>?=Prefs.lastBattery(ctx)):RemoteViews {
         WidgetLayout.dashboard(width,height,Widgets.lineHeight(ctx,16f,"google-sans-text-medium"),
             Widgets.lineHeight(ctx,15f,"google-sans-text-medium"),Widgets.lineHeight(ctx,12f),
             SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)})?.let {
-            return dashboard(ctx,it,current,pending,interactive,linked,battery,scenes)
+            return dashboard(ctx,it,current,pending,interactive,linked,battery)
         }
             val spec=WidgetLayout.modes(width,height,
                 label=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)},line=Widgets.lineHeight(ctx,14f))
@@ -180,15 +153,30 @@ class ModeWidget : AppWidgetProvider() {
             }
         }
 
-        private fun pendingIntent(ctx:Context,code:Int,intent:Intent)=
-            PendingIntent.getBroadcast(ctx,code,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        /** "5 h 30 min left · case +12 h 20 min": the numbers bright and medium weight, the words quiet. */
+        private fun listening(ctx:Context,b:SonyProtocol.Battery,mode:SonyProtocol.Mode?):CharSequence? {
+            val buds=BatteryLife.budsMinutes(b,mode) ?: return null
+            val case=BatteryLife.caseMinutes(b,mode)?.takeIf{it>=10}
+            val strong=ctx.getColor(if(buds<60) R.color.w_low else R.color.w_off_text)
+            val out=android.text.SpannableStringBuilder()
+            fun number(text:String,color:Int) {
+                val start=out.length
+                out.append(text)
+                out.setSpan(android.text.style.ForegroundColorSpan(color),start,out.length,0)
+                out.setSpan(android.text.style.TypefaceSpan("google-sans-text-medium"),start,out.length,0)
+            }
+            number(BatteryLife.short(buds),strong)
+            out.append(" left")
+            if(case!=null) {out.append("   ·   case ");number("+"+BatteryLife.short(case),ctx.getColor(R.color.w_off_text))}
+            return out
+        }
 
         /**
          * Lock-screen hub and large home slots: name and status, three battery rings, the
-         * listening estimate, the mode group and up to three scenes, all from cached state.
+         * listening time and the mode group, all from cached state.
          */
         private fun dashboard(ctx:Context,spec:WidgetLayout.DashboardSpec,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
-                              interactive:Boolean,linked:Boolean?,last:Pair<SonyProtocol.Battery,Long>?,scenes:List<Scene>):RemoteViews {
+                              interactive:Boolean,linked:Boolean?,last:Pair<SonyProtocol.Battery,Long>?):RemoteViews {
             val v=RemoteViews(ctx.packageName,R.layout.widget_dashboard)
             val away=linked==false
             val b=last?.first
@@ -197,33 +185,15 @@ class ModeWidget : AppWidgetProvider() {
             v.setTextViewText(R.id.w_status,BatteryWidget.status(ctx,b,last?.second ?: 0L,linked,Prefs.lastSeen(ctx)).takeIf{it.isNotEmpty()}?.let{"·  $it"} ?: "")
             val bb=b ?: SonyProtocol.Battery()
             val spoken=listOf(
-                BatteryWidget.bindRing(ctx,v,R.id.w_left_box,R.id.w_left_ring,R.id.w_left_art,R.id.w_left_value,R.id.w_left_label,"Left",bb.left,bb.leftCharging,null,away,true),
-                BatteryWidget.bindRing(ctx,v,R.id.w_case_box,R.id.w_case_ring,R.id.w_case_art,R.id.w_case_value,R.id.w_case_label,"Case",bb.case,bb.caseCharging,null,away,true),
-                BatteryWidget.bindRing(ctx,v,R.id.w_right_box,R.id.w_right_ring,R.id.w_right_art,R.id.w_right_value,R.id.w_right_label,"Right",bb.right,bb.rightCharging,null,away,true),
+                BatteryWidget.bindRing(ctx,v,R.id.w_left_box,R.id.w_left_ring,R.id.w_left_art,R.id.w_left_value,R.id.w_left_label,R.id.w_left_charge,"Left",bb.left,bb.leftCharging,null,away,true),
+                BatteryWidget.bindRing(ctx,v,R.id.w_case_box,R.id.w_case_ring,R.id.w_case_art,R.id.w_case_value,R.id.w_case_label,R.id.w_case_charge,"Case",bb.case,bb.caseCharging,null,away,true),
+                BatteryWidget.bindRing(ctx,v,R.id.w_right_box,R.id.w_right_ring,R.id.w_right_art,R.id.w_right_value,R.id.w_right_label,R.id.w_right_charge,"Right",bb.right,bb.rightCharging,null,away,true),
             )
             v.setContentDescription(R.id.w_batteries,"Battery: "+spoken.joinToString(", "))
-            val estimate=b?.let{BatteryLife.summary(it,current)}
-            v.setTextViewText(R.id.w_estimate,estimate.orEmpty())
+            val estimate=b?.let{listening(ctx,it,current)}
+            v.setTextViewText(R.id.w_estimate,estimate ?: "")
             v.setViewVisibility(R.id.w_estimate,if(spec.estimate && estimate!=null) View.VISIBLE else View.GONE)
             bindTiles(ctx,v,listOf(R.drawable.w_tile_start,R.drawable.w_tile_middle,R.drawable.w_tile_end),current,pending,away,spec.labels,24f,interactive)
-            val chips=listOf(R.id.w_scene0,R.id.w_scene1,R.id.w_scene2)
-            val shown=if(spec.scenes) scenes.take(3) else emptyList()
-            v.setViewVisibility(R.id.w_scenes,if(shown.isEmpty()) View.GONE else View.VISIBLE)
-            val nc=Prefs.lastNc(ctx)
-            chips.forEachIndexed {i,id ->
-                val scene=shown.getOrNull(i)
-                if(scene==null) {v.setViewVisibility(id,View.INVISIBLE);return@forEachIndexed}
-                // Without a live equalizer read, a scene counts as active when its sound matches.
-                val on=scene.copy(eqPreset=null).matches(nc,null)
-                v.setViewVisibility(id,View.VISIBLE)
-                v.setTextViewText(id,scene.name)
-                v.setInt(id,"setBackgroundResource",if(on) R.drawable.w_chip_on else R.drawable.w_chip)
-                val text=ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text)
-                v.setTextColor(id,if(away) (text and 0x00FFFFFF) or (DIM_ALPHA shl 24) else text)
-                v.setContentDescription(id,"Scene ${scene.name}, ${scene.summary}"+if(on) ", active" else "")
-                if(interactive) v.setOnClickPendingIntent(id,pendingIntent(ctx,10+i,
-                    Intent(ctx,ModeWidget::class.java).setAction(ACTION_SCENE).putExtra(EXTRA_SCENE,scene.id)))
-            }
             if(interactive) {
                 val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 val openApp=PendingIntent.getActivity(ctx,101,open,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

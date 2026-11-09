@@ -92,12 +92,11 @@ class WidgetLayoutTest {
     @Test fun lockScreenHubSlotGetsTheFullDashboard() {
         val s = WidgetLayout.dashboard(416f, 275f, 20f, 18f, 15f, label)
         assertNotNull(s); s!!
-        assertTrue(s.estimate); assertTrue(s.scenes); assertTrue(s.labels)
+        assertTrue(s.estimate); assertTrue(s.labels)
     }
 
     @Test fun homeFourByTwoGetsADashboardWithoutClippedLabels() {
         val s = WidgetLayout.dashboard(340f, 208f, 20f, 18f, 15f, label)!!
-        assertFalse(s.scenes)
         val tile = (340 - 32 - 2 * WidgetLayout.GAP) / 3
         if (s.labels) assertTrue(tile >= 16 + 24 + 8 + label)
     }

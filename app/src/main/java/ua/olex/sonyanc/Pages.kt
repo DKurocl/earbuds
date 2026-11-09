@@ -78,7 +78,6 @@ data class PairedDevice(val address: String, val name: String)
 fun AppSettingsContent(
     devices: List<PairedDevice>, selected: String?, displayName: String, dynamicColor: Boolean, haptics: Boolean,
     canAddTile: Boolean, canPinWidget: Boolean, version: String, onConnect: OnConnect = OnConnect.KEEP,
-    scenes: List<Scene> = emptyList(), onConnectScene: Scene? = null, onOnConnectScene: (Scene) -> Unit = {},
     onBack: () -> Unit = {}, onSelect: (PairedDevice) -> Unit = {}, onRename: () -> Unit = {},
     onDynamicColor: (Boolean) -> Unit = {}, onHaptics: (Boolean) -> Unit = {},
     onAddTile: () -> Unit = {}, onPinWidget: () -> Unit = {}, onBluetooth: () -> Unit = {}, onDiagnostics: () -> Unit = {},
@@ -96,11 +95,8 @@ fun AppSettingsContent(
             if (devices.isEmpty()) item { NavRow(it, Glyph.BLUETOOTH, "Pair your WF-1000XM5", "Open Android Bluetooth settings", onClick = onBluetooth) }
             item { NavRow(it, Glyph.EDIT, "Name", displayName, onClick = onRename) }
             item {
-                // Modes first, then any saved scene ("Commute" when you leave the house).
-                val choices = OnConnect.entries.map { c -> c.ordinal to c.label } + scenes.mapIndexed { i, sc -> 100 + i to "Scene: ${sc.name}" }
-                val selected = onConnectScene?.let { sc -> scenes.indexOfFirst { it.id == sc.id }.takeIf { i -> i >= 0 }?.plus(100) } ?: onConnect.ordinal
-                ChoiceRow(it, Glyph.LINK, "When earbuds connect", choices, selected) { i ->
-                    if (i >= 100) onOnConnectScene(scenes[i - 100]) else onOnConnect(OnConnect.entries[i])
+                ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
+                    onOnConnect(OnConnect.entries[i])
                 }
             }
         }
