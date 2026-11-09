@@ -1,0 +1,59 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="horizontal" android:baselineAligned="false"
+        android:background="@drawable/w_bg" android:paddingHorizontal="10dp" android:paddingVertical="8dp">
+        <LinearLayout android:id="@+id/w_anc"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center" android:orientation="vertical"
+            android:clickable="true" android:focusable="true"
+            android:background="@drawable/w_tile_start">
+            <ImageView android:id="@+id/w_anc_icon"
+                android:layout_width="24dp" android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/w_icon_noise_control_off" />
+            <TextView android:id="@+id/w_anc_label"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:paddingTop="4dp" android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false" android:singleLine="true"
+                android:importantForAccessibility="no"
+                android:textSize="13sp" android:textColor="@color/w_off_text"
+                android:text="@string/shortcut_anc" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/w_amb"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginStart="8dp"
+            android:gravity="center" android:orientation="vertical"
+            android:clickable="true" android:focusable="true"
+            android:background="@drawable/w_tile_middle">
+            <ImageView android:id="@+id/w_amb_icon"
+                android:layout_width="24dp" android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/w_icon_hearing" />
+            <TextView android:id="@+id/w_amb_label"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:paddingTop="4dp" android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false" android:singleLine="true"
+                android:importantForAccessibility="no"
+                android:textSize="13sp" android:textColor="@color/w_off_text"
+                android:text="@string/shortcut_ambient" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/w_off"
+            android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginStart="8dp"
+            android:gravity="center" android:orientation="vertical"
+            android:clickable="true" android:focusable="true"
+            android:background="@drawable/w_tile_end">
+            <ImageView android:id="@+id/w_off_icon"
+                android:layout_width="24dp" android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/w_icon_power_settings_new" />
+            <TextView android:id="@+id/w_off_label"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:paddingTop="4dp" android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false" android:singleLine="true"
+                android:importantForAccessibility="no"
+                android:textSize="13sp" android:textColor="@color/w_off_text"
+                android:text="@string/shortcut_off" />
+        </LinearLayout>
+    </LinearLayout>
