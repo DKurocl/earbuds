@@ -470,8 +470,11 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
 @Composable
 private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boolean, seenAt: Long?) {
     val cs = MaterialTheme.colorScheme
-    val buds = battery?.let { BatteryLife.budsMinutes(it, mode) } ?: return
-    val case = BatteryLife.caseMinutes(battery, mode)?.takeIf { it >= 10 }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // The owner's measured drain once known; Sony's rating until then.
+    val rate = remember(battery, mode) { Prefs.drainRate(ctx, mode) }
+    val buds = battery?.let { BatteryLife.budsMinutes(it, mode, rate) } ?: return
+    val case = BatteryLife.caseMinutes(battery, mode, rate)?.takeIf { it >= 10 }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60) {

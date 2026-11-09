@@ -161,8 +161,9 @@ class ModeWidget : AppWidgetProvider() {
 
         /** "5 h 30 min left · case +12 h 20 min": the numbers bright and medium weight, the words quiet. */
         private fun listening(ctx:Context,b:SonyProtocol.Battery,mode:SonyProtocol.Mode?):CharSequence? {
-            val buds=BatteryLife.budsMinutes(b,mode) ?: return null
-            val case=BatteryLife.caseMinutes(b,mode)?.takeIf{it>=10}
+            val rate=Prefs.drainRate(ctx,mode)
+            val buds=BatteryLife.budsMinutes(b,mode,rate) ?: return null
+            val case=BatteryLife.caseMinutes(b,mode,rate)?.takeIf{it>=10}
             val strong=ctx.getColor(if(buds<60) R.color.w_low else R.color.w_off_text)
             val out=android.text.SpannableStringBuilder()
             fun number(text:String,color:Int) {

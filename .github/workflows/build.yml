@@ -76,6 +76,39 @@ jobs:
         with:
           name: Earbuds-ui-tests
           path: app/build/outputs/apk/androidTest/debug/*.apk
+  release:
+    # Every main build becomes a GitHub release that Obtainium on the phone installs by itself.
+    # Only with the owner key: builds signed with a throwaway key could not update each other.
+    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[quick-apk]')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Owner key configured?
+        id: key
+        env:
+          KEYSTORE_B64: ${{ secrets.HUSH_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then echo "publish=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::No owner signing key; skipping the release so Obtainium never sees an APK it cannot install."; fi
+      - uses: actions/download-artifact@v4
+        if: steps.key.outputs.publish == 'true'
+        with:
+          name: Earbuds-install
+          path: apk
+      - name: Name the APK
+        if: steps.key.outputs.publish == 'true'
+        run: mv apk/*.apk "apk/Earbuds-${{ github.run_number }}.apk"
+      - uses: softprops/action-gh-release@v2
+        if: steps.key.outputs.publish == 'true'
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Earbuds build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          files: apk/*.apk
+          make_latest: true
+          body: "Commit ${{ github.sha }}. Obtainium: add this repository as a GitHub source; it installs each new build over the previous one."
   visual-check:
     if: "!contains(github.event.head_commit.message, '[quick-apk]')"
     needs: build

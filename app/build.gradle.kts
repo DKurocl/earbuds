@@ -6,17 +6,17 @@ plugins {
 
 android {
     namespace = "ua.olex.sonyanc"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "ua.olex.sonyanc"
         // Pixel 10 Pro XL ships Android 16; 35 keeps the CI emulator image working.
         minSdk = 35
-        targetSdk = 35
+        targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // CI run numbers only grow, so every CI build installs over the previous one.
         versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.plus(1000) ?: 15
-        versionName = "1.2.0"
+        versionName = "1.3.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,6 +24,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // Style-only suggestion (KTX helpers); behaviour is identical.
+    lint { disable += "UseKtx" }
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {

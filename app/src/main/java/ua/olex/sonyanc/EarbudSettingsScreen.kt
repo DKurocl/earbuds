@@ -44,8 +44,14 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
     }
     LaunchedEffect(resumeTick) { load() }
 
+    // While a setting is being read, show its last known value (rows are read-only while busy).
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val cachedValues = remember { Prefs.cachedAdvanced(ctx) }
+    val cachedFeatures = remember { Prefs.cachedFeatures(ctx) }
+    val shownValues = values + cachedValues.filterKeys { it in loading && it !in values }
+    val shownFeatures = features + cachedFeatures.filterKeys { it in featureLoading && it !in features }
     EarbudSettingsContent(
-        values, features, loading, featureLoading, writing, message, onBack, onAppSettings,
+        shownValues, shownFeatures, loading, featureLoading, writing, message, onBack, onAppSettings,
         onRefresh = { scope.launch { load(force = true) } },
         onUpdate = { key, index, code ->
             scope.launch {

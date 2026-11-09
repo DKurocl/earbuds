@@ -3,24 +3,37 @@
 Formerly Hush. A personal, offline **Sony WF-1000XM5** controller for one **Pixel 10 Pro XL**.
 English only. Roadmap (Ukrainian): [docs/PLAN.md](docs/PLAN.md).
 
-## New in 1.2
+## What it does (1.3)
 
-- Battery rings rebuilt after Pixel's device details: product on a filled disc, a thin ring
-  that stops at the status chip's outline, a centered single-bud cutout that never clips.
-- Earbuds-connected events (ACL broadcasts, no service): battery read and widgets refreshed
-  when the earbuds leave the case; optional **When earbuds connect** mode; "Disconnected · 25
-  minutes ago" and dimmed widget buttons while they are away.
-- Two-stage haptics: a tick on touch, the mode's own pulse when the earbuds confirm, a double
-  click on failure.
-- **Find** (Google Find Hub) replaces Disconnect, which only closed the control link.
-- Noise-control widget renders an exact layout for every launcher size (row with labels under
-  or beside icons, icons only, or a column), M3E connected button group shapes, measured labels.
-- Optional battery widget: three rings, one ring at 1×1, absolute "Updated 14:32".
-- Large slots (lock-screen hub ≈ 416 × 275 dp, home 4×2) turn the noise-control widget into a
-  dashboard: status, battery rings, listening time and modes.
-  Both widgets declare `home_screen|keyguard`.
-- Home has no logo or app name at the top: only the settings button.
-- Generated widget picker previews on Android 15+.
+**Home** — device name and status ("Connected · LDAC", "Disconnected · 25 minutes ago"), Pixel-style
+battery rings (product on a disc, chip in the ring gap, a travelling wave while charging), listening
+time as two tiles (measured from your own use once known), Find (Google Find Hub), More controls.
+Noise control lives in a floating **dock** at the bottom: ANC / Ambient / Off; in ANC also
+Speak-to-Chat and **Ambient for a moment** (2/5/10 min, then back, with a countdown); in Ambient the
+level (haptic tick per step), Low / Medium / High and voice focus.
+
+**Zero-tap behaviour** (Android's ACL broadcasts, no service): battery read and widgets refreshed when
+the earbuds leave the case; optional *When earbuds connect* mode; widgets dim and the tile greys out
+while they are in the case; optional case-battery reminder at 25 % or less; taps fail at once when the
+earbuds are away instead of waiting for RFCOMM.
+
+**Widgets** — noise control with an exact layout for every launcher size (labels under or beside the
+icons, icons only, or a column; M3E connected-group shapes with soft 28/16 dp corners); at large sizes
+(lock-screen hub ≈ 416 × 275 dp, home 4×2) a dashboard with status, battery rings, listening time and
+modes. Optional battery widget (one ring at 1×1). Both are `home_screen|keyguard`; generated picker
+previews. Taps on widgets and the Quick Settings tile pulse once the earbuds confirm.
+
+**Haptics** — a tick on touch, a per-mode pulse on the earbuds' acknowledgement (ANC thud, Ambient
+quick rise, Off tick), a double click on failure.
+
+**Speed** — minSdk 35 / target 36, uncompressed dex, startup profile for the app's code, secure RFCOMM
+only, push-driven reads.
+
+## Updates on the phone (Obtainium)
+
+After the signing key below is set up, every build of `main` is published as a GitHub release. In
+[Obtainium](https://github.com/ImranR98/Obtainium) add this repository as a GitHub source (for a
+private repository, with a read-only GitHub token); it installs each new build over the previous one.
 
 ## Stable updates (one-time owner setup)
 
