@@ -26,20 +26,29 @@ class WidgetAnimationUiTest {
 
     @Test fun onlyARealModeChangeAnimates() {
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                fun views(current: SonyProtocol.Mode, pending: SonyProtocol.Mode? = null) =
-                    ModeWidget.viewsFor(activity, 340f, 96f, current, pending = pending, interactive = false, linked = true)
+            lateinit var root: View
+            fun views(current: SonyProtocol.Mode, pending: SonyProtocol.Mode? = null, ctx: android.content.Context) =
+                ModeWidget.viewsFor(ctx, 340f, 96f, current, pending = pending, interactive = false, linked = true)
+            // Each step runs on the UI thread, then the test waits: vector animations start on
+            // the RenderThread with the next drawn frame, as they do in the launcher.
+            fun step(wait: Long = 120, action: (ComponentActivity) -> Unit) { scenario.onActivity(action); Thread.sleep(wait) }
+            step(wait = 800) { activity ->
                 val host = FrameLayout(activity)
                 activity.setContentView(host)
-                val root = views(SonyProtocol.Mode.ANC).apply(activity, host)
+                root = views(SonyProtocol.Mode.ANC, ctx = activity).apply(activity, host)
                 host.addView(root)
-                assertFalse("first appearance is still", animating(root))
-                views(SonyProtocol.Mode.ANC).reapply(activity, root)
-                assertFalse("an identical update replays nothing", animating(root))
-                views(SonyProtocol.Mode.ANC, pending = SonyProtocol.Mode.AMBIENT).reapply(activity, root)
-                assertEquals(listOf(true, false, true), ids.map { root.findViewById<View>(it).isEnabled })
+            }
+            scenario.onActivity { assertFalse("first appearance is still", animating(root)) }
+            step { views(SonyProtocol.Mode.ANC, ctx = it).reapply(it, root) }
+            scenario.onActivity { assertFalse("an identical update replays nothing", animating(root)) }
+            step(wait = 60) { views(SonyProtocol.Mode.ANC, pending = SonyProtocol.Mode.AMBIENT, ctx = it).reapply(it, root) }
+            scenario.onActivity {
+                assertEquals(listOf(true, false, true), ids.map { id -> root.findViewById<View>(id).isEnabled })
                 assertTrue("the change morphs the buttons", animating(root))
             }
+            Thread.sleep(800)
+            step { views(SonyProtocol.Mode.AMBIENT, ctx = it).reapply(it, root) }
+            scenario.onActivity { assertFalse("the confirmation replays nothing", animating(root)) }
         }
     }
 }
