@@ -69,11 +69,9 @@ class ScreenshotTest {
         )
     }
 
-    /** Predictive back mid-swipe: the battery page slides off and Home comes out from underneath. */
-    private fun backSwipe(progress: Float) = shoot("back-swipe-%02d".format((progress * 100).toInt())) {
-        val nav = androidx.compose.runtime.remember { androidx.compose.animation.core.SeekableTransitionState(listOf("HOME", "BATTERY")) }
-        androidx.compose.runtime.LaunchedEffect(Unit) { nav.seekTo(progress, listOf("HOME")) }
-        PageTransition(androidx.compose.animation.core.rememberTransition(nav), swiping = true) { page ->
+    /** Predictive back posed mid-gesture: the battery page shrinks away, Home waits underneath. */
+    private fun backSwipe(name: String, pose: PagePose) = shoot(name) {
+        PageLayers(listOf("HOME", "BATTERY"), pose) { page ->
             if (page == "HOME") HushScreen(
                 status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
                 fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78), granted = true, hasDevice = true,
@@ -82,8 +80,12 @@ class ScreenshotTest {
         }
     }
 
-    @Test fun backSwipe30() = backSwipe(0.3f)
-    @Test fun backSwipe60() = backSwipe(0.6f)
+    @Test fun backSwipe30() = backSwipe("back-swipe-30", PagePose(swipe = { 0.3f }, dy = { 120f }))
+    @Test fun backSwipe100() = backSwipe("back-swipe-100", PagePose(swipe = { 1f }, dy = { 400f }))
+    /** Let go at 70 %: the page is halfway out. */
+    @Test fun backCommit() = backSwipe("back-commit", PagePose(swipe = { 0.7f }, slide = { 0.5f }))
+    /** Opening a page (or the back arrow), halfway. */
+    @Test fun pageOpen() = backSwipe("page-open", PagePose(slide = { 0.5f }))
 
     @Test fun homeAmbient() = shoot("home-ambient") {
         HushScreen(

@@ -12,11 +12,13 @@ predictive back.
 - **Type**: Pixel phones expose Google Sans as system families (`google-sans-flex`,
   `google-sans`, `google-sans-text`). The theme uses them when present, otherwise the default
   sans. No font files are bundled.
-- **Motion**: `MotionScheme.expressive()`. Pages move like Chrome's (`Navigation.kt`): the back
-  swipe seeks a `SeekableTransitionState`, so the page slides right exactly with the finger while
-  the previous page, already live, comes out from underneath (a quarter width to the left, dimmed,
-  a soft edge between them); letting go finishes, cancelling slides it back. Opening a page is the
-  mirror (400 ms, emphasized). `PredictiveBackHandler`, `enableOnBackInvokedCallback`.
+- **Motion**: `MotionScheme.expressive()`. Pages move like Android's own predictive back between
+  screens (`Navigation.kt`): while the finger moves, the page shrinks to 90 % toward the far edge
+  (8 dp from it) with 32 dp corners and a shadow, follows the finger a little up and down, and the
+  previous page waits underneath, dimmed and already live. Letting go sends the page off that edge
+  (300 ms, emphasized); cancelling springs it back. Opening a page slides it in from the right over
+  the old one (400 ms, emphasized); the back arrow is the reverse. Pages keep their saved state
+  while covered. `PredictiveBackHandler`, `enableOnBackInvokedCallback`.
 - **Lists**: `ListGroup` + rows. Group corners are 24 dp outside and 4 dp between items, 2 dp
   gaps, a primary-colored section title. Rows are at least 64 dp: icon, title, summary.
   - `SwitchRow`: the whole row toggles. A setting the earbuds did not report says
