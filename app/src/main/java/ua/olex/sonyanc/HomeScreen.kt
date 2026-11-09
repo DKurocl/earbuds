@@ -21,6 +21,9 @@ import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,7 +64,7 @@ fun HushScreen(
     deviceName: String = "WF-1000XM5", onAppSettings: () -> Unit = onSettings,
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
     batterySeenAt: Long? = null,
-    onFind: () -> Unit = {}, lastSeen: Long? = null,
+    onFind: () -> Unit = {}, lastSeen: Long? = null, onBatteryDetails: () -> Unit = {},
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, ambientUntil: Long? = null, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
 ) {
@@ -87,8 +90,18 @@ fun HushScreen(
         // Noise control lives in a dock at the bottom: on a 6.8" phone that is where the thumb is.
         if (granted && hasDevice) ModeDock(state, pending, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
     }) { insets ->
+        // Pull down to read battery and codec again (also connects if needed).
+        val pull = rememberPullToRefreshState()
+        PullToRefreshBox(
+            isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = onBattery, state = pull,
+            modifier = Modifier.padding(insets).fillMaxSize(),
+            indicator = {
+                PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = batteryRefreshing || codecRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter))
+            },
+        ) {
         Column(
-            Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             Header(deviceName, status, codec, batteryRefreshing, lastSeen)
@@ -104,7 +117,7 @@ fun HushScreen(
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery)
-                        ListeningTime(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt)
+                        ListeningTime(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt, onClick = onBatteryDetails)
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -116,6 +129,7 @@ fun HushScreen(
                     }
 
                     ListGroup("More controls") {
+                        item { NavRow(it, Glyph.BATTERY, "Battery", "Last 7 days and how long a charge really lasts", onClick = onBatteryDetails) }
                         item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
                         item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls, Speak-to-Chat, voice prompts", onClick = onEarbuds) }
                         item {
@@ -127,6 +141,7 @@ fun HushScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
         }
     }
 }
@@ -479,7 +494,7 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
  * case adds. Big numbers on tonal icons, centered; the age of the reading only when it is old.
  */
 @Composable
-private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boolean, seenAt: Long?) {
+private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boolean, seenAt: Long?, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // The owner's measured drain once known; Sony's rating until then.
@@ -488,10 +503,10 @@ private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boo
     val case = BatteryLife.caseMinutes(battery, mode, rate)?.takeIf { it >= 10 }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60) {
+            StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60, onClick = onClick) {
                 HushIcon(Glyph.EARBUDS, Modifier.size(22.dp), it)
             }
-            if (case != null) StatTile("+" + BatteryLife.short(case), "From the case", Modifier.weight(1f)) {
+            if (case != null) StatTile("+" + BatteryLife.short(case), "From the case", Modifier.weight(1f), onClick = onClick) {
                 Icon(painterResource(R.drawable.ic_case_mark), null, tint = it, modifier = Modifier.size(22.dp))
             }
         }
@@ -503,11 +518,13 @@ private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boo
 }
 
 @Composable
-private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, icon: @Composable (Color) -> Unit) {
+private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, onClick: () -> Unit = {}, icon: @Composable (Color) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val accent = if (low) cs.errorContainer else cs.primaryContainer
     val onAccent = if (low) cs.onErrorContainer else cs.onPrimaryContainer
-    Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = modifier.fillMaxHeight().semantics(mergeDescendants = true) {}) {
+    // Tapping either tile opens the Battery page (history and measured battery life).
+    Surface(onClick = onClick, shape = RoundedCornerShape(28.dp), color = Surfaces.card,
+        modifier = modifier.fillMaxHeight().semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {
         Column(
             Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),

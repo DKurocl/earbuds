@@ -1,0 +1,197 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
+package ua.olex.sonyanc
+
+import android.text.format.DateFormat
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
+import ua.olex.sonyanc.SonyProtocol.Mode
+import java.util.Calendar
+import java.util.Date
+import kotlin.math.abs
+
+/**
+ * Chart colors: a fixed, validated pair (blue earbuds, orange case) rather than the wallpaper
+ * scheme, whose primary/tertiary can sit too close to tell apart. Checked with the dataviz
+ * validator in both modes (CVD ΔE ≥ 24, normal ΔE ≥ 31, ≥ 3:1 on the card). The case line is
+ * also dashed, so identity never rests on color alone.
+ */
+private object ChartColors {
+    val buds @Composable get() = if (isSystemInDarkTheme()) Color(0xFF3987E5) else Color(0xFF2A78D6)
+    val case @Composable get() = if (isSystemInDarkTheme()) Color(0xFFD95926) else Color(0xFFEB6834)
+}
+
+/** The Battery page: a week of real readings and what a full charge lasts for the owner. */
+@Composable
+fun BatteryScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val log = remember { Prefs.batteryLog(ctx) }
+    BatteryContent(log, System.currentTimeMillis(), onBack)
+}
+
+@Composable
+fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}) {
+    val cs = MaterialTheme.colorScheme
+    PageScaffold("Battery", onBack) {
+        Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Last 7 days", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Legend(ChartColors.buds, "Earbuds", dashed = false)
+                    Spacer(Modifier.width(12.dp))
+                    Legend(ChartColors.case, "Case", dashed = true)
+                }
+                val week = log.filter { now - it.at in 0..7 * 24 * 60 * 60_000L }
+                if (week.size < 2) {
+                    Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                        Text("Readings appear here as you use the earbuds.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
+                } else WeekChart(week, now)
+            }
+        }
+        ListGroup("A full charge lasts") {
+            item { DrainRow(it, Glyph.QUIET, "Noise cancelling & ambient", log, Mode.ANC) }
+            item { DrainRow(it, Glyph.OFF, "Noise control off", log, Mode.OFF) }
+        }
+        Text(
+            "Measured from your own use while the earbuds are out of the case, so LDAC, volume and battery wear count. " +
+                "Until there is enough, Sony's rating is shown.",
+            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp),
+        )
+    }
+}
+
+@Composable
+private fun Legend(color: Color, label: String, dashed: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(Modifier.size(width = 18.dp, height = 8.dp)) {
+            drawLine(color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.dp.toPx(), StrokeCap.Round,
+                if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())) else null)
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun DrainRow(shape: androidx.compose.ui.graphics.Shape, glyph: Glyph, title: String, log: List<BatterySample>, mode: Mode) {
+    val drain = remember(log) { BatteryLog.drain(log, mode) }
+    val rated = BatteryLife.fullChargeMinutes(mode, null)
+    val value = if (drain == null) "Rated ${BatteryLife.format(rated)} · learning from your use"
+    else {
+        val measured = BatteryLife.fullChargeMinutes(mode, drain.rate)
+        "About ${BatteryLife.format(measured)} · rated ${BatteryLife.format(rated)} · from ${BatteryLife.format(drain.minutes.toInt())} of use"
+    }
+    InfoRow(shape, glyph, title, value)
+}
+
+/** One week: earbuds (solid) and case (dashed) over a 0–100 % axis; drag or tap to read a moment. */
+@Composable
+private fun WeekChart(samples: List<BatterySample>, now: Long) {
+    val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
+    val buds = ChartColors.buds
+    val caseColor = ChartColors.case
+    val grid = cs.outlineVariant.copy(alpha = .5f)
+    val card = Surfaces.card
+    val ink = cs.onSurfaceVariant
+    val measurer = rememberTextMeasurer()
+    val axisStyle = MaterialTheme.typography.labelSmall.copy(color = ink)
+    val start = now - 7 * 24 * 60 * 60_000L
+    var picked by remember { mutableStateOf<BatterySample?>(null) }
+    val timeFormat = remember { DateFormat.getTimeFormat(ctx) }
+    fun nearest(x: Float, width: Float, left: Float): BatterySample? {
+        val t = start + ((x - left) / (width - left)).coerceIn(0f, 1f) * (now - start)
+        return samples.minByOrNull { abs(it.at - t) }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The reading under the finger; the latest one otherwise.
+        val shown = picked ?: samples.last()
+        Text(
+            "${dayName(shown.at)} ${timeFormat.format(Date(shown.at))} · Earbuds ${shown.level} %" + (shown.case?.let { " · Case $it %" } ?: ""),
+            style = MaterialTheme.typography.labelLarge, color = cs.onSurface,
+        )
+        Canvas(
+            Modifier.fillMaxWidth().height(180.dp)
+                .pointerInput(samples) {
+                    detectDragGestures(onDragEnd = { picked = null }, onDragCancel = { picked = null }) { change, _ ->
+                        picked = nearest(change.position.x, size.width.toFloat(), 32.dp.toPx())
+                    }
+                }
+                .pointerInput(samples) { detectTapGestures { picked = nearest(it.x, size.width.toFloat(), 32.dp.toPx()) } }
+                .semantics {
+                    contentDescription = "Battery over the last 7 days. Latest: earbuds ${samples.last().level} percent" +
+                        (samples.last().case?.let { ", case $it percent" } ?: "")
+                },
+        ) {
+            val left = 32.dp.toPx()
+            val bottom = size.height - 18.dp.toPx()
+            val top = 6.dp.toPx()
+            fun x(t: Long) = left + (t - start).toFloat() / (now - start) * (size.width - left)
+            fun y(v: Int) = bottom - (bottom - top) * v / 100f
+            // Recessive grid with three labels, and day ticks.
+            for (v in listOf(0, 50, 100)) {
+                drawLine(grid, Offset(left, y(v)), Offset(size.width, y(v)), 1.dp.toPx())
+                val label = measurer.measure(if (v == 0) "0" else "$v%", axisStyle)
+                drawText(label, topLeft = Offset(0f, y(v) - label.size.height / 2f))
+            }
+            val day = Calendar.getInstance().apply { timeInMillis = start; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0); add(Calendar.DAY_OF_YEAR, 1) }
+            while (day.timeInMillis < now) {
+                val dx = x(day.timeInMillis)
+                drawLine(grid, Offset(dx, top), Offset(dx, bottom), 1.dp.toPx())
+                val label = measurer.measure(dayName(day.timeInMillis), axisStyle)
+                drawText(label, topLeft = Offset(dx + 3.dp.toPx(), bottom + 3.dp.toPx()))
+                day.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            // The earbuds' line breaks between sessions (they recharge in the case) and across long
+            // gaps; the case is one continuous line, since it keeps its charge between sessions.
+            fun series(value: (BatterySample) -> Int?, color: Color, dashed: Boolean, perSession: Boolean) {
+                val path = Path()
+                var prev: BatterySample? = null
+                for (s in samples) {
+                    val v = value(s)
+                    if (v == null) { prev = null; continue }
+                    val p = prev
+                    val gap = if (perSession) 3 * 60 * 60_000L else 36 * 60 * 60_000L
+                    if (p == null || (perSession && p.session != s.session) || s.at - p.at > gap) path.moveTo(x(s.at), y(v))
+                    else path.lineTo(x(s.at), y(v))
+                    prev = s
+                }
+                drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                    pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())) else null))
+            }
+            series({ it.case }, caseColor, dashed = true, perSession = false)
+            series({ it.level }, buds, dashed = false, perSession = true)
+            // Crosshair on the picked reading, or a dot on the latest one.
+            val mark = picked ?: samples.last()
+            if (picked != null) drawLine(ink.copy(alpha = .6f), Offset(x(mark.at), top), Offset(x(mark.at), bottom), 1.dp.toPx())
+            mark.case?.let { drawCircle(caseColor, 4.dp.toPx(), Offset(x(mark.at), y(it))) }
+            drawCircle(card, 6.dp.toPx(), Offset(x(mark.at), y(mark.level)))
+            drawCircle(buds, 4.dp.toPx(), Offset(x(mark.at), y(mark.level)))
+        }
+    }
+}
+
+private fun dayName(at: Long): String = android.text.format.DateFormat.format("EEE", at).toString()
