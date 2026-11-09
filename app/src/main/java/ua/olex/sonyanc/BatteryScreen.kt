@@ -49,11 +49,12 @@ private object ChartColors {
 fun BatteryScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val log = remember { Prefs.batteryLog(ctx) }
-    BatteryContent(log, System.currentTimeMillis(), onBack)
+    val health = remember { Prefs.batteryHealth(ctx) }
+    BatteryContent(log, System.currentTimeMillis(), onBack, health)
 }
 
 @Composable
-fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}) {
+fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}, health: List<WeekHealth> = emptyList()) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Battery", onBack) {
         Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
@@ -72,6 +73,7 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {})
                 } else WeekChart(week, now)
             }
         }
+        HealthCard(BatteryHealth.verdict(health))
         ListGroup("A full charge lasts") {
             item { DrainRow(it, Glyph.QUIET, "Noise cancelling & ambient", log, Mode.ANC) }
             item { DrainRow(it, Glyph.OFF, "Noise control off", log, Mode.OFF) }
@@ -195,3 +197,38 @@ private fun WeekChart(samples: List<BatterySample>, now: Long) {
 }
 
 private fun dayName(at: Long): String = android.text.format.DateFormat.format("EEE", at).toString()
+
+/** A duration that never breaks across lines in running text ("7 h 10 min"). */
+private fun keep(minutes: Int) = BatteryLife.format(minutes).replace(' ', '\u00A0')
+
+/** First day (Monday) of a [BatteryHealth.weekOf] week, as "Mar 3". */
+private fun weekStart(week: Long): String =
+    android.text.format.DateFormat.format("MMM d", (week * 7 - 3) * 86_400_000L).toString()
+
+/**
+ * Months-long battery health, said quietly: tracking, steady, or a highlighted card when a full
+ * charge lasts at least 10 % less than in the first weeks tracked.
+ */
+@Composable
+private fun HealthCard(verdict: BatteryHealth.Verdict?) {
+    verdict ?: return
+    val cs = MaterialTheme.colorScheme
+    when (verdict) {
+        is BatteryHealth.Verdict.Declined -> Surface(shape = RoundedCornerShape(28.dp), color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Battery health", style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
+                Text(
+                    "A full charge now lasts about ${keep(verdict.minutes)}, ${verdict.percent}\u00A0% less than " +
+                        "${keep(verdict.baseline)} in the week of ${weekStart(verdict.since)}. Normal wear for earbud batteries.",
+                    style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer,
+                )
+            }
+        }
+        is BatteryHealth.Verdict.Steady -> ListGroup {
+            item { InfoRow(it, Glyph.BATTERY, "Battery health", "Steady · about ${BatteryLife.format(verdict.minutes)} per charge since ${weekStart(verdict.since)}") }
+        }
+        is BatteryHealth.Verdict.Tracking -> ListGroup {
+            item { InfoRow(it, Glyph.BATTERY, "Battery health", "Tracking since ${weekStart(verdict.since)} · about ${BatteryLife.format(verdict.minutes)} per charge now") }
+        }
+    }
+}

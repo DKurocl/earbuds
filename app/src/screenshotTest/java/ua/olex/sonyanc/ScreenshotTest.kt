@@ -106,7 +106,9 @@ class ScreenshotTest {
     }
 
     @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
-    @Test fun batteryPage() = shoot("page-battery") { BatteryContent(weekOfUse(), NOW) }
+    @Test fun batteryPage() = shoot("page-battery") {
+        BatteryContent(weekOfUse(), NOW, health = listOf(WeekHealth(2800, 430, 9), WeekHealth(2801, 425, 12), WeekHealth(2820, 372, 11)))
+    }
 
     @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
     @Test fun batteryPageLight() = shoot("page-battery-light") { BatteryContent(weekOfUse(), NOW) }
