@@ -558,7 +558,7 @@ object Headphones {
                     Prefs.saveBattery(app, b, now)
                     // Feed the owner's real drain model with the emptier earbud.
                     listOfNotNull(b.left, b.right).minOrNull()?.let { level ->
-                        Prefs.addBatterySample(app, BatterySample(now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app)))
+                        Prefs.addBatterySample(app, BatterySample(now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app), b.case))
                     }
                     Widgets.refreshAll(app)
                 }

@@ -35,6 +35,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w448dp-h960dp-night-xxhdpi")
 class ScreenshotTest {
+    private companion object { const val NOW = 1_762_700_000_000L } // a Sunday evening, fixed for stable renders
+
     // The opt-in check runs before the activity starts (release unit tests have no test activity).
     @get:Rule(order = 0) val optIn = TestRule { base, _ ->
         object : Statement() {
@@ -101,6 +103,36 @@ class ScreenshotTest {
     @Config(qualifiers = "w448dp-h1100dp-night-xxhdpi")
     @Test fun equalizer() = shoot("page-equalizer") {
         EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)
+    }
+
+    @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
+    @Test fun batteryPage() = shoot("page-battery") { BatteryContent(weekOfUse(), NOW) }
+
+    @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
+    @Test fun batteryPageLight() = shoot("page-battery-light") { BatteryContent(weekOfUse(), NOW) }
+
+    @Test fun batteryPageEmpty() = shoot("page-battery-empty") { BatteryContent(emptyList(), NOW) }
+
+    /** Fixture: seven days, two or three out-of-case sessions a day, the case slowly emptying. */
+    private fun weekOfUse(): List<BatterySample> {
+        val min = 60_000L
+        val out = mutableListOf<BatterySample>()
+        var session = 0
+        var case = 95
+        for (day in 6 downTo 0) {
+            for ((startH, hours) in listOf(8 to 2, 13 to 1, 19 to 3).take(if (day % 2 == 0) 3 else 2)) {
+                session++
+                val start = NOW - day * 24 * 60 * min - (24 - startH) * 60 * min
+                var level = 100
+                for (m in 0..hours * 60 step 15) {
+                    out += BatterySample(start + m * min, level.coerceAtLeast(5), false, SonyProtocol.Mode.ANC, session, case)
+                    level -= 4
+                }
+                case = (case - 9).coerceAtLeast(12)
+            }
+            if (day == 3) case = 100 // case charged
+        }
+        return out.filter { it.at <= NOW }.sortedBy { it.at }
     }
 
     @Test fun deviceInfo() = shoot("page-info") {

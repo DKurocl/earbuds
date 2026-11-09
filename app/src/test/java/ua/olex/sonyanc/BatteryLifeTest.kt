@@ -65,4 +65,24 @@ class BatteryLifeTest {
         assertEquals(log, BatteryLog.decode(BatteryLog.encode(log)))
         assertEquals(emptyList<BatterySample>(), BatteryLog.decode("garbage;1,2"))
     }
+
+    @Test fun oldFiveFieldLogsStillReadAndTheCaseIsKept() {
+        val old = BatteryLog.decode("60000,80,0,ANC,1")
+        assertEquals(listOf(BatterySample(60000, 80, false, Mode.ANC, 1, null)), old)
+        val withCase = sample(10, 70).copy(case = 45)
+        assertEquals(listOf(withCase), BatteryLog.decode(BatteryLog.encode(listOf(withCase))))
+    }
+
+    @Test fun historyKeepsAboutAWeek() {
+        val day = 24 * 60L
+        var log = emptyList<BatterySample>()
+        for (d in 0..10) log = BatteryLog.add(log, sample(d * day, 90 - d))
+        assertTrue(log.first().at >= log.last().at - BatteryLog.KEEP_MS)
+        assertEquals(9, log.size) // days 2..10
+    }
+
+    @Test fun drainReportsHowMuchUseItRestsOn() {
+        val d = BatteryLog.drain(listOf(sample(0, 100), sample(90, 70)), Mode.ANC)!!
+        assertEquals(90.0, d.minutes, 1e-9)
+    }
 }

@@ -12,6 +12,10 @@ Noise control lives in a floating **dock** at the bottom: ANC / Ambient / Off; i
 Speak-to-Chat and **Ambient for a moment** (2/5/10 min, then back, with a countdown); in Ambient the
 level (haptic tick per step), Low / Medium / High and voice focus.
 
+**Battery page** (tap the listening tiles or More controls → Battery): the last 7 days of earbuds
+(solid) and case (dashed) readings — drag across to read any moment — and how long a full charge
+really lasts per mode versus Sony's rating. Pull down on Home to read battery and codec again.
+
 **Zero-tap behaviour** (Android's ACL broadcasts, no service): battery read and widgets refreshed when
 the earbuds leave the case; optional *When earbuds connect* mode; widgets dim and the tile greys out
 while they are in the case; optional case-battery reminder at 25 % or less; taps fail at once when the

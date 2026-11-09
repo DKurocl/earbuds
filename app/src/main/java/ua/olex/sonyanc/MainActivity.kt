@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() { Headphones.release(); super.onStop() }
 }
 
-private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS }
+private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS, BATTERY }
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -207,7 +207,7 @@ fun App(
                         onAppSettings = { open(Page.APP) }, batteryParts = device.liveBatteryParts,
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
                         batterySeenAt = device.batterySeenAt,
-                        onFind = ::findHub,
+                        onFind = ::findHub, onBatteryDetails = { open(Page.BATTERY) },
                         speakToChat = advancedHome[AdvancedSettings.Key.CHAT]?.firstOrNull()?.let { it == 0 }?.takeIf { device.connected },
                         onSpeakToChat = { on ->
                             scope.launch {
@@ -226,6 +226,7 @@ fun App(
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && !device.connected && Prefs.linked(ctx) == false },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
+                    Page.BATTERY -> BatteryScreen(::back)
                     Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) }, startTick)
                     Page.DEVICE -> {
                         var turningOff by remember { mutableStateOf(false) }
