@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget mode button content in the resting colors: the mirror of w_while_chosen. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false">
+        <objectAnimator android:propertyName="alpha" android:valueTo="0" android:duration="250"
+            android:interpolator="@android:interpolator/fast_out_slow_in" />
+    </item>
+    <item>
+        <objectAnimator android:propertyName="alpha" android:valueTo="1" android:duration="250"
+            android:interpolator="@android:interpolator/fast_out_slow_in" />
+    </item>
+</selector>

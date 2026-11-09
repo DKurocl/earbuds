@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget mode button content in the chosen colors. Same 250 ms curve as the fill color
+     (docs/widget/segments.py) and as w_while_not_chosen, so the two layers always sum to full
+     opacity: the content color blends with the fill instead of dipping. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false">
+        <objectAnimator android:propertyName="alpha" android:valueTo="1" android:duration="250"
+            android:interpolator="@android:interpolator/fast_out_slow_in" />
+    </item>
+    <item>
+        <objectAnimator android:propertyName="alpha" android:valueTo="0" android:duration="250"
+            android:interpolator="@android:interpolator/fast_out_slow_in" />
+    </item>
+</selector>
