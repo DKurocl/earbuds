@@ -52,9 +52,9 @@ differs); from then on updates install in place. `versionCode` is the CI run num
 
 ## Screenshots without an emulator
 
-`gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots=true` renders Home and
-every widget size with Robolectric native graphics into `app/build/screenshots`. Skipped in
-normal test runs. Add `-ProbolectricRepo=<maven mirror>` where Maven Central is throttled.
+`gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots=true` renders every page
+and widget size with Robolectric native graphics into `app/build/screenshots`. Skipped in
+normal builds: without the flag neither the test nor Robolectric is on the classpath. Add `-ProbolectricRepo=<maven mirror>` where Maven Central is throttled.
 
 ## Interface
 

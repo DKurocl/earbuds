@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// -Pscreenshots=true adds src/screenshotTest (Robolectric renders of every page and widget).
+val screenshots = providers.gradleProperty("screenshots").orNull == "true"
+
 android {
     namespace = "ua.olex.sonyanc"
     compileSdk = 36
@@ -26,6 +29,7 @@ android {
     buildFeatures { compose = true }
     // Style-only suggestion (KTX helpers); behaviour is identical.
     lint { disable += "UseKtx" }
+    if (screenshots) sourceSets["test"].java.srcDir("src/screenshotTest/java")
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
@@ -39,10 +43,13 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
-    // JVM screenshots of real composables and RemoteViews (opt-in: -Pscreenshots).
-    testImplementation("org.robolectric:robolectric:4.14.1")
-    testImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
-    testImplementation("androidx.compose.ui:ui-test-junit4")
+    // JVM screenshots (Robolectric) only for an explicit -Pscreenshots=true run: its native
+    // runtime is ~160 MB, and pulling it on every CI build hit Maven Central's rate limit.
+    if (screenshots) {
+        testImplementation("org.robolectric:robolectric:4.14.1")
+        testImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
+        testImplementation("androidx.compose.ui:ui-test-junit4")
+    }
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
