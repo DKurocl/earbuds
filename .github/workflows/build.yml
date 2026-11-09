@@ -10,6 +10,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    outputs:
+      owner_key: ${{ steps.key.outputs.owner }}
     env:
       HUSH_KEYSTORE_PASSWORD: ${{ secrets.HUSH_KEYSTORE_PASSWORD }}
       HUSH_KEY_ALIAS: ${{ secrets.HUSH_KEY_ALIAS }}
@@ -22,12 +24,14 @@ jobs:
             [ -f "$f" ] || { echo "::error::$f is missing; the commit replaced the source tree"; exit 1; }
           done
       - name: Owner signing key
+        id: key
         env:
           KEYSTORE_B64: ${{ secrets.HUSH_KEYSTORE_B64 }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hush.jks"
             echo "HUSH_KEYSTORE=$RUNNER_TEMP/hush.jks" >> "$GITHUB_ENV"
+            echo "owner=true" >> "$GITHUB_OUTPUT"
             echo "Release is signed with the owner key."
           else
             echo "::notice::No HUSH_KEYSTORE_B64 secret; release uses the CI debug key and may need a reinstall."
@@ -79,29 +83,20 @@ jobs:
   release:
     # Every main build becomes a GitHub release that Obtainium on the phone installs by itself.
     # Only with the owner key: builds signed with a throwaway key could not update each other.
-    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[quick-apk]')
+    # Publishes only an APK the build itself signed with the owner key (not a check made later).
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.owner_key == 'true' && !contains(github.event.head_commit.message, '[quick-apk]')
     needs: build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Owner key configured?
-        id: key
-        env:
-          KEYSTORE_B64: ${{ secrets.HUSH_KEYSTORE_B64 }}
-        run: |
-          if [ -n "$KEYSTORE_B64" ]; then echo "publish=true" >> "$GITHUB_OUTPUT"
-          else echo "::notice::No owner signing key; skipping the release so Obtainium never sees an APK it cannot install."; fi
       - uses: actions/download-artifact@v4
-        if: steps.key.outputs.publish == 'true'
         with:
           name: Earbuds-install
           path: apk
       - name: Name the APK
-        if: steps.key.outputs.publish == 'true'
         run: mv apk/*.apk "apk/Earbuds-${{ github.run_number }}.apk"
       - uses: softprops/action-gh-release@v2
-        if: steps.key.outputs.publish == 'true'
         with:
           tag_name: build-${{ github.run_number }}
           name: Earbuds build ${{ github.run_number }}
