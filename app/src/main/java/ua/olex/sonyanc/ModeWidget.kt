@@ -41,13 +41,14 @@ class ModeWidget : AppWidgetProvider() {
         AmbientTimer.cancel(ctx) // a manual choice wins over "Ambient for a moment"
         val pending=goAsync()
         val generation=latestTap.incrementAndGet()
+        // The highlight moves (animated) on the tap itself; only the command waits for a burst to settle.
+        busyMode=mode
+        refreshAll(ctx)
         CoroutineScope(Dispatchers.IO).launch {
             Headphones.hold(foreground=false)
             try {
                 delay(70)
                 if(latestTap.get()!=generation) return@launch
-                busyMode=mode
-                refreshAll(ctx)
                 val base=Headphones.state.value.shownNc ?: SonyProtocol.NcState(mode)
                 val receipt=Headphones.request(base.copy(mode=mode))
                 val ok=withTimeoutOrNull(8500){receipt.await()} ?: false
@@ -73,11 +74,13 @@ class ModeWidget : AppWidgetProvider() {
         private const val DIM_ALPHA=97 // 38 %, Material's disabled-content opacity
         private val latestTap=AtomicLong()
         @Volatile private var busyMode:SonyProtocol.Mode?=null
-        private data class Tile(val mode:SonyProtocol.Mode,val id:Int,val icon:Int,val label:Int,val selectedIcon:Int,val normalIcon:Int)
+        /** A mode button: a ViewFlipper whose child 0 is "not chosen" and child 1 "chosen". */
+        private data class Tile(val mode:SonyProtocol.Mode,val id:Int,val normal:Int,
+                                val icon:Int,val label:Int,val iconOn:Int,val labelOn:Int)
         private val tiles=listOf(
-            Tile(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_icon,R.id.w_anc_label,R.drawable.w_icon_noise_control_off_on,R.drawable.w_icon_noise_control_off),
-            Tile(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_icon,R.id.w_amb_label,R.drawable.w_icon_hearing_on,R.drawable.w_icon_hearing),
-            Tile(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_icon,R.id.w_off_label,R.drawable.w_icon_power_settings_new_on,R.drawable.w_icon_power_settings_new)
+            Tile(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_n,R.id.w_anc_icon,R.id.w_anc_label,R.id.w_anc_icon_s,R.id.w_anc_label_s),
+            Tile(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_n,R.id.w_amb_icon,R.id.w_amb_label,R.id.w_amb_icon_s,R.id.w_amb_label_s),
+            Tile(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_n,R.id.w_off_icon,R.id.w_off_label,R.id.w_off_icon_s,R.id.w_off_label_s),
         )
         /** Used before the launcher reports sizes: the system picks the best fit. */
         private val FALLBACK=listOf(SizeF(180f,64f),SizeF(300f,64f),SizeF(340f,100f),SizeF(420f,100f),SizeF(180f,220f),SizeF(420f,220f))
@@ -129,22 +132,31 @@ class ModeWidget : AppWidgetProvider() {
             return v
         }
 
+        /**
+         * Binds the three buttons. The chosen one is shown at once (the pending choice wins over
+         * the last confirmed one), and setDisplayedChild lets the launcher animate the change:
+         * the new pill fades in with a small pop, the old one fades out. If the earbuds do not
+         * confirm, the next render moves it back the same way.
+         */
         private fun bindTiles(ctx:Context,v:RemoteViews,shapes:List<Int>,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                               away:Boolean,labels:Boolean,icon:Float,interactive:Boolean) {
+            val chosen=pending ?: current
             tiles.forEachIndexed {index,tile ->
                 val mode=tile.mode
-                val on=mode==current
+                val on=mode==chosen
                 val applying=mode==pending
-                v.setInt(tile.id,"setBackgroundResource",if(on) R.drawable.w_tile_on else shapes[index])
-                v.setImageViewResource(tile.icon,if(on) tile.selectedIcon else tile.normalIcon)
-                v.setInt(tile.icon,"setImageAlpha",if(away) DIM_ALPHA else 255)
-                v.setViewLayoutWidth(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
-                v.setViewLayoutHeight(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
-                val text=ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text)
-                v.setTextColor(tile.label,if(away) (text and 0x00FFFFFF) or (DIM_ALPHA shl 24) else text)
-                v.setTextViewText(tile.label,mode.short+if(applying) "…" else "")
-                v.setViewVisibility(tile.label,if(labels) View.VISIBLE else View.GONE)
-                v.setContentDescription(tile.id,mode.label+(if(applying) ", applying" else if(on) ", last used" else "")+if(away) ", earbuds not connected" else "")
+                v.setInt(tile.normal,"setBackgroundResource",shapes[index])
+                v.setDisplayedChild(tile.id,if(on) 1 else 0)
+                for((iconId,labelId,textRes) in listOf(Triple(tile.icon,tile.label,R.color.w_off_text),Triple(tile.iconOn,tile.labelOn,R.color.w_on_text))) {
+                    v.setInt(iconId,"setImageAlpha",if(away) DIM_ALPHA else 255)
+                    v.setViewLayoutWidth(iconId,icon,TypedValue.COMPLEX_UNIT_DIP)
+                    v.setViewLayoutHeight(iconId,icon,TypedValue.COMPLEX_UNIT_DIP)
+                    val text=ctx.getColor(textRes)
+                    v.setTextColor(labelId,if(away) (text and 0x00FFFFFF) or (DIM_ALPHA shl 24) else text)
+                    v.setTextViewText(labelId,mode.short+if(applying) "…" else "")
+                    v.setViewVisibility(labelId,if(labels) View.VISIBLE else View.GONE)
+                }
+                v.setContentDescription(tile.id,mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
                     val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
