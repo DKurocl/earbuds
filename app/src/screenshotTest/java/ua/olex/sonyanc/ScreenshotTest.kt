@@ -69,6 +69,22 @@ class ScreenshotTest {
         )
     }
 
+    /** Predictive back mid-swipe: the battery page slides off and Home comes out from underneath. */
+    private fun backSwipe(progress: Float) = shoot("back-swipe-%02d".format((progress * 100).toInt())) {
+        val nav = androidx.compose.runtime.remember { androidx.compose.animation.core.SeekableTransitionState(listOf("HOME", "BATTERY")) }
+        androidx.compose.runtime.LaunchedEffect(Unit) { nav.seekTo(progress, listOf("HOME")) }
+        PageTransition(androidx.compose.animation.core.rememberTransition(nav), swiping = true) { page ->
+            if (page == "HOME") HushScreen(
+                status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
+                fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78), granted = true, hasDevice = true,
+                codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            ) else BatteryContent(weekOfUse(), NOW)
+        }
+    }
+
+    @Test fun backSwipe30() = backSwipe(0.3f)
+    @Test fun backSwipe60() = backSwipe(0.6f)
+
     @Test fun homeAmbient() = shoot("home-ambient") {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,
