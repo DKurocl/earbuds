@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
 import android.util.TypedValue
@@ -146,7 +145,7 @@ class ModeWidget : AppWidgetProvider() {
             val v=RemoteViews(ctx.packageName,layout)
             // Earbuds known to be in the case: controls stay tappable but read as unavailable.
             val away=linked==false
-            if(Build.VERSION.SDK_INT>=31) v.setViewLayoutHeight(R.id.w_group,spec.group,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutHeight(R.id.w_group,spec.group,TypedValue.COMPLEX_UNIT_DIP)
             bindTiles(ctx,v,shapes,current,pending,away,spec.labels,spec.icon,interactive)
             return v
         }
@@ -160,10 +159,8 @@ class ModeWidget : AppWidgetProvider() {
                 v.setInt(tile.id,"setBackgroundResource",if(on) R.drawable.w_tile_on else shapes[index])
                 v.setImageViewResource(tile.icon,if(on) tile.selectedIcon else tile.normalIcon)
                 v.setInt(tile.icon,"setImageAlpha",if(away) DIM_ALPHA else 255)
-                if(Build.VERSION.SDK_INT>=31) {
-                    v.setViewLayoutWidth(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
-                    v.setViewLayoutHeight(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
-                }
+                v.setViewLayoutWidth(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
                 val text=ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text)
                 v.setTextColor(tile.label,if(away) (text and 0x00FFFFFF) or (DIM_ALPHA shl 24) else text)
                 v.setTextViewText(tile.label,mode.short+if(applying) "…" else "")
@@ -196,7 +193,8 @@ class ModeWidget : AppWidgetProvider() {
             val away=linked==false
             val b=last?.first
             v.setTextViewText(R.id.w_title,Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5")
-            v.setTextViewText(R.id.w_status,BatteryWidget.status(ctx,b,last?.second ?: 0L,linked,Prefs.lastSeen(ctx)))
+            // One centered line: "WF-1000XM5 · Updated 14:32".
+            v.setTextViewText(R.id.w_status,BatteryWidget.status(ctx,b,last?.second ?: 0L,linked,Prefs.lastSeen(ctx)).takeIf{it.isNotEmpty()}?.let{"·  $it"} ?: "")
             val bb=b ?: SonyProtocol.Battery()
             val spoken=listOf(
                 BatteryWidget.bindRing(ctx,v,R.id.w_left_box,R.id.w_left_ring,R.id.w_left_art,R.id.w_left_value,R.id.w_left_label,"Left",bb.left,bb.leftCharging,null,away,true),

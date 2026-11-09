@@ -53,9 +53,10 @@ class SonyConnection(
         if(!stillNeeded()) return@withContext false
         close(notify = false)
         val expectedEpoch=connectionEpoch
-        // The secure V2 service is verified on the owner's WF-1000XM5.
+        // The secure V2 service is verified on the owner's WF-1000XM5. The insecure retry was
+        // removed: it never helped there and doubled the wait whenever the earbuds were away.
         // No slow attempts at unrelated XM3/SPP services.
-        for (secure in listOf(true, false)) {
+        for (secure in listOf(true)) {
             currentCoroutineContext().ensureActive()
             if(connectionEpoch!=expectedEpoch || !stillNeeded()) return@withContext false
             val candidate = if (secure) device.createRfcommSocketToServiceRecord(SONY_V2_UUID)

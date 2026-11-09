@@ -67,6 +67,15 @@ class ScreenshotTest {
         )
     }
 
+    @Test fun homeAmbient() = shoot("home-ambient") {
+        HushScreen(
+            status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,
+            fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
+            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            scenes = Scenes.defaults,
+        )
+    }
+
     @Test fun homeEdgeCases() = shoot("home-edge") {
         HushScreen(
             status = Headphones.Status.DISCONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, level = 12), pending = null,

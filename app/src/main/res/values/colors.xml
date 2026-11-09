@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: follow the wallpaper (dynamic color). -->
 <resources>
-    <color name="w_bg">#FFF3EDF7</color>
-    <color name="w_on">#FF6750A4</color>
-    <color name="w_on_text">#FFFFFFFF</color>
-    <color name="w_off">#FFE8DEF8</color>
-    <color name="w_off_text">#FF1D192B</color>
-    <color name="w_sub_text">#FF49454F</color>
-    <color name="w_track">#FFDED8E1</color>
-    <color name="w_ripple">#1F1D192B</color>
+    <color name="w_bg">@android:color/system_neutral1_50</color>
+    <color name="w_on">@android:color/system_accent1_600</color>
+    <color name="w_on_text">@android:color/system_accent1_0</color>
+    <color name="w_off">@android:color/system_accent2_100</color>
+    <color name="w_off_text">@android:color/system_accent2_900</color>
+    <color name="w_sub_text">@android:color/system_neutral2_700</color>
+    <color name="w_track">@android:color/system_neutral2_200</color>
+    <color name="w_ripple">#1F000000</color>
     <color name="w_good">#FF1E8E3E</color>
     <color name="w_low">#FFB3261E</color>
-    <color name="w_unknown">#FFCAC4D0</color>
+    <color name="w_unknown">@android:color/system_neutral2_300</color>
 </resources>

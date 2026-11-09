@@ -10,7 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "ua.olex.sonyanc"
-        minSdk = 26
+        // Pixel 10 Pro XL ships Android 16; 35 keeps the CI emulator image working.
+        minSdk = 35
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // CI run numbers only grow, so every CI build installs over the previous one.

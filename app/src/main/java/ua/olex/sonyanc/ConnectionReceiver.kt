@@ -4,7 +4,6 @@ import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,9 +22,7 @@ class ConnectionReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val action = intent.action ?: return
         if (action != BluetoothDevice.ACTION_ACL_CONNECTED && action != BluetoothDevice.ACTION_ACL_DISCONNECTED) return
-        val device = if (Build.VERSION.SDK_INT >= 33)
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-        else @Suppress("DEPRECATION") intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         val saved = Prefs.deviceAddress(ctx) ?: return
         if (device?.address != saved) return
 
@@ -41,12 +38,13 @@ class ConnectionReceiver : BroadcastReceiver() {
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
         val onConnect = Prefs.onConnect(ctx)
+        val scene = Prefs.onConnectScene(ctx)
         val pending = goAsync()
         scope.launch {
             try {
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS)
-                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(onConnect.mode) }
+                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(onConnect.mode, scene) }
             } finally {
                 pending.finish()
             }

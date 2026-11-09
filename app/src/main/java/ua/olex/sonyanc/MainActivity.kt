@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetManager
 import android.content.ClipData
 import android.content.ComponentName
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -119,6 +118,7 @@ fun App(
         ctx.startActivity(app ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/android/find/")))
     }
     var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
+    var onConnectScene by remember { mutableStateOf(Prefs.onConnectScene(ctx)) }
     // Two-stage haptics: the tap ticks at once (HushScreen); the earbuds' acknowledgement
     // plays the mode's own pulse. Only the newest tap may report, so bursts stay quiet.
     var tapGeneration by remember { mutableIntStateOf(0) }
@@ -219,7 +219,7 @@ fun App(
                         device.status, device.nc, device.pending, device.ncConfirmed, device.error, device.battery, granted, saved != null,
                         onMode = ::requestMode, onSettings = { open(Page.EARBUDS) },
                         onConnect = { scope.launch { Headphones.connectAndSync() } },
-                        onPermission = { if (Build.VERSION.SDK_INT >= 31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) },
+                        onPermission = { permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) },
                         onBluetooth = ::bluetooth, onPick = { open(Page.APP) },
                         onEqualizer = { open(Page.EQUALIZER) }, onEarbuds = { open(Page.EARBUDS) }, onConnection = { open(Page.DEVICE) },
                         haptics = haptics, batteryRefreshing = device.batteryRefreshing, batteryFresh = device.liveBatteryParts.isNotEmpty(),
@@ -266,7 +266,7 @@ fun App(
                     }
                     Page.APP -> AppSettingsContent(
                         devices, saved, displayName, dynamic, haptics,
-                        canAddTile = Build.VERSION.SDK_INT >= 33, canPinWidget = widgetManager.isRequestPinAppWidgetSupported,
+                        canAddTile = true, canPinWidget = widgetManager.isRequestPinAppWidgetSupported,
                         version = remember { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName.orEmpty() },
                         onBack = ::back,
                         onSelect = { picked ->
@@ -280,14 +280,16 @@ fun App(
                         onRename = { renaming = true }, onDynamicColor = onDynamic,
                         onHaptics = { haptics = it; Prefs.setHaptics(ctx, it) },
                         onAddTile = {
-                            if (Build.VERSION.SDK_INT >= 33) ctx.getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
+                            ctx.getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
                                 ComponentName(ctx, NoiseTileService::class.java), "Noise control",
                                 android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.w_icon_noise_control_off), ctx.mainExecutor,
                             ) {}
                         },
                         onPinWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, ModeWidget::class.java), null, null) },
                         onPinBatteryWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, BatteryWidget::class.java), null, null) },
-                        onConnect = onConnect, onOnConnect = { onConnect = it; Prefs.setOnConnect(ctx, it) },
+                        onConnect = onConnect, onOnConnect = { onConnect = it; onConnectScene = null; Prefs.setOnConnect(ctx, it) },
+                        scenes = scenes, onConnectScene = onConnectScene,
+                        onOnConnectScene = { onConnect = OnConnect.KEEP; onConnectScene = it; Prefs.setOnConnectScene(ctx, it) },
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                     )
                     Page.DIAGNOSTICS -> {
@@ -298,8 +300,7 @@ fun App(
                             onCopy = {
                                 scope.launch {
                                     clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Earbuds log", log.joinToString("\n"))))
-                                    // Android 13+ confirms clipboard copies itself.
-                                    if (Build.VERSION.SDK_INT < 33) show("Log copied")
+                                    // Android confirms clipboard copies itself.
                                 }
                             },
                             onClear = { Headphones.clearLog() },

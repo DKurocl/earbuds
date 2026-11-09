@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
 import android.util.TypedValue
@@ -131,11 +130,8 @@ object Widgets {
      */
     internal fun sizes(options: Bundle?, fallback: List<SizeF>): List<SizeF> {
         if (options == null) return fallback
-        if (Build.VERSION.SDK_INT >= 31) {
-            val exact = if (Build.VERSION.SDK_INT >= 33) options.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
-                else @Suppress("DEPRECATION") options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
-            if (!exact.isNullOrEmpty()) return exact.filter { it.width > 0 && it.height > 0 }.distinct().take(16)
-        }
+        val exact = options.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
+        if (!exact.isNullOrEmpty()) return exact.filter { it.width > 0 && it.height > 0 }.distinct().take(16)
         val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
         val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
         val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
@@ -147,7 +143,7 @@ object Widgets {
 
     /** One RemoteViews that carries an exact layout for each size (Android 12+). */
     internal fun forSizes(sizes: List<SizeF>, build: (SizeF) -> RemoteViews): RemoteViews =
-        if (Build.VERSION.SDK_INT >= 31 && sizes.size > 1) RemoteViews(sizes.associateWith(build))
+        if (sizes.size > 1) RemoteViews(sizes.associateWith(build))
         else build(sizes.first())
 
     /**
@@ -155,7 +151,6 @@ object Widgets {
      * app version; the call is rate-limited, so failures are ignored and retried next version.
      */
     fun publishPreviews(ctx: Context) {
-        if (Build.VERSION.SDK_INT < 35) return
         val version = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode }.getOrDefault(0L)
         if (Prefs.previewVersion(ctx) == version) return
         val mgr = AppWidgetManager.getInstance(ctx)

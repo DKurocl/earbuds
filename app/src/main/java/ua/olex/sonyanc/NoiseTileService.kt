@@ -1,7 +1,6 @@
 package ua.olex.sonyanc
 
 import android.content.Intent
-import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import kotlinx.coroutines.*
@@ -21,8 +20,15 @@ class NoiseTileService : TileService() {
                 .distinctUntilChanged().collect {(mode,connected,level) ->
                 qsTile?.apply {
                     label="Noise control"
-                    if(Build.VERSION.SDK_INT>=29) subtitle=(mode?.short ?: "Tap to connect")+(level?.let{" · $it%"} ?: "")
-                    this.state=if(connected && mode!=SonyProtocol.Mode.OFF) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+                    subtitle=(mode?.short ?: "Tap to connect")+(level?.let{" · $it%"} ?: "")
+                    // Earbuds in the case: the tile greys out instead of failing a few seconds later.
+                    val away=!connected && Prefs.linked(this@NoiseTileService)==false
+                    if(away) subtitle="In case"
+                    this.state=when {
+                        away -> Tile.STATE_UNAVAILABLE
+                        connected && mode!=SonyProtocol.Mode.OFF -> Tile.STATE_ACTIVE
+                        else -> Tile.STATE_INACTIVE
+                    }
                     contentDescription="Noise control, "+(mode?.label ?: "not connected")
                     updateTile()
                 }
@@ -32,7 +38,7 @@ class NoiseTileService : TileService() {
     override fun onClick() {
         super.onClick()
         if(!Headphones.hasPermission(this) || Prefs.deviceAddress(this)==null) {
-            qsTile?.apply {if(Build.VERSION.SDK_INT>=29) subtitle="Set up Earbuds first";updateTile()}
+            qsTile?.apply {subtitle="Set up Earbuds first";updateTile()}
             return
         }
         val current=(Headphones.state.value.shownNc ?: Prefs.lastNc(this))?.mode

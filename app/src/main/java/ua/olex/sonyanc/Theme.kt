@@ -2,7 +2,6 @@
 
 package ua.olex.sonyanc
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -18,7 +17,6 @@ import androidx.compose.ui.text.font.Typeface
  * reads like Google's own; anywhere else this returns null and the default sans is kept.
  */
 private fun systemFamily(vararg names: String): FontFamily? {
-    if (Build.VERSION.SDK_INT < 28) return null
     for (name in names) {
         val typeface = android.graphics.Typeface.create(name, android.graphics.Typeface.NORMAL)
         // An unknown family name resolves to the default typeface object itself.
@@ -58,7 +56,7 @@ fun AppTheme(dynamic: Boolean = true, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val dark = isSystemInDarkTheme()
     val colors = when {
-        dynamic && Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+        dynamic -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         dark -> darkColorScheme(
             primary = Color(0xFFAAC7FF), onPrimary = Color(0xFF0A305F),
             primaryContainer = Color(0xFF284777), onPrimaryContainer = Color(0xFFD6E3FF),

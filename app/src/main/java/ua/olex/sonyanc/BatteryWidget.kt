@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.util.SizeF
@@ -76,18 +75,16 @@ class BatteryWidget : AppWidgetProvider() {
                 else -> R.color.w_good
             })
             v.setProgressBar(ring, 100, level ?: 0, false)
-            if (Build.VERSION.SDK_INT >= 31) {
-                val tint = if (stale) (color and 0x00FFFFFF) or (STALE_ALPHA shl 24) else color
-                v.setColorStateList(ring, "setProgressTintList", android.content.res.ColorStateList.valueOf(tint))
-                if (size != null) {
-                    v.setViewLayoutWidth(box, size, TypedValue.COMPLEX_UNIT_DIP)
-                    v.setViewLayoutHeight(box, size, TypedValue.COMPLEX_UNIT_DIP)
-                    val artSize = size * 0.78f
-                    v.setViewLayoutWidth(art, artSize, TypedValue.COMPLEX_UNIT_DIP)
-                    v.setViewLayoutHeight(art, artSize, TypedValue.COMPLEX_UNIT_DIP)
-                    val inset = (artSize * 0.13f * ctx.resources.displayMetrics.density).toInt()
-                    v.setViewPadding(art, inset, inset, inset, inset)
-                }
+            val tint = if (stale) (color and 0x00FFFFFF) or (STALE_ALPHA shl 24) else color
+            v.setColorStateList(ring, "setProgressTintList", android.content.res.ColorStateList.valueOf(tint))
+            if (size != null) {
+                v.setViewLayoutWidth(box, size, TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(box, size, TypedValue.COMPLEX_UNIT_DIP)
+                val artSize = size * 0.78f
+                v.setViewLayoutWidth(art, artSize, TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(art, artSize, TypedValue.COMPLEX_UNIT_DIP)
+                val inset = (artSize * 0.13f * ctx.resources.displayMetrics.density).toInt()
+                v.setViewPadding(art, inset, inset, inset, inset)
             }
             if (size == null) {
                 val inset = (34f * 0.13f * ctx.resources.displayMetrics.density).toInt()
