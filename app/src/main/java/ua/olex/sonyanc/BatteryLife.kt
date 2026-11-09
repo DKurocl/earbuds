@@ -117,3 +117,55 @@ object BatteryLog {
         return if (minutes >= MIN_MINUTES && drop >= MIN_DROP) Drain(drop / minutes, minutes) else null
     }
 }
+
+/** How long a full charge lasted (noise cancelling & ambient) in one ISO week, from [hours] of real use. */
+data class WeekHealth(val week: Long, val minutes: Int, val hours: Int)
+
+/**
+ * Battery health over months: one measured full-charge figure per week (up to a year), and a
+ * quiet verdict for the Battery page. Built only from BatteryLog, never from extra reads.
+ */
+object BatteryHealth {
+    const val MAX_WEEKS = 52
+    private const val MIN_HOURS = 1
+    /** A drop this large against the best early weeks, over at least [MIN_SPAN] weeks, is worth saying. */
+    private const val NOTABLE = 0.10
+    private const val MIN_SPAN = 4
+
+    /** Monday-based week number since the epoch (UTC days / 7, shifted so weeks start on Monday). */
+    fun weekOf(at: Long): Long = Math.floorDiv(Math.floorDiv(at, 86_400_000L) + 3, 7L)
+
+    fun encode(h: List<WeekHealth>) = h.joinToString(";") { "${it.week},${it.minutes},${it.hours}" }
+    fun decode(text: String?): List<WeekHealth> = text.orEmpty().split(';').mapNotNull { row ->
+        val p = row.split(',').map { it.toLongOrNull() ?: return@mapNotNull null }
+        if (p.size != 3 || p[1] <= 0) null else WeekHealth(p[0], p[1].toInt(), p[2].toInt())
+    }
+
+    /** Replaces this week's figure with the latest measurement, once it rests on enough use. */
+    fun record(history: List<WeekHealth>, week: Long, drain: Drain?): List<WeekHealth> {
+        drain ?: return history
+        val hours = (drain.minutes / 60).toInt()
+        if (hours < MIN_HOURS) return history
+        val minutes = BatteryLife.fullChargeMinutes(Mode.ANC, drain.rate)
+        return (history.filter { it.week != week } + WeekHealth(week, minutes, hours)).sortedBy { it.week }.takeLast(MAX_WEEKS)
+    }
+
+    sealed interface Verdict {
+        /** Too little history to compare yet. */
+        data class Tracking(val since: Long, val minutes: Int) : Verdict
+        data class Steady(val since: Long, val minutes: Int) : Verdict
+        /** [percent] shorter than the best of the first weeks tracked. */
+        data class Declined(val since: Long, val minutes: Int, val baseline: Int, val percent: Int) : Verdict
+    }
+
+    fun verdict(history: List<WeekHealth>): Verdict? {
+        if (history.isEmpty()) return null
+        val first = history.first()
+        val now = history.last()
+        if (history.size < 2 || now.week - first.week < MIN_SPAN) return Verdict.Tracking(first.week, now.minutes)
+        val baseline = history.take(3).maxOf { it.minutes }
+        val change = (baseline - now.minutes).toDouble() / baseline
+        return if (change >= NOTABLE) Verdict.Declined(first.week, now.minutes, baseline, (change * 100).toInt())
+        else Verdict.Steady(first.week, now.minutes)
+    }
+}

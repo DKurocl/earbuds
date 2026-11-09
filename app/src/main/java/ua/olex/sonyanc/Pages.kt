@@ -109,7 +109,7 @@ fun AppSettingsContent(
             }
             item {
                 SwitchRow(it, Glyph.BATTERY, "Case battery reminder",
-                    "When you put the earbuds into a case at ${CaseReminder.THRESHOLD} % or less", caseReminder, onChange = onCaseReminder)
+                    "When the case is at ${CaseReminder.THRESHOLD} % or less as you take the earbuds out or put them away", caseReminder, onChange = onCaseReminder)
             }
         }
         ListGroup("Appearance") {

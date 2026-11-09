@@ -98,8 +98,12 @@ object Prefs {
     fun addBatterySample(ctx: Context, s: BatterySample) {
         val log = batteryLog(ctx)
         val next = BatteryLog.add(log, s)
-        if (next !== log) p(ctx).edit().putString("battery_log", BatteryLog.encode(next)).apply()
+        if (next === log) return
+        // This week's measured full charge, for the months-long health view.
+        val health = BatteryHealth.record(batteryHealth(ctx), BatteryHealth.weekOf(s.at), BatteryLog.drain(next, SonyProtocol.Mode.ANC))
+        p(ctx).edit().putString("battery_log", BatteryLog.encode(next)).putString("battery_health", BatteryHealth.encode(health)).apply()
     }
+    fun batteryHealth(ctx: Context) = BatteryHealth.decode(p(ctx).getString("battery_health", null))
     /** Measured percent per minute for [mode], or null while there is too little real use. */
     fun drainRate(ctx: Context, mode: SonyProtocol.Mode?) = BatteryLog.rate(batteryLog(ctx), mode)
     fun session(ctx: Context) = p(ctx).getInt("session", 0)

@@ -47,6 +47,7 @@ class ConnectionReceiver : BroadcastReceiver() {
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS)
                 withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(onConnect.mode) }
+                CaseReminder.onEarbudsOut(ctx)
             } finally {
                 pending.finish()
             }
