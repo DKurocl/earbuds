@@ -195,7 +195,8 @@ jobs:
             adb shell am force-stop ua.olex.sonyanc
             adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER ua.olex.sonyanc > screens/launcher-activity.txt
             grep -q 'MainActivity' screens/launcher-activity.txt
-            adb install -r release/app-release.apk
+            adb uninstall ua.olex.sonyanc >/dev/null
+            adb install release/app-release.apk
             adb shell am start -W -n ua.olex.sonyanc/.MainActivity > screens/release-startup.txt
             sleep 5
             adb exec-out screencap -p > screens/release-first-launch.png
