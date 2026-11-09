@@ -46,10 +46,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -117,6 +115,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
     val batteryParts by Headphones.batteryParts.collectAsState()
     val codec by Headphones.codec.collectAsState()
     val codecRefreshing by Headphones.codecRefreshing.collectAsState()
+    val batteryAt by Headphones.batteryAt.collectAsState()
     var granted by remember { mutableStateOf(Headphones.hasPermission(ctx)) }
     var saved by remember { mutableStateOf(Prefs.deviceAddress(ctx)) }
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
@@ -137,6 +136,23 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         confirmButton={TextButton(enabled=nameDraft.isNotBlank(),onClick={displayName=nameDraft.trim();Prefs.setDisplayName(ctx,displayName);renaming=false}) {Text("Save")}},
         dismissButton={TextButton(onClick={renaming=false}) {Text("Cancel")}})
     var haptics by remember { mutableStateOf(Prefs.haptics(ctx)) }
+    var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
+    // Only the newest tap may produce confirm/reject feedback; superseded taps stay silent.
+    var tapGeneration by remember { mutableIntStateOf(0) }
+    fun requestMode(state:NcState) {
+        val before=(Headphones.pending.value ?: Headphones.nc.value)?.mode
+        if(haptics) Haptics.tap(ctx)
+        val receipt=Headphones.request(state)
+        val mine=++tapGeneration
+        scope.launch {
+            val ok=receipt.await()
+            if(!haptics || mine!=tapGeneration) return@launch
+            if(ok) Haptics.confirm(ctx,if(state.mode!=before) state.mode else null) else Haptics.reject(ctx)
+        }
+    }
+    // Ticks while the screen is visible so "5 min ago" labels stay current.
+    var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(startTick) { while(true) { clock=System.currentTimeMillis(); kotlinx.coroutines.delay(30_000) } }
     var devices by remember { mutableStateOf(emptyList<android.bluetooth.BluetoothDevice>()) }
     val permissionLauncher=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {granted=it}
     val widgetManager=remember {AppWidgetManager.getInstance(ctx)}
@@ -155,7 +171,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
     }
     LaunchedEffect(shortcutMode,granted,saved) {
         if(shortcutMode!=null && granted && saved!=null) {
-            Headphones.request((Headphones.nc.value ?: NcState(shortcutMode)).copy(mode=shortcutMode))
+            requestMode((Headphones.nc.value ?: NcState(shortcutMode)).copy(mode=shortcutMode))
             onShortcutConsumed()
         }
     }
@@ -163,11 +179,13 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
         batteryRefreshing=batteryRefreshing,batteryFresh=batteryFresh,batteryParts=batteryParts,
         codec=codec,codecRefreshing=codecRefreshing,onBattery={refreshInfo()},
         onConnection={openSheet("connection")},onEarbuds={openSheet("earbuds")},
-        onMode={Headphones.request(it)},onSettings={openSheet("earbuds")},onEqualizer={openSheet("equalizer")},
+        onMode={requestMode(it)},onSettings={openSheet("earbuds")},onEqualizer={openSheet("equalizer")},
         onConnect={scope.launch {Headphones.connectAndSync()}},
         onPermission={if(Build.VERSION.SDK_INT>=31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)},
         onBluetooth={bluetooth()},onPick={openSheet("settings")},haptics=haptics,
-        onAppSettings={openSheet("settings")},deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()})
+        onAppSettings={openSheet("settings")},deviceName=displayName,onRename={nameDraft=displayName;renaming=true},onDisconnect={Headphones.disconnect()},
+        batteryNote=if(batteryParts.isEmpty()) Snapshot.ago(clock,batteryAt)?.let{"Last known · $it"} else null,
+        lastSeen=if(Prefs.linked(ctx)==false) Snapshot.ago(clock,Prefs.lastSeen(ctx)) else null)
     if(sheet!=null) ModalBottomSheet(sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),onDismissRequest={sheet=null;sheetParent=null},containerColor=MaterialTheme.colorScheme.surfaceContainerLow) {
         if(sheet=="connection") ConnectionSheet(status,codec,codecRefreshing || batteryRefreshing,{refreshInfo()},{bluetooth()},::closeSheet,startTick)
         else if(sheet=="deviceControls" || sheet=="earbuds") AdvancedSettingsSheet(::closeSheet,{openSheet("settings")},startTick)
@@ -185,6 +203,19 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                     }
                     SettingsRow(Glyph.EARBUDS,"Device name",displayName,onClick={nameDraft=displayName;renaming=true})
                     SettingsRow(Glyph.BLUETOOTH,"Bluetooth settings",onClick={bluetooth()})
+                    var onConnectMenu by remember { mutableStateOf(false) }
+                    SettingsRow(Glyph.QUIET,"When earbuds connect",onConnect.label,onClick={onConnectMenu=true},trailing={
+                        Box {
+                            HushIcon(Glyph.ARROW,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            DropdownMenu(expanded=onConnectMenu,onDismissRequest={onConnectMenu=false}) {
+                                Snapshot.OnConnect.entries.forEach {choice ->
+                                    DropdownMenuItem(text={Text(choice.label)},
+                                        trailingIcon={if(choice==onConnect) HushIcon(Glyph.CHECK,color=MaterialTheme.colorScheme.primary)},
+                                        onClick={onConnectMenu=false;onConnect=choice;Prefs.setOnConnect(ctx,choice)})
+                                }
+                            }
+                        }
+                    })
                 }
                 GroupLabel("APPEARANCE & FEEDBACK")
                 Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
@@ -203,7 +234,7 @@ fun App(startTick:Int,dynamic:Boolean,shortcutMode:Mode?=null,onShortcutConsumed
                     SettingsRow(Glyph.TUNE,"Earbud settings",onClick={openSheet("earbuds")})
                     SettingsRow(Glyph.INFO,"Connection diagnostics",onClick={openSheet("diagnostics")})
                 }
-                Text("Hush 0.9.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
+                Text("Hush 0.10.0",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(vertical=8.dp))
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -219,6 +250,7 @@ fun HushScreen(
     batteryRefreshing:Boolean=false,batteryFresh:Boolean=true,onBattery:()->Unit={},
     codec:CodecProtocol.State?=null,codecRefreshing:Boolean=false,
     deviceName:String="WF-1000XM5",onRename:()->Unit={},onDisconnect:()->Unit={},onAppSettings:()->Unit=onSettings,batteryParts:Set<Int> = if(batteryFresh) setOf(0,1,2) else emptySet(),
+    batteryNote:String?=null,lastSeen:String?=null,
 ) {
     val cs=MaterialTheme.colorScheme
     val dark=isSystemInDarkTheme()
@@ -226,11 +258,8 @@ fun HushScreen(
     val card=if(dark) cs.surfaceContainerHigh else cs.surfaceContainerLowest
     val state=pending ?: nc
     val ready=status==Headphones.Status.CONNECTED
-    val feedback=LocalHapticFeedback.current
-    fun choose(value:NcState) {
-        if(haptics) feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        onMode(value)
-    }
+    // Haptic feedback is owned by the caller: it knows when the earbuds confirm.
+    fun choose(value:NcState) = onMode(value)
     Scaffold(containerColor=background,topBar={
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start=24.dp,end=12.dp,top=8.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically) {
             HushMark(Modifier.size(28.dp));Spacer(Modifier.width(10.dp))
@@ -253,8 +282,8 @@ fun HushScreen(
                     val line=when(status) {
                         Headphones.Status.CONNECTED -> "Active"+(codec?.takeIf{it.isKnown}?.let{" · ${it.label}"} ?: "")
                         Headphones.Status.CONNECTING -> "Connecting…"
-                        Headphones.Status.FAILED -> "Not connected"
-                        Headphones.Status.DISCONNECTED -> "Disconnected"
+                        Headphones.Status.FAILED -> "Not connected"+(lastSeen?.let{" · last seen $it"} ?: "")
+                        Headphones.Status.DISCONNECTED -> lastSeen?.let{"Last seen $it"} ?: "Disconnected"
                     }
                     Text(line,style=MaterialTheme.typography.bodyLarge,color=cs.onSurfaceVariant,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})
                     if(status==Headphones.Status.CONNECTING || batteryRefreshing) LoadingIndicator(Modifier.size(20.dp))
@@ -275,6 +304,8 @@ fun HushScreen(
                     BatteryRing("Case",b.case,b.caseCharging,2 in batteryParts) {CaseArt()}
                     BatteryRing("Right",b.right,b.rightCharging,1 in batteryParts) {EarbudArt(Alignment.CenterEnd)}
                 }
+                if(batteryNote!=null && battery!=null) Text(batteryNote,style=MaterialTheme.typography.labelMedium,color=cs.onSurfaceVariant,
+                    textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth().offset(y=(-10).dp))
 
                 // ---- big actions ----
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {

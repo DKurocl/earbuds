@@ -10,8 +10,28 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      HUSH_KEYSTORE_PASSWORD: ${{ secrets.HUSH_KEYSTORE_PASSWORD }}
+      HUSH_KEY_ALIAS: ${{ secrets.HUSH_KEY_ALIAS }}
+      HUSH_KEY_PASSWORD: ${{ secrets.HUSH_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v5
+      - name: Guard against an emptied source tree
+        run: |
+          for f in app/build.gradle.kts app/src/main/AndroidManifest.xml app/src/main/java/ua/olex/sonyanc/MainActivity.kt; do
+            [ -f "$f" ] || { echo "::error::$f is missing; the commit replaced the source tree"; exit 1; }
+          done
+      - name: Owner signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.HUSH_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hush.jks"
+            echo "HUSH_KEYSTORE=$RUNNER_TEMP/hush.jks" >> "$GITHUB_ENV"
+            echo "Release is signed with the owner key."
+          else
+            echo "::notice::No HUSH_KEYSTORE_B64 secret; release uses the CI debug key and may need a reinstall."
+          fi
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

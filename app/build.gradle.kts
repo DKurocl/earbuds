@@ -13,8 +13,9 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 12
-        versionName = "0.9.0"
+        // CI run numbers only grow, so every CI build installs over the previous one.
+        versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.plus(1000) ?: 13
+        versionName = "0.10.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -39,11 +40,23 @@ dependencies {
 }
 
 
+// Owner key from CI secrets (see README, "Stable updates"). Without it, the CI debug identity
+// is used as before, and each CI run may need a reinstall.
+val ownerKeystore = providers.environmentVariable("HUSH_KEYSTORE").orNull?.let(::file)?.takeIf { it.isFile }
+
 android {
+    signingConfigs {
+        if (ownerKeystore != null) create("owner") {
+            storeFile = ownerKeystore
+            storePassword = providers.environmentVariable("HUSH_KEYSTORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("HUSH_KEY_ALIAS").orNull
+            keyPassword = providers.environmentVariable("HUSH_KEY_PASSWORD").orNull
+        }
+    }
     buildTypes {
         getByName("release") {
-            // Personal APK: optimized, installable, using the CI debug identity.
-            signingConfig = signingConfigs.getByName("debug")
+            // Personal APK: optimized and installable; stable when the owner key is configured.
+            signingConfig = signingConfigs.findByName("owner") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = providers.gradleProperty("quickApk").orNull != "true"
             isShrinkResources = providers.gradleProperty("quickApk").orNull != "true"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))

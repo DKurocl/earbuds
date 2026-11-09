@@ -1,4 +1,41 @@
-# Hush 0.6.0
+# Hush 0.10.0
+
+A personal, offline **Sony WF-1000XM5** controller for one **Pixel 10 Pro XL**. English only.
+The improvement roadmap (Ukrainian) is in [docs/PLAN.md](docs/PLAN.md).
+
+## New in 0.10
+
+- **Instant start.** The last battery reading (left, right, case, charging) is cached and shown
+  dimmed with "Last known · 2 h ago" until the earbuds answer.
+- **Earbuds-connected events.** A manifest receiver for Android's ACL broadcasts (exempt from
+  implicit-broadcast limits) runs one bounded sync when the saved earbuds connect: optional
+  on-connect mode, then battery. There is no service, job or alarm, and polling stays off.
+  On disconnect Hush records when and dims the widget's buttons.
+- **When earbuds connect** (App settings): Don't change (default) / ANC / Ambient / Off.
+- **Two-stage haptics.** A light tick on touch, then a mode-specific primitive once the earbuds
+  acknowledge (ANC: thud, Ambient: quick rise, Off: tick), or a double click on failure.
+  Superseded taps stay silent.
+- **Status line** shows "Last seen 2 h ago" while the earbuds are away.
+
+## Stable updates (one-time owner setup)
+
+CI signs with a throwaway debug key unless an owner key is configured, so updates may need a
+reinstall. To install every future build over the previous one:
+
+```sh
+keytool -genkeypair -v -keystore hush.jks -alias hush -keyalg RSA -keysize 4096 -validity 36500
+base64 -w0 hush.jks   # copy the output
+```
+
+Add repository secrets (Settings → Secrets and variables → Actions):
+`HUSH_KEYSTORE_B64` (the base64 output), `HUSH_KEYSTORE_PASSWORD`, `HUSH_KEY_ALIAS` (`hush`),
+`HUSH_KEY_PASSWORD`. Keep `hush.jks` somewhere safe and never commit it.
+Uninstall the old build once (its signature differs), install the next CI build, and from
+then on updates install in place. `versionCode` is the CI run number + 1000.
+
+---
+
+# Earlier notes (0.6–0.9)
 
 A personal, offline **Sony WF-1000XM5** controller for Android. English only.
 

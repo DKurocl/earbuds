@@ -50,6 +50,9 @@ object Headphones {
     val batteryParts=_batteryParts.asStateFlow()
     private val _batteryNote=MutableStateFlow("Connect to read battery")
     val batteryNote=_batteryNote.asStateFlow()
+    private val _batteryAt=MutableStateFlow(0L)
+    /** Wall-clock time of the newest decoded battery value, live or cached. */
+    val batteryAt=_batteryAt.asStateFlow()
     private val batteryLock=Mutex()
     private val batteryReplies=ConcurrentHashMap<Int,CompletableDeferred<Boolean>>()
     private val _features=MutableStateFlow<Map<DeviceSettingsProtocol.Feature,Boolean>>(emptyMap())
@@ -118,6 +121,8 @@ object Headphones {
         if (!::app.isInitialized) {
             app = ctx.applicationContext
             _nc.value = Prefs.lastNc(app)
+            // Cached levels render immediately, dimmed: no part is marked live until a reply arrives.
+            Prefs.battery(app)?.let {_battery.value=it;_batteryAt.value=Prefs.batteryAt(app);_batteryNote.value="Last known levels"}
         }
     }
     fun addLog(line: String) = _log.update { (it + line).takeLast(120) }
@@ -173,6 +178,8 @@ object Headphones {
         if(!usage.active) {conn.close();return false}
         _status.value = Status.CONNECTED
         _error.value = null
+        // A working control link proves Android's Bluetooth link is up.
+        if(Prefs.linked(app)!=true) {Prefs.setLinked(app,true);ModeWidget.refreshAll(app)}
         startInfoLoop()
         return true
     }
@@ -190,6 +197,35 @@ object Headphones {
         while(true) {val old=requests.tryReceive().getOrNull() ?: break;old.delivered.complete(false)}
     }
     fun disconnect() { cancelModes();infoJob?.cancel();infoJob=null;scope.launch { lock.withLock { conn.close() } } }
+
+    /**
+     * One-shot sync when Android reports the earbuds connected. Holds a background lease only:
+     * no polling starts, and the control socket closes on return unless a screen is open.
+     * Applies [apply] if given, then reads the battery so widgets and the cache are current.
+     */
+    suspend fun syncOnConnect(apply:SonyProtocol.Mode?):Boolean {
+        hold(foreground=false)
+        try {
+            var ok=false
+            for(attempt in 0..1) {
+                // The earbuds can refuse RFCOMM while A2DP/HFP are still being set up.
+                if(attempt>0) delay(1500)
+                ok=connectAndSync()
+                if(ok || usage.foreground) break
+            }
+            if(!ok) {
+                // A background attempt must not leave an error card for the next app launch.
+                if(!usage.foreground) {_error.value=null;if(_status.value==Status.FAILED) _status.value=Status.DISCONNECTED}
+                return false
+            }
+            if(apply!=null) {
+                val base=_pending.value ?: _nc.value ?: SonyProtocol.NcState(apply)
+                withTimeoutOrNull(4000){request(base.copy(mode=apply)).await()}
+            }
+            withTimeoutOrNull(3000){queryBattery()}
+            return true
+        } finally {release(foreground=false)}
+    }
 
     suspend fun connectAndSync(): Boolean = lock.withLock {
         if (!ensureConnectedLocked()) return@withLock false
@@ -242,6 +278,7 @@ object Headphones {
         _nc.value = null
         _pending.value = null
         _battery.value=null
+        _batteryAt.value=0L
         _batteryFresh.value=false
         _batteryParts.value=emptySet()
         _codec.value=null
@@ -436,7 +473,12 @@ object Headphones {
         SonyProtocol.parseBattery(p, _battery.value ?: SonyProtocol.Battery())?.let {
             val family=if(p[1].toInt()==0x0A) 2 else 1
             val hasValue=if(family==2) (p[2].toInt() and 255) in 1..100 else (p[2].toInt() and 255) in 1..100 || (p[4].toInt() and 255) in 1..100
-            if(hasValue) {_battery.value=it;_batteryFresh.value=true;_batteryParts.update{parts->parts+SonyProtocol.liveBatteryParts(p)}}
+            if(hasValue) {
+                val now=System.currentTimeMillis()
+                _battery.value=it;_batteryAt.value=now;_batteryFresh.value=true
+                _batteryParts.update{parts->parts+SonyProtocol.liveBatteryParts(p)}
+                Prefs.saveBattery(app,it,now)
+            }
             batteryReplies[family]?.complete(hasValue)
         }
     }

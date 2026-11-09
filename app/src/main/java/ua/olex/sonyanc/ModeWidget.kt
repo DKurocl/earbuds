@@ -60,6 +60,7 @@ class ModeWidget : AppWidgetProvider() {
     companion object {
         private const val ACTION_SET="ua.olex.sonyanc.SET_MODE"
         private const val EXTRA_MODE="mode"
+        private const val DIM_ALPHA=97 // 38 %, Material's disabled-content opacity
         private val latestTap=AtomicLong()
         @Volatile private var busyMode:SonyProtocol.Mode?=null
         private data class Tile(val mode:SonyProtocol.Mode,val id:Int,val icon:Int,val label:Int,val normal:Int,val selectedIcon:Int,val normalIcon:Int)
@@ -71,7 +72,8 @@ class ModeWidget : AppWidgetProvider() {
         private fun mediumWidth(ctx:Context)=maxOf(240f,(54f*ctx.resources.configuration.fontScale+16f)*3f+16f)
 
         private fun showFailure(ctx:Context) {
-            Handler(Looper.getMainLooper()).post {Toast.makeText(ctx,"Could not connect. Tap a mode to retry.",Toast.LENGTH_SHORT).show()}
+            val text=if(Prefs.linked(ctx)==false) "Earbuds are not connected to this phone." else "Could not connect. Tap a mode to retry."
+            Handler(Looper.getMainLooper()).post {Toast.makeText(ctx,text,Toast.LENGTH_SHORT).show()}
         }
 
         fun refreshAll(ctx:Context) {
@@ -97,8 +99,11 @@ class ModeWidget : AppWidgetProvider() {
         }
 
         /** The debug harness inflates these same RemoteViews at real launcher sizes. */
-        internal fun viewsForSize(ctx:Context,width:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,interactive:Boolean=true):RemoteViews {
+        internal fun viewsForSize(ctx:Context,width:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,interactive:Boolean=true,
+                                  linked:Boolean?=if(interactive) Prefs.linked(ctx) else null):RemoteViews {
             val labels=width>=mediumWidth(ctx)
+            // Earbuds known to be in the case: controls stay tappable but read as unavailable.
+            val away=linked==false
             val v=RemoteViews(ctx.packageName,R.layout.widget_modes)
             val density=ctx.resources.displayMetrics.density
             for(tile in tiles) {
@@ -107,11 +112,13 @@ class ModeWidget : AppWidgetProvider() {
                 val applying=mode==pending
                 v.setInt(tile.id,"setBackgroundResource",if(on) R.drawable.w_tile_on else tile.normal)
                 v.setImageViewResource(tile.icon,if(on) tile.selectedIcon else tile.normalIcon)
-                v.setTextColor(tile.label,ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
+                v.setInt(tile.icon,"setImageAlpha",if(away) DIM_ALPHA else 255)
+                val text=ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text)
+                v.setTextColor(tile.label,if(away) (text and 0x00FFFFFF) or (DIM_ALPHA shl 24) else text)
                 v.setTextViewText(tile.label,mode.short+if(applying) "…" else "")
                 v.setViewVisibility(tile.label,if(labels) View.VISIBLE else View.GONE)
                 v.setViewPadding(tile.label,0,(4*density).toInt(),0,0)
-                v.setContentDescription(tile.id,mode.label+if(applying) ", applying" else if(on) ", last used" else "")
+                v.setContentDescription(tile.id,mode.label+(if(applying) ", applying" else if(on) ", last used" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
                     val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
