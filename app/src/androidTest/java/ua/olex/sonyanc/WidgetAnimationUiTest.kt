@@ -24,6 +24,14 @@ class WidgetAnimationUiTest {
     }
     private fun animating(root: View) = segments(root).any { (it.current as? Animatable)?.isRunning == true }
 
+    /** What the device did, for a failure message: the platform's own behaviour is the question. */
+    private fun report(root: View): String {
+        val row = (root.findViewById<ViewGroup>(R.id.w_amb).getChildAt(0) as ViewGroup).getChildAt(0) as ImageView
+        return "scale=${android.animation.ValueAnimator.getDurationScale()} enabled=${android.animation.ValueAnimator.areAnimatorsEnabled()} " +
+            "hw=${row.isHardwareAccelerated} shown=${row.isShown} win=${row.windowVisibility} " +
+            "segments=" + segments(root).joinToString { "${it.current.javaClass.simpleName}:${(it.current as? Animatable)?.isRunning}" }
+    }
+
     @Test fun onlyARealModeChangeAnimates() {
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             lateinit var root: View
@@ -44,7 +52,7 @@ class WidgetAnimationUiTest {
             step(wait = 60) { views(SonyProtocol.Mode.ANC, pending = SonyProtocol.Mode.AMBIENT, ctx = it).reapply(it, root) }
             scenario.onActivity {
                 assertEquals(listOf(true, false, true), ids.map { id -> root.findViewById<View>(id).isEnabled })
-                assertTrue("the change morphs the buttons", animating(root))
+                assertTrue("the change morphs the buttons: " + report(root), animating(root))
             }
             Thread.sleep(800)
             step { views(SonyProtocol.Mode.AMBIENT, ctx = it).reapply(it, root) }
