@@ -58,9 +58,11 @@ The home screen has no logo or app name (only the settings button); the CI visua
 
 ## Icon
 
-`docs/icon`: the case outline is measured from a photo (`silhouette.py`), smoothed
-(`casepath.py`) and written as adaptive icon layers (`make_icon.py`). The launcher layers are
-scaled to 76 % so the case sits on Google's icon keylines rather than filling the safe zone.
+Google's 2025 Pixel icon style (Docs, Calendar, Drive): a white background, one bold geometric
+glyph and diagonal gradients from saturated blue into lavender. The glyph is the WF-1000XM5 case:
+a lighter lid (the "fold"), a white seam, the body and a green status light as the second colour.
+`docs/icon/google_style.py` writes the foreground, background and themed (monochrome) vectors from
+one geometry, and an SVG preview. The case is 48 dp wide, inside the 66 dp safe zone.
 
 ## Not done yet (needs captures from the real earbuds first)
 
