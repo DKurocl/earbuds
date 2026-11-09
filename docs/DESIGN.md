@@ -43,6 +43,14 @@ The home screen has no logo or app name (only the settings button); the CI visua
 `equalizer-preset`, `info`, `app`, `diagnostics`, `widgets`, `widgets-battery`.
 `ScreenshotTest` (JVM, Robolectric, `-Pscreenshots=true`) renders every page and widget size to PNG.
 
+Widget mode buttons (`docs/widget/segments.py` generates the drawables and layouts): each button is
+a left cap, a stretching middle and a right cap, and a cap is half as wide as the button is tall, so
+its vector scales uniformly. The chosen mode is disabled; every part is an animated selector on that
+state, so only a real change animates: the caps morph from the connected-group shape (outer corners
+round, inner 16 of 64) into a pill in 350 ms (emphasized), the fill and the cross-faded content
+blend in 250 ms. A launcher re-applying the same update replays nothing. Buttons are never taller
+than wide (`WidgetLayout.modes`). `WidgetAnimationTest` seeks the animators and renders the frames.
+
 ## Small things that do real work
 
 - **Listening time**: two tiles under the rings. Starts from Sony's rating (8 h with ANC or

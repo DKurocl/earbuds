@@ -34,6 +34,17 @@ class WidgetLayoutTest {
         }
     }
 
+    @Test fun buttonsAreNeverTallerThanWide() {
+        // Each rounded end is a cap half as wide as the button is tall; two caps must fit.
+        for (w in listOf(110, 130, 150, 164, 252, 340, 424)) for (h in listOf(56, 96, 150, 208, 300)) {
+            val s = modes(w, h)
+            val inner = w - 2 * WidgetLayout.PAD
+            val (width, height) = if (s.variant == COLUMN) inner to (s.group - 2 * WidgetLayout.GAP) / 3
+                else (inner - 2 * WidgetLayout.GAP) / 3 to s.group
+            assertTrue("$w×$h ${s.variant}: $height > $width", height <= width + 0.01f)
+        }
+    }
+
     @Test fun narrowSlotsDropLabelsInsteadOfClipping() {
         val s = modes(150, 96)
         assertFalse(s.labels)

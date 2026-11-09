@@ -40,16 +40,17 @@ internal object WidgetLayout {
         val h = height - 2 * PAD
         val columnHeight = 3 * 48f + 2 * GAP
         // Taller than wide (2×2, 2×3): stack the buttons, each a full-width pill.
+        // A button is never taller than wide: its rounded ends are half its height each (docs/widget/segments.py).
         if (h >= columnHeight && h > w * 1.15f) {
-            val tile = ((h - 2 * GAP) / 3).coerceAtMost(MAX_COLUMN_TILE)
+            val tile = minOf((h - 2 * GAP) / 3, MAX_COLUMN_TILE, w)
             val labels = w >= 2 * TILE_PAD + ICON + 8 + label
             return ModeSpec(ModeVariant.COLUMN, labels, ICON, 3 * tile + 2 * GAP)
         }
         val tile = (w - 2 * GAP) / 3
         val inline = tile >= 2 * TILE_PAD + ICON + 8 + label
-        val stackedHeight = h.coerceAtMost(MAX_ROW_STACKED)
+        val stackedHeight = minOf(h, MAX_ROW_STACKED, tile)
         val stacked = tile >= 2 * TILE_PAD + label && stackedHeight >= ICON + 4 + line + 16
-        val flat = h.coerceAtMost(MAX_ROW_FLAT)
+        val flat = minOf(h, MAX_ROW_FLAT, tile)
         return when {
             // Wide enough for "icon label" side by side: the calmest layout, one line high.
             inline && (h < ICON + 4 + line + 16 || tile >= 2 * TILE_PAD + ICON + 8 + label + 16) ->
