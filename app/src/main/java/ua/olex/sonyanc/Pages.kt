@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 fun DeviceInfoContent(
     deviceName: String, status: Headphones.Status, codec: CodecProtocol.State?, firmware: String?,
     refreshing: Boolean, onBack: () -> Unit = {}, onRefresh: () -> Unit = {}, onBluetooth: () -> Unit = {},
-    onDiagnostics: () -> Unit = {}, onTurnOff: () -> Unit = {}, ldacBlocked: Boolean = false, onPreferQuality: () -> Unit = {},
+    onTurnOff: () -> Unit = {}, ldacBlocked: Boolean = false, onPreferQuality: () -> Unit = {},
     onFind: () -> Unit = {},
 ) {
     var confirmOff by remember { mutableStateOf(false) }
@@ -55,7 +55,6 @@ fun DeviceInfoContent(
         ListGroup {
             item { NavRow(it, Glyph.FIND, "Find earbuds", "Location and ring, in Find Hub", onClick = onFind) }
             item { NavRow(it, Glyph.BLUETOOTH, "Android Bluetooth settings", "Pairing and spatial audio", onClick = onBluetooth) }
-            item { NavRow(it, Glyph.BUG, "Diagnostics", "Connection log for troubleshooting", onClick = onDiagnostics) }
         }
         if (connected) ListGroup {
             item { NavRow(it, Glyph.OFF, "Turn off earbuds", onClick = { confirmOff = true }) }
@@ -82,10 +81,13 @@ fun AppSettingsContent(
     onDynamicColor: (Boolean) -> Unit = {}, onHaptics: (Boolean) -> Unit = {},
     onAddTile: () -> Unit = {}, onPinWidget: () -> Unit = {}, onBluetooth: () -> Unit = {}, onDiagnostics: () -> Unit = {},
     onPinBatteryWidget: () -> Unit = {}, onOnConnect: (OnConnect) -> Unit = {},
+    caseReminder: Boolean = false, onCaseReminder: (Boolean) -> Unit = {},
+    tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
-            devices.forEach { device ->
+            // One pair of earbuds: the picker only appears when there is something to choose.
+            if (devices.size > 1 || devices.none { it.address == selected }) devices.forEach { device ->
                 item {
                     NavRow(it, Glyph.EARBUDS, device.name, if (device.address == selected) "Selected" else "Paired",
                         trailing = { if (device.address == selected) HushIcon(Glyph.CHECK, color = MaterialTheme.colorScheme.primary) },
@@ -99,6 +101,10 @@ fun AppSettingsContent(
                     onOnConnect(OnConnect.entries[i])
                 }
             }
+            item {
+                SwitchRow(it, Glyph.BATTERY, "Case battery reminder",
+                    "When you put the earbuds into a case at ${CaseReminder.THRESHOLD} % or less", caseReminder, onChange = onCaseReminder)
+            }
         }
         ListGroup("Appearance") {
             item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Match the colors of your wallpaper", dynamicColor, onChange = onDynamicColor) }
@@ -106,6 +112,10 @@ fun AppSettingsContent(
         }
         if (canAddTile || canPinWidget) ListGroup("Shortcuts") {
             if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Cycle noise control from the notification shade", onClick = onAddTile) }
+            item {
+                ChoiceRow(it, Glyph.REFRESH, "Quick Settings tile cycles", listOf(0 to "ANC → Ambient → Off", 1 to "ANC ↔ Ambient"),
+                    if (tileTwoWay) 1 else 0) { i -> onTileTwoWay(i == 1) }
+            }
             if (canPinWidget) item { NavRow(it, Glyph.WIDGET, "Add noise control widget", "ANC, Ambient and Off on your home screen", onClick = onPinWidget) }
             if (canPinWidget) item { NavRow(it, Glyph.BATTERY, "Add battery widget", "Left, case and right at a glance", onClick = onPinBatteryWidget) }
         }

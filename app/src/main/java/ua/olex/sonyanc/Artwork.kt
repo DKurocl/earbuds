@@ -13,7 +13,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
 /** Official Material icons; the release shrinker retains only referenced vectors. */
-enum class Glyph { QUIET, AMBIENT, OFF, TUNE, BACK, REFRESH, CHECK, BLUETOOTH, WIDGET, COPY, EARBUDS, PALETTE, HAPTICS, INFO, EQ, SETTINGS, CLOSE, EDIT, BUG, CLEAR, ADD, FIND, BATTERY, LINK }
+enum class Glyph { QUIET, AMBIENT, OFF, TUNE, BACK, REFRESH, CHECK, BLUETOOTH, WIDGET, COPY, EARBUDS, PALETTE, HAPTICS, INFO, EQ, SETTINGS, EDIT, BUG, CLEAR, ADD, FIND, BATTERY, LINK }
 
 @Composable
 fun HushIcon(glyph: Glyph, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
@@ -34,7 +34,6 @@ fun HushIcon(glyph: Glyph, modifier: Modifier = Modifier, color: Color = Materia
         Glyph.INFO -> Icons.Rounded.Info
         Glyph.EQ -> Icons.Rounded.GraphicEq
         Glyph.SETTINGS -> Icons.Rounded.Settings
-        Glyph.CLOSE -> Icons.Rounded.Close
         Glyph.EDIT -> Icons.Rounded.Edit
         Glyph.BUG -> Icons.Rounded.BugReport
         Glyph.CLEAR -> Icons.Rounded.DeleteSweep
@@ -46,7 +45,3 @@ fun HushIcon(glyph: Glyph, modifier: Modifier = Modifier, color: Color = Materia
     Icon(vector,contentDescription=null,modifier=modifier.size(24.dp),tint=color)
 }
 
-@Composable
-fun HushMark(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary) {
-    Icon(painterResource(R.drawable.ic_case_mark),contentDescription=null,tint=color,modifier=modifier.size(32.dp))
-}

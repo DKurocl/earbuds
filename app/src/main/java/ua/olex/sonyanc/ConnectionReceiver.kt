@@ -30,11 +30,13 @@ class ConnectionReceiver : BroadcastReceiver() {
             Prefs.setLinked(ctx, false)
             Prefs.setLastSeen(ctx, System.currentTimeMillis())
             Widgets.refreshAll(ctx)
+            CaseReminder.onEarbudsAway(ctx)
             return
         }
 
         Prefs.setLinked(ctx, true)
         Widgets.refreshAll(ctx)
+        CaseReminder.clear(ctx)
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
         val onConnect = Prefs.onConnect(ctx)
