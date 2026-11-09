@@ -56,7 +56,7 @@ fun HushScreen(
     onConnection: () -> Unit = {}, haptics: Boolean = true,
     batteryRefreshing: Boolean = false, batteryFresh: Boolean = true, onBattery: () -> Unit = {},
     codec: CodecProtocol.State? = null, codecRefreshing: Boolean = false,
-    deviceName: String = "WF-1000XM5", onRename: () -> Unit = {}, onDisconnect: () -> Unit = {}, onAppSettings: () -> Unit = onSettings,
+    deviceName: String = "WF-1000XM5", onAppSettings: () -> Unit = onSettings,
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
     batterySeenAt: Long? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null,
@@ -87,7 +87,7 @@ fun HushScreen(
             Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Header(deviceName, status, codec, batteryRefreshing, onRename, lastSeen)
+            Header(deviceName, status, codec, batteryRefreshing, lastSeen)
 
             // Setup cards already explain a missing permission or device; the banner is for link problems.
             AnimatedVisibility(error != null && granted && hasDevice, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
@@ -104,9 +104,8 @@ fun HushScreen(
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        // The control link opens and closes by itself, so there is no Disconnect here:
-                        // it would not disconnect the audio and only made the next tap slower.
-                        BigAction(Glyph.BLUETOOTH, "Bluetooth", onClick = onBluetooth)
+                        // Only what is used day to day. The control link opens and closes by itself (no
+                        // Disconnect); Android's Bluetooth settings are one level down in Device info.
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
                         if (!ready) BigAction(Glyph.REFRESH, if (status == Headphones.Status.CONNECTING) "Connecting…" else "Connect",
                             enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
@@ -129,17 +128,12 @@ fun HushScreen(
 }
 
 @Composable
-private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, onRename: () -> Unit, lastSeen: Long? = null) {
+private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, lastSeen: Long? = null) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.width(40.dp))
-            Text(name, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, false))
-            IconButton(onClick = onRename, modifier = Modifier.size(40.dp).semantics { contentDescription = "Rename device" }) {
-                HushIcon(Glyph.EDIT, Modifier.size(18.dp), cs.onSurfaceVariant)
-            }
-        }
+        // Renaming is rare: it lives in App settings, not next to the name.
+        Text(name, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center, maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
         Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val line = when (status) {
                 Headphones.Status.CONNECTED -> "Connected" + (codec?.takeIf { it.isKnown }?.let { " · ${it.label}" } ?: "")

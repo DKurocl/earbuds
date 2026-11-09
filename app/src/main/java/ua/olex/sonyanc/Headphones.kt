@@ -253,12 +253,6 @@ object Headphones {
         }
     }
 
-    fun disconnect() {
-        cancelModes()
-        infoJob?.cancel(); infoJob = null
-        scope.launch { lock.withLock { conn.close() } }
-    }
-
     suspend fun connectAndSync(): Boolean = lock.withLock {
         if (!ensureConnectedLocked()) return@withLock false
         // Mode controls never wait behind a state read.

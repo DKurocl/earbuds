@@ -58,6 +58,15 @@ object Prefs {
     fun onConnect(ctx: Context): OnConnect = OnConnect.from(p(ctx).getString("on_connect", null))
     fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).apply()
 
+    fun caseReminder(ctx: Context) = p(ctx).getBoolean("case_reminder", false)
+    fun setCaseReminder(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("case_reminder", value).apply()
+    fun caseRemindedAt(ctx: Context) = p(ctx).getLong("case_reminded_at", 0L)
+    fun setCaseRemindedAt(ctx: Context, at: Long) = p(ctx).edit().putLong("case_reminded_at", at).apply()
+
+    /** Quick Settings tile: true cycles ANC ↔ Ambient only; false also visits Off. */
+    fun tileTwoWay(ctx: Context) = p(ctx).getBoolean("tile_two_way", false)
+    fun setTileTwoWay(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("tile_two_way", value).apply()
+
     /** Version for which the widget picker previews were last generated. */
     fun previewVersion(ctx: Context): Long = p(ctx).getLong("preview_version", 0L)
     fun setPreviewVersion(ctx: Context, value: Long) = p(ctx).edit().putLong("preview_version", value).apply()

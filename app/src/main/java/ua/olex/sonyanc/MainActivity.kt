@@ -119,6 +119,13 @@ fun App(
         ctx.startActivity(app ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/android/find/")))
     }
     var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
+    var caseReminder by remember { mutableStateOf(Prefs.caseReminder(ctx)) }
+    var tileTwoWay by remember { mutableStateOf(Prefs.tileTwoWay(ctx)) }
+    // The reminder is the only notification; ask for the permission only when it is turned on.
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        caseReminder = granted; Prefs.setCaseReminder(ctx, granted)
+        if (!granted) show("Notifications are off for Earbuds, so the reminder can't be shown.")
+    }
     // Two-stage haptics: the tap ticks at once (HushScreen); the earbuds' acknowledgement
     // plays the mode's own pulse. Only the newest tap may report, so bursts stay quiet.
     var tapGeneration by remember { mutableIntStateOf(0) }
@@ -185,7 +192,7 @@ fun App(
                         onEqualizer = { open(Page.EQUALIZER) }, onEarbuds = { open(Page.EARBUDS) }, onConnection = { open(Page.DEVICE) },
                         haptics = haptics, batteryRefreshing = device.batteryRefreshing, batteryFresh = device.liveBatteryParts.isNotEmpty(),
                         onBattery = ::refreshInfo, codec = device.codec, codecRefreshing = device.codecRefreshing,
-                        deviceName = displayName, onRename = { renaming = true }, onDisconnect = { Headphones.disconnect() },
+                        deviceName = displayName,
                         onAppSettings = { open(Page.APP) }, batteryParts = device.liveBatteryParts,
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
                         batterySeenAt = device.batterySeenAt,
@@ -213,7 +220,7 @@ fun App(
                                 }
                             },
                             refreshing = device.codecRefreshing || device.batteryRefreshing || turningOff,
-                            onBack = ::back, onRefresh = ::refreshInfo, onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
+                            onBack = ::back, onRefresh = ::refreshInfo, onBluetooth = ::bluetooth,
                             onFind = ::findHub,
                             onTurnOff = {
                                 scope.launch {
@@ -248,6 +255,13 @@ fun App(
                         onPinWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, ModeWidget::class.java), null, null) },
                         onPinBatteryWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, BatteryWidget::class.java), null, null) },
                         onConnect = onConnect, onOnConnect = { onConnect = it; Prefs.setOnConnect(ctx, it) },
+                        caseReminder = caseReminder, onCaseReminder = { on ->
+                            if (!on) { caseReminder = false; Prefs.setCaseReminder(ctx, false) }
+                            else if (ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                caseReminder = true; Prefs.setCaseReminder(ctx, true)
+                            } else notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        },
+                        tileTwoWay = tileTwoWay, onTileTwoWay = { tileTwoWay = it; Prefs.setTileTwoWay(ctx, it) },
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                     )
                     Page.DIAGNOSTICS -> {

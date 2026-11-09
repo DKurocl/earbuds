@@ -44,7 +44,7 @@ class NoiseTileService : TileService() {
         val current=(Headphones.state.value.shownNc ?: Prefs.lastNc(this))?.mode
         val next=when(current) {
             SonyProtocol.Mode.ANC -> SonyProtocol.Mode.AMBIENT
-            SonyProtocol.Mode.AMBIENT -> SonyProtocol.Mode.OFF
+            SonyProtocol.Mode.AMBIENT -> if(Prefs.tileTwoWay(this)) SonyProtocol.Mode.ANC else SonyProtocol.Mode.OFF
             else -> SonyProtocol.Mode.ANC
         }
         sendBroadcast(Intent(this,ModeWidget::class.java).setAction("ua.olex.sonyanc.SET_MODE").putExtra("mode",next.name))

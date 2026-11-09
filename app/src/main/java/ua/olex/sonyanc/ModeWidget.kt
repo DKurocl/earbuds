@@ -50,6 +50,11 @@ class ModeWidget : AppWidgetProvider() {
                 val base=Headphones.state.value.shownNc ?: SonyProtocol.NcState(mode)
                 val receipt=Headphones.request(base.copy(mode=mode))
                 val ok=withTimeoutOrNull(8500){receipt.await()} ?: false
+                // Felt from the pocket or lock screen: the same pulse as in the app once the
+                // earbuds accept, a double click when they do not. Only the newest tap reports.
+                if(latestTap.get()==generation && Prefs.haptics(ctx)) {
+                    if(ok) Haptics.confirm(ctx,mode) else Haptics.reject(ctx)
+                }
                 if(latestTap.get()==generation && !ok) showFailure(ctx)
             } catch(e:Exception) {
                 if(latestTap.get()==generation) showFailure(ctx)
