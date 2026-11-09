@@ -12,7 +12,7 @@ Noise control lives in a floating **dock** at the bottom: ANC / Ambient / Off; i
 Speak-to-Chat and **Ambient for a moment** (2/5/10 min, then back, with a countdown); in Ambient the
 level (haptic tick per step), Low / Medium / High and voice focus.
 
-**Battery page** (tap the listening tiles or More controls → Battery): the last 7 days of earbuds
+**Battery page** (tap either listening-time tile): the last 7 days of earbuds
 (solid) and case (dashed) readings — drag across to read any moment — and how long a full charge
 really lasts per mode versus Sony's rating. Pull down on Home to read battery and codec again.
 
