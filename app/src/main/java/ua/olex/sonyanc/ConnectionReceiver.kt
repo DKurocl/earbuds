@@ -38,13 +38,12 @@ class ConnectionReceiver : BroadcastReceiver() {
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
         val onConnect = Prefs.onConnect(ctx)
-        val scene = Prefs.onConnectScene(ctx)
         val pending = goAsync()
         scope.launch {
             try {
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS)
-                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(onConnect.mode, scene) }
+                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(onConnect.mode) }
             } finally {
                 pending.finish()
             }

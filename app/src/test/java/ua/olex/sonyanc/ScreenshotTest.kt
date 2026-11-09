@@ -63,7 +63,6 @@ class ScreenshotTest {
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = false), granted = true, hasDevice = true,
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
-            scenes = Scenes.defaults,
         )
     }
 
@@ -72,7 +71,6 @@ class ScreenshotTest {
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
-            scenes = Scenes.defaults,
         )
     }
 
@@ -111,7 +109,7 @@ class ScreenshotTest {
     @Test fun appSettings() = shoot("page-app") {
         AppSettingsContent(
             listOf(PairedDevice("00:11", "WF-1000XM5")), "00:11", "WF-1000XM5", dynamicColor = true, haptics = true,
-            canAddTile = true, canPinWidget = true, version = "1.2.0", scenes = Scenes.defaults,
+            canAddTile = true, canPinWidget = true, version = "1.2.0",
         )
     }
 
@@ -132,7 +130,6 @@ class ScreenshotTest {
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 18, caseCharging = false), granted = true, hasDevice = true,
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
-            scenes = Scenes.defaults,
         )
     }
 
@@ -172,8 +169,7 @@ class ScreenshotTest {
                         val views = ModeWidget.viewsFor(
                             ctx, w.toFloat(), h.toFloat(), SonyProtocol.Mode.AMBIENT, interactive = false, linked = linked,
                             battery = (if (linked == false) SonyProtocol.Battery(64, 61, 40) else SonyProtocol.Battery(69, 70, 78, caseCharging = true)) to now,
-                            scenes = Scenes.defaults,
-                        )
+                                        )
                         addView(views.apply(ctx, this), FrameLayout.LayoutParams(-1, -1))
                     }
                 }, modifier = Modifier.size(w.dp, h.dp))

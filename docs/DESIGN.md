@@ -31,7 +31,6 @@ predictive back.
 | Page | Content |
 |---|---|
 | Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name with rename, status line ("Connected · LDAC"). Error banner. Battery rings L / case / R with a chip in the ring gap, large percentage and label (tap to refresh). Bluetooth and Connect/Disconnect pills. Noise control: connected button group, Ambient panel (level, presets, voice focus). More controls: Equalizer, Earbud settings, Device info, App settings. |
-| Scenes (on Home) | One-tap sound setups: noise mode, ambient level, voice focus and optionally an EQ preset. Defaults Focus, Commute, Conversation; "Save current" captures the sound; long-press edits, re-captures or deletes. The card matching the earbuds is highlighted. The first two are also launcher shortcuts. |
 | Equalizer | Preset chips. Custom: five vertical bands (drag or tap, TalkBack adjustable) over a response curve, Clear Bass slider, Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; Android Bluetooth settings; Diagnostics; Turn off earbuds (confirmation). |

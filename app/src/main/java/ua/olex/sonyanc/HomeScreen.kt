@@ -58,8 +58,7 @@ fun HushScreen(
     codec: CodecProtocol.State? = null, codecRefreshing: Boolean = false,
     deviceName: String = "WF-1000XM5", onRename: () -> Unit = {}, onDisconnect: () -> Unit = {}, onAppSettings: () -> Unit = onSettings,
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
-    batterySeenAt: Long? = null, scenes: List<Scene> = emptyList(), equalizer: EqualizerProtocol.State? = null,
-    onScene: (Scene) -> Unit = {}, onSaveScene: () -> Unit = {}, onEditScene: (Scene) -> Unit = {},
+    batterySeenAt: Long? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -101,7 +100,7 @@ fun HushScreen(
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery)
-                        BatteryNote(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt)
+                        ListeningTime(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt)
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -111,27 +110,6 @@ fun HushScreen(
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
                         if (!ready) BigAction(Glyph.REFRESH, if (status == Headphones.Status.CONNECTING) "Connecting…" else "Connect",
                             enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SectionTitle("Scenes")
-                        // Scrolls to the screen edges (past the page margin), like Google's own carousels.
-                        Row(
-                            Modifier.fillMaxWidth().layout { measurable, constraints ->
-                                val margin = 16.dp.roundToPx()
-                                val wide = constraints.copy(minWidth = constraints.minWidth + 2 * margin, maxWidth = constraints.maxWidth + 2 * margin)
-                                val placeable = measurable.measure(wide)
-                                layout(placeable.width - 2 * margin, placeable.height) { placeable.place(-margin, 0) }
-                            }.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            scenes.forEach { scene ->
-                                SceneCard(scene.name, scene.summary, sceneGlyph(scene), scene.matches(state, equalizer),
-                                    onClick = { if (haptics) feedback.performHapticFeedback(HapticFeedbackType.Confirm); onScene(scene) },
-                                    onLongClick = { onEditScene(scene) })
-                            }
-                            if (scenes.size < Scenes.MAX) SceneCard("Save current", "Make a scene", Glyph.ADD, false, onClick = onSaveScene, onLongClick = null)
-                        }
                     }
 
                     ListGroup("More controls") {
@@ -430,85 +408,48 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
     }
 }
 
-/** Estimated listening time, and how old the reading is when it is not live. */
+/**
+ * Listening time as two equal tiles under the rings: what the earbuds have left, and what the
+ * case adds. Big numbers on tonal icons, centered; the age of the reading only when it is old.
+ */
 @Composable
-private fun BatteryNote(battery: SonyProtocol.Battery?, mode: Mode?, live: Boolean, seenAt: Long?) {
+private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boolean, seenAt: Long?) {
     val cs = MaterialTheme.colorScheme
-    val estimate = battery?.let { BatteryLife.summary(it, mode) }
-    val age = if (!live && seenAt != null) "Last seen " + DateUtils.getRelativeTimeSpanString(seenAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS) else null
-    if (estimate == null && age == null) return
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        estimate?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface, textAlign = TextAlign.Center) }
-        age?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+    val buds = battery?.let { BatteryLife.budsMinutes(it, mode) } ?: return
+    val case = BatteryLife.caseMinutes(battery, mode)?.takeIf { it >= 10 }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60) {
+                HushIcon(Glyph.EARBUDS, Modifier.size(22.dp), it)
+            }
+            if (case != null) StatTile("+" + BatteryLife.short(case), "From the case", Modifier.weight(1f)) {
+                Icon(painterResource(R.drawable.ic_case_mark), null, tint = it, modifier = Modifier.size(22.dp))
+            }
+        }
+        if (!live && seenAt != null) Text(
+            "Last reading " + DateUtils.getRelativeTimeSpanString(seenAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
+            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+        )
     }
 }
 
-private fun sceneGlyph(scene: Scene) = when (scene.nc.mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }
-
-/** A scene: tap applies it, long-press edits it. Highlighted while the earbuds match it. */
 @Composable
-private fun SceneCard(title: String, subtitle: String, glyph: Glyph, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)?) {
+private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, icon: @Composable (Color) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(20.dp)
-    val bg by animateColorAsState(if (selected) cs.primaryContainer else Surfaces.card, tween(200), label = "scene bg")
-    val fg = if (selected) cs.onPrimaryContainer else cs.onSurface
-    Surface(
-        shape = shape, color = bg,
-        modifier = Modifier.clip(shape)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) "Edit scene" else null, role = Role.Button)
-            .semantics { this.selected = selected },
-    ) {
-        Column(Modifier.widthIn(min = 128.dp, max = 200.dp).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            HushIcon(glyph, Modifier.size(20.dp), if (selected) cs.onPrimaryContainer else cs.primary)
-            Text(title, style = MaterialTheme.typography.titleSmall, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val accent = if (low) cs.errorContainer else cs.primaryContainer
+    val onAccent = if (low) cs.onErrorContainer else cs.onPrimaryContainer
+    Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = modifier.fillMaxHeight().semantics(mergeDescendants = true) {}) {
+        Column(
+            Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(shape = CircleShape, color = accent, modifier = Modifier.size(40.dp)) {
+                Box(contentAlignment = Alignment.Center) { icon(onAccent) }
+            }
+            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium, maxLines = 1,
+                color = if (low) cs.error else cs.onSurface)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
         }
     }
 }
 
-/** Create or edit a scene. A new scene captures the current sound; an edited one can be re-captured. */
-@Composable
-fun SceneDialog(
-    editing: Scene?, current: String, eqName: String?, onDismiss: () -> Unit,
-    onSave: (name: String, recapture: Boolean, includeEq: Boolean) -> Unit, onDelete: () -> Unit = {},
-) {
-    var name by remember { mutableStateOf(editing?.name ?: "") }
-    var recapture by remember { mutableStateOf(editing == null) }
-    var includeEq by remember { mutableStateOf(editing?.eqPreset != null) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (editing == null) "New scene" else "Edit scene") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(name, { name = Scenes.cleanName(it) }, singleLine = true, label = { Text("Name") })
-                if (editing != null) {
-                    Text(editing.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    CheckRow("Replace with current sound", "Now: $current", recapture) { recapture = it }
-                } else Text("Saves: $current", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (eqName != null && recapture) CheckRow("Include equalizer", eqName, includeEq) { includeEq = it }
-            }
-        },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onSave(name.trim(), recapture, includeEq) }) { Text("Save") } },
-        dismissButton = {
-            Row {
-                if (editing != null) TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            }
-        },
-    )
-}
-
-@Composable
-private fun CheckRow(title: String, summary: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).toggleable(checked, role = Role.Checkbox, onValueChange = onChange).padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Checkbox(checked = checked, onCheckedChange = null)
-        Column {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}

@@ -12,4 +12,5 @@
     <color name="w_good">#FF1E8E3E</color>
     <color name="w_low">#FFB3261E</color>
     <color name="w_unknown">@android:color/system_neutral2_300</color>
+    <color name="w_on_good">#FFFFFFFF</color>
 </resources>

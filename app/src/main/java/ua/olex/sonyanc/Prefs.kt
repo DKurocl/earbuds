@@ -56,19 +56,12 @@ object Prefs {
     fun setLastSeen(ctx: Context, at: Long) = p(ctx).edit().putLong("last_seen", at).apply()
 
     fun onConnect(ctx: Context): OnConnect = OnConnect.from(p(ctx).getString("on_connect", null))
-    fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).remove("on_connect_scene").apply()
-    /** A scene applied on connect instead of a bare mode; wins over [onConnect] while it exists. */
-    fun onConnectScene(ctx: Context): Scene? = p(ctx).getString("on_connect_scene", null)?.let { id -> scenes(ctx).firstOrNull { it.id == id } }
-    fun setOnConnectScene(ctx: Context, scene: Scene) =
-        p(ctx).edit().putString("on_connect", OnConnect.KEEP.name).putString("on_connect_scene", scene.id).apply()
+    fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).apply()
 
     /** Version for which the widget picker previews were last generated. */
     fun previewVersion(ctx: Context): Long = p(ctx).getLong("preview_version", 0L)
     fun setPreviewVersion(ctx: Context, value: Long) = p(ctx).edit().putLong("preview_version", value).apply()
 
-    // ---- scenes ----
-    fun scenes(ctx: Context): List<Scene> = p(ctx).getString("scenes", null)?.let(Scenes::decode) ?: Scenes.defaults
-    fun saveScenes(ctx: Context, scenes: List<Scene>) = p(ctx).edit().putString("scenes", Scenes.encode(scenes)).apply()
 }
 
 /** What to do with noise control when the earbuds connect to the phone. */

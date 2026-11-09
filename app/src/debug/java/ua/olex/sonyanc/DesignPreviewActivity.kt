@@ -58,7 +58,6 @@ private fun Scene(scene: String) {
                 battery = SonyProtocol.Battery(82, 79, 56, rightCharging = true), granted = scene != "permission", hasDevice = true,
                 codec = CodecProtocol.State(0x10), onMode = { state = it }, onSettings = {}, onConnect = {}, onPermission = {},
                 onBluetooth = {}, onPick = {}, equalizerPreset = "Custom",
-                scenes = Scenes.defaults, onScene = { state = it.target(state) },
             )
         }
     }

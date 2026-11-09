@@ -66,7 +66,7 @@ class BatteryWidget : AppWidgetProvider() {
          * a bolt while charging, and dimmed when the earbuds are away. Returns the spoken text.
          */
         internal fun bindRing(
-            ctx: Context, v: RemoteViews, box: Int, ring: Int, art: Int, value: Int, label: Int,
+            ctx: Context, v: RemoteViews, box: Int, ring: Int, art: Int, value: Int, label: Int, charge: Int,
             name: String, level: Int?, charging: Boolean, size: Float?, stale: Boolean, showLabel: Boolean,
         ): String {
             val color = ctx.getColor(when {
@@ -94,7 +94,13 @@ class BatteryWidget : AppWidgetProvider() {
             v.setTextViewText(value, level?.let { "$it%" } ?: "—")
             val text = ctx.getColor(if (level != null && level <= 20 && !charging) R.color.w_low else R.color.w_off_text)
             v.setTextColor(value, if (stale) (text and 0x00FFFFFF) or (STALE_ALPHA shl 24) else text)
-            v.setTextViewCompoundDrawablesRelative(value, 0, 0, if (charging && level != null) R.drawable.w_icon_bolt else 0, 0)
+            // Charging shows as a badge on the ring (like the app's chip), not as a glyph after the number.
+            v.setViewVisibility(charge, if (charging && level != null) View.VISIBLE else View.GONE)
+            val badge = ((size ?: 44f) * 0.38f).coerceIn(16f, 26f)
+            v.setViewLayoutWidth(charge, badge, TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutHeight(charge, badge, TypedValue.COMPLEX_UNIT_DIP)
+            val pad = (badge * 0.2f * ctx.resources.displayMetrics.density).toInt()
+            v.setViewPadding(charge, pad, pad, pad, pad)
             v.setViewVisibility(label, if (showLabel) View.VISIBLE else View.GONE)
             return "$name " + (level?.let { "$it percent" + if (charging) " charging" else "" } ?: "unknown")
         }
@@ -110,8 +116,8 @@ class BatteryWidget : AppWidgetProvider() {
             val b = battery ?: SonyProtocol.Battery()
             val spoken = mutableListOf<String>()
 
-            fun part(box: Int, ring: Int, art: Int, value: Int, label: Int, name: String, level: Int?, charging: Boolean) {
-                spoken += bindRing(ctx, v, box, ring, art, value, label, name, level, charging, spec.ring, stale, spec.labels)
+            fun part(box: Int, ring: Int, art: Int, value: Int, label: Int, charge: Int, name: String, level: Int?, charging: Boolean) {
+                spoken += bindRing(ctx, v, box, ring, art, value, label, charge, name, level, charging, spec.ring, stale, spec.labels)
             }
 
             if (spec.compact) {
@@ -120,13 +126,13 @@ class BatteryWidget : AppWidgetProvider() {
                 val useRight = right != null && (left == null || right < left)
                 val level = if (useRight) right else left
                 val charging = if (useRight) b.rightCharging else b.leftCharging
-                part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, "Earbuds", level, charging)
+                part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, R.id.w_left_charge, "Earbuds", level, charging)
                 v.setTextViewText(R.id.w_status, "Case " + (b.case?.let { "$it%" } ?: "—"))
                 spoken += "case " + (b.case?.let { "$it percent" } ?: "unknown")
             } else {
-                part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, "Left", b.left, b.leftCharging)
-                part(R.id.w_case_box, R.id.w_case_ring, R.id.w_case_art, R.id.w_case_value, R.id.w_case_label, "Case", b.case, b.caseCharging)
-                part(R.id.w_right_box, R.id.w_right_ring, R.id.w_right_art, R.id.w_right_value, R.id.w_right_label, "Right", b.right, b.rightCharging)
+                part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, R.id.w_left_charge, "Left", b.left, b.leftCharging)
+                part(R.id.w_case_box, R.id.w_case_ring, R.id.w_case_art, R.id.w_case_value, R.id.w_case_label, R.id.w_case_charge, "Case", b.case, b.caseCharging)
+                part(R.id.w_right_box, R.id.w_right_ring, R.id.w_right_art, R.id.w_right_value, R.id.w_right_label, R.id.w_right_charge, "Right", b.right, b.rightCharging)
                 v.setTextViewText(R.id.w_status, status(ctx, battery, at, linked, lastSeen))
             }
             v.setViewVisibility(R.id.w_status, if (spec.status) View.VISIBLE else View.GONE)

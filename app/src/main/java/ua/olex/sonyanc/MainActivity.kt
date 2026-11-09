@@ -38,11 +38,9 @@ import ua.olex.sonyanc.SonyProtocol.NcState
 class MainActivity : ComponentActivity() {
     private val startTick = mutableIntStateOf(0)
     private val shortcutMode = mutableStateOf<Mode?>(null)
-    private val shortcutScene = mutableStateOf<String?>(null)
 
     private fun consumeIntent(intent: Intent?) {
         shortcutMode.value = intent?.getStringExtra("hush.mode")?.let { name -> runCatching { Mode.valueOf(name) }.getOrNull() }
-        shortcutScene.value = intent?.getStringExtra(SceneShortcuts.EXTRA)
     }
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); consumeIntent(intent) }
@@ -52,14 +50,17 @@ class MainActivity : ComponentActivity() {
         Headphones.init(this)
         consumeIntent(intent)
         // Picker previews are a binder call per widget; keep them off the first frame.
-        Thread { Widgets.publishPreviews(applicationContext) }.start()
+        Thread {
+            Widgets.publishPreviews(applicationContext)
+            // Scenes are gone; drop the launcher shortcuts earlier versions published for them.
+            runCatching { getSystemService(android.content.pm.ShortcutManager::class.java)?.removeAllDynamicShortcuts() }
+        }.start()
         enableEdgeToEdge()
         setContent {
             var dynamic by remember { mutableStateOf(Prefs.dynamicColor(this)) }
             AppTheme(dynamic) {
                 App(
                     startTick.intValue, dynamic, shortcutMode.value, { shortcutMode.value = null },
-                    shortcutScene.value, { shortcutScene.value = null },
                 ) { dynamic = it; Prefs.setDynamicColor(this, it) }
             }
         }
@@ -76,7 +77,7 @@ private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS }
 @Composable
 fun App(
     startTick: Int, dynamic: Boolean, shortcutMode: Mode? = null, onShortcutConsumed: () -> Unit = {},
-    shortcutScene: String? = null, onSceneConsumed: () -> Unit = {}, onDynamic: (Boolean) -> Unit,
+    onDynamic: (Boolean) -> Unit,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -118,7 +119,6 @@ fun App(
         ctx.startActivity(app ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/android/find/")))
     }
     var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
-    var onConnectScene by remember { mutableStateOf(Prefs.onConnectScene(ctx)) }
     // Two-stage haptics: the tap ticks at once (HushScreen); the earbuds' acknowledgement
     // plays the mode's own pulse. Only the newest tap may report, so bursts stay quiet.
     var tapGeneration by remember { mutableIntStateOf(0) }
@@ -151,45 +151,6 @@ fun App(
 
     if (renaming) RenameDialog(displayName, onDismiss = { renaming = false }) {
         displayName = it; Prefs.setDisplayName(ctx, it); renaming = false
-    }
-
-    // ---- scenes ----
-    var scenes by remember { mutableStateOf(Prefs.scenes(ctx)) }
-    var editingScene by remember { mutableStateOf<Scene?>(null) }
-    var creatingScene by remember { mutableStateOf(false) }
-    fun storeScenes(list: List<Scene>) { scenes = list; Prefs.saveScenes(ctx, list); SceneShortcuts.update(ctx, list) }
-    LaunchedEffect(Unit) { SceneShortcuts.update(ctx, scenes) }
-    fun applyScene(scene: Scene) {
-        SceneShortcuts.reportUsed(ctx, scene)
-        scope.launch { if (!Headphones.applyScene(scene)) show("Couldn't fully apply ${scene.name}. Check that your earbuds are connected.") }
-    }
-    LaunchedEffect(shortcutScene, granted, saved) {
-        val scene = scenes.firstOrNull { it.id == shortcutScene } ?: return@LaunchedEffect
-        if (granted && saved != null) { applyScene(scene); onSceneConsumed() }
-    }
-    /** What "save current" would capture right now. */
-    fun captured(name: String, id: String, includeEq: Boolean) = Scene(
-        id, name, device.shownNc ?: NcState(Mode.ANC), if (includeEq) equalizer?.preset else null,
-    )
-    if (creatingScene || editingScene != null) {
-        val editing = editingScene
-        SceneDialog(
-            editing, current = captured("", "", false).summary, eqName = equalizer?.let { EqualizerProtocol.presets[it.preset] },
-            onDismiss = { creatingScene = false; editingScene = null },
-            onSave = { name, recapture, includeEq ->
-                val updated = when {
-                    editing == null -> captured(name, "s${System.currentTimeMillis()}", includeEq)
-                    recapture -> captured(name, editing.id, includeEq)
-                    else -> editing.copy(name = name)
-                }
-                storeScenes(if (editing == null) scenes + updated else scenes.map { if (it.id == editing.id) updated else it })
-                creatingScene = false; editingScene = null
-            },
-            onDelete = {
-                storeScenes(scenes.filterNot { it.id == editing?.id })
-                editingScene = null
-            },
-        )
     }
 
     CompositionLocalProvider(LocalMessages provides show) {
@@ -227,8 +188,7 @@ fun App(
                         deviceName = displayName, onRename = { renaming = true }, onDisconnect = { Headphones.disconnect() },
                         onAppSettings = { open(Page.APP) }, batteryParts = device.liveBatteryParts,
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
-                        batterySeenAt = device.batterySeenAt, scenes = scenes, equalizer = equalizer,
-                        onScene = ::applyScene, onSaveScene = { creatingScene = true }, onEditScene = { editingScene = it },
+                        batterySeenAt = device.batterySeenAt,
                         onFind = ::findHub,
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && !device.connected && Prefs.linked(ctx) == false },
                     )
@@ -287,9 +247,7 @@ fun App(
                         },
                         onPinWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, ModeWidget::class.java), null, null) },
                         onPinBatteryWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, BatteryWidget::class.java), null, null) },
-                        onConnect = onConnect, onOnConnect = { onConnect = it; onConnectScene = null; Prefs.setOnConnect(ctx, it) },
-                        scenes = scenes, onConnectScene = onConnectScene,
-                        onOnConnectScene = { onConnect = OnConnect.KEEP; onConnectScene = it; Prefs.setOnConnectScene(ctx, it) },
+                        onConnect = onConnect, onOnConnect = { onConnect = it; Prefs.setOnConnect(ctx, it) },
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                     )
                     Page.DIAGNOSTICS -> {

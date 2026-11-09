@@ -272,7 +272,7 @@ object Headphones {
      * no polling starts, and the control socket closes on return unless a screen is open.
      * Applies [apply] if given, then reads the battery so widgets and the cache are current.
      */
-    suspend fun syncOnConnect(apply: SonyProtocol.Mode?, scene: Scene? = null): Boolean {
+    suspend fun syncOnConnect(apply: SonyProtocol.Mode?): Boolean {
         hold(foreground = false)
         try {
             var ok = false
@@ -289,8 +289,7 @@ object Headphones {
                 }
                 return false
             }
-            if (scene != null) withTimeoutOrNull(5000) { applyScene(scene) }
-            else if (apply != null) {
+            if (apply != null) {
                 val base = _state.value.shownNc ?: SonyProtocol.NcState(apply)
                 withTimeoutOrNull(4000) { request(base.copy(mode = apply)).await() }
             }
@@ -319,17 +318,6 @@ object Headphones {
         activeRequest = request
         requests.trySend(request)
         return request.delivered
-    }
-
-    /**
-     * Applies a scene: noise control first (it is what the user hears change), then the
-     * equalizer preset if the scene has one. True only when every part was confirmed.
-     */
-    suspend fun applyScene(scene: Scene): Boolean {
-        val delivered = request(scene.target(_state.value.shownNc)).await()
-        val preset = scene.eqPreset ?: return delivered
-        if (_equalizer.value == null && readEqualizer() == null) return false
-        return delivered && (_equalizer.value?.preset == preset || writeEqualizer(preset = preset))
     }
 
     private suspend fun apply(state: SonyProtocol.NcState, id: Long, onDelivered: (Boolean) -> Unit): Boolean = lock.withLock {
@@ -400,7 +388,7 @@ object Headphones {
                     codecDue = now() + if (codecPushed) 120_000L else 30_000L
                 }
                 if (!usage.foreground || !conn.connected) break
-                // One equalizer read per connection, so Home and scenes know the current preset.
+                // One equalizer read per connection, so Home can name the current preset.
                 if (_equalizer.value == null && !equalizerAsked) { equalizerAsked = true; readEqualizer() }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= batteryDue) {

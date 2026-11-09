@@ -17,7 +17,7 @@ English only. Roadmap (Ukrainian): [docs/PLAN.md](docs/PLAN.md).
   or beside icons, icons only, or a column), M3E connected button group shapes, measured labels.
 - Optional battery widget: three rings, one ring at 1×1, absolute "Updated 14:32".
 - Large slots (lock-screen hub ≈ 416 × 275 dp, home 4×2) turn the noise-control widget into a
-  dashboard: status, battery rings, listening estimate, modes and up to three scene chips.
+  dashboard: status, battery rings, listening time and modes.
   Both widgets declare `home_screen|keyguard`.
 - Home has no logo or app name at the top: only the settings button.
 - Generated widget picker previews on Android 15+.
@@ -56,7 +56,6 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
 
 ## Daily controls
 
-- Scenes: one-tap setups of noise mode, ambient level, voice focus and EQ preset; also as launcher shortcuts.
 - Estimated listening time left (earbuds and case) and the last battery reading shown at launch.
 - ANC / Ambient / Off; choices queue while connecting and rapid taps are conflated.
 - Ambient level 0–20, Low/Medium/High shortcuts and voice focus.

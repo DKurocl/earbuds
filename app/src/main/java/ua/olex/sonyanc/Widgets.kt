@@ -60,8 +60,8 @@ internal object WidgetLayout {
         }
     }
 
-    /** Large slots get the dashboard; [estimate] and [scenes] rows appear only when they fit. */
-    data class DashboardSpec(val estimate: Boolean, val scenes: Boolean, val labels: Boolean)
+    /** Large slots get the dashboard; the listening-time line appears only when it fits. */
+    data class DashboardSpec(val estimate: Boolean, val labels: Boolean)
 
     /**
      * The lock-screen hub slot on a Pixel 10 Pro XL is about 416 × 275 dp; a home 4×2 about 340 × 208.
@@ -72,12 +72,11 @@ internal object WidgetLayout {
         val w = width - 2 * 16f
         val h = height - 2 * 14f
         val batteries = maxOf(44f, value + 2 + small)
-        val base = title + 12 + batteries + 12 + 56
+        val base = title + 12 + batteries + 14 + 64
         if (w < 280f || h < base) return null
-        val estimate = h >= base + 8 + small
-        val scenes = h >= base + (if (estimate) 8 + small else 0f) + 8 + 40
+        val estimate = h >= base + 10 + small
         val tile = (w - 2 * GAP) / 3
-        return DashboardSpec(estimate, scenes, labels = tile >= 2 * TILE_PAD + ICON + 8 + label)
+        return DashboardSpec(estimate, labels = tile >= 2 * TILE_PAD + ICON + 8 + label)
     }
 
     /** [ring] is the outer ring diameter. Compact shows one ring (the emptier earbud) and the case as text. */
