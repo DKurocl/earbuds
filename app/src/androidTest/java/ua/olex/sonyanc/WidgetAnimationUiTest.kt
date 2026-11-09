@@ -3,7 +3,6 @@ package ua.olex.sonyanc
 import android.graphics.drawable.Animatable2
 import android.graphics.drawable.AnimatedVectorDrawable
 import android.graphics.drawable.Drawable
-import java.util.concurrent.atomic.AtomicInteger
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -26,9 +25,10 @@ class WidgetAnimationUiTest {
      * test listens for the start instead of polling isRunning at a guessed moment.
      */
     private class Starts {
-        val count = AtomicInteger()
+        // Distinct drawables: the platform may report one transition's start more than once.
+        val started: MutableSet<Drawable> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
         val callback = object : Animatable2.AnimationCallback() {
-            override fun onAnimationStart(drawable: Drawable) { count.incrementAndGet() }
+            override fun onAnimationStart(drawable: Drawable) { started += drawable }
         }
         fun watch(root: View) = segments(root).forEach { (it.current as? AnimatedVectorDrawable)?.registerAnimationCallback(callback) }
         private fun segments(root: View) = listOf(R.id.w_anc, R.id.w_amb, R.id.w_off).flatMap { id ->
@@ -37,8 +37,9 @@ class WidgetAnimationUiTest {
         }
         fun await(expected: Int, ms: Long): Int {
             val end = System.currentTimeMillis() + ms
-            while (count.get() < expected && System.currentTimeMillis() < end) Thread.sleep(20)
-            return count.get()
+            while (started.size < expected && System.currentTimeMillis() < end) Thread.sleep(20)
+            Thread.sleep(300) // and nothing beyond what was expected
+            return started.size
         }
     }
 
