@@ -73,13 +73,14 @@ class SettingsUiTest {
         }
         repeat(3) {
             listOf("Ambient sound","Noise control off","Noise cancelling").forEach {title->
-                compose.onNodeWithContentDescription(title).performScrollTo().performClick()
+                // The modes live in the fixed dock at the bottom: no scrolling.
+                compose.onNodeWithContentDescription(title).performClick()
             }
         }
         compose.onNodeWithContentDescription("Ambient sound").performClick().assertIsSelected()
-        compose.onNodeWithText("Low").performScrollTo().performClick()
+        compose.onNodeWithText("Low").performClick()
         compose.onNodeWithContentDescription("Ambient sound level").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,"5 of 20"))
-        compose.onNodeWithContentDescription("Voice focus").performScrollTo().performClick().assertIsOn()
+        compose.onNodeWithContentDescription("Voice focus").performClick().assertIsOn()
     }
     @Test fun largeFontValuesStayBelowTheirLabels() {
         compose.setContent {

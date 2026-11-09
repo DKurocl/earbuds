@@ -326,11 +326,11 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
             ) {
                 Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     extras.speakToChat?.let { on ->
-                        SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f)) {
+                        SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
                             extras.onSpeakToChat(!on)
                         }
                     }
-                    SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f),
+                    SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
                         description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                 }
             }
@@ -425,21 +425,32 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
             presets.forEach { (label, value) ->
                 SoftChip(label, selected = state.level == value, modifier = Modifier.weight(1f)) { onChange(state.copy(level = value)) }
             }
-            SoftChip("Voice", selected = state.voice, glyph = if (state.voice) Glyph.CHECK else null, modifier = Modifier.weight(1.15f),
+            SoftChip("Voice", selected = state.voice, glyph = if (state.voice) Glyph.CHECK else null, modifier = Modifier.weight(1.15f), kind = ChipKind.SWITCH,
                 description = "Voice focus") { onChange(state.copy(voice = !state.voice)) }
         }
     }
 }
 
-/** A fully rounded toggle pill; selected fills with the secondary container. */
+/** What a pill is to TalkBack: a plain action, one choice of several, or an on/off switch. */
+private enum class ChipKind { BUTTON, CHOICE, SWITCH }
+
+/** A fully rounded pill; selected fills with the secondary container. */
 @Composable
-private fun SoftChip(label: String, selected: Boolean, modifier: Modifier = Modifier, glyph: Glyph? = null, description: String = label, onClick: () -> Unit) {
+private fun SoftChip(
+    label: String, selected: Boolean, modifier: Modifier = Modifier, glyph: Glyph? = null, description: String = label,
+    kind: ChipKind = ChipKind.CHOICE, onClick: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val bg by animateColorAsState(if (selected) cs.secondaryContainer else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = "chip")
+    val action = when (kind) {
+        ChipKind.SWITCH -> Modifier.toggleable(value = selected, role = Role.Switch, onValueChange = { onClick() })
+        ChipKind.CHOICE -> Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+        ChipKind.BUTTON -> Modifier.clickable(role = Role.Button, onClick = onClick)
+    }
     Surface(
-        onClick = onClick, shape = CircleShape, color = bg,
+        shape = CircleShape, color = bg,
         contentColor = if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant,
-        modifier = modifier.height(40.dp).semantics { contentDescription = description; stateDescription = if (selected) "On" else "Off" },
+        modifier = modifier.height(40.dp).clip(CircleShape).then(action).semantics { contentDescription = description },
     ) {
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 6.dp)) {
             if (glyph != null) { HushIcon(glyph, Modifier.size(16.dp), LocalContentColor.current); Spacer(Modifier.width(4.dp)) }
