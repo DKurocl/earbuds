@@ -9,28 +9,22 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import ua.olex.sonyanc.SonyProtocol.Mode
 import ua.olex.sonyanc.SonyProtocol.NcState
@@ -97,17 +91,7 @@ fun App(
     var stack by rememberSaveable { mutableStateOf(listOf(Page.HOME.name)) }
     fun open(page: Page) { if (stack.last() != page.name) stack = stack + page.name }
     fun back() { if (stack.size > 1) stack = stack.dropLast(1) }
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    PredictiveBackHandler(enabled = stack.size > 1) { events ->
-        try {
-            events.collect { backProgress = it.progress }
-            back()
-        } catch (e: CancellationException) {
-            backProgress = 0f
-            throw e
-        }
-        backProgress = 0f
-    }
+    // The predictive back gesture lives in PageStack (Navigation.kt).
 
     // ---- data and actions ----
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
@@ -173,27 +157,8 @@ fun App(
 
     CompositionLocalProvider(LocalMessages provides show) {
         Box(Modifier.fillMaxSize()) {
-            AnimatedContent(
-                targetState = stack,
-                contentKey = { it.last() },
-                transitionSpec = {
-                    val forward = targetState.size >= initialState.size
-                    val spec = tween<IntOffset>(350, easing = androidx.compose.animation.core.FastOutSlowInEasing)
-                    if (forward) (slideInHorizontally(spec) { it / 5 } + fadeIn(tween(250))) togetherWith (slideOutHorizontally(spec) { -it / 10 } + fadeOut(tween(150)))
-                    else (slideInHorizontally(spec) { -it / 10 } + fadeIn(tween(250))) togetherWith (slideOutHorizontally(spec) { it / 5 } + fadeOut(tween(150)))
-                },
-                label = "pages",
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    // Predictive back: the page shrinks and follows the finger before it is popped.
-                    // Read in the draw phase only, so the gesture never recomposes the page.
-                    val p = backProgress
-                    scaleX = 1f - .08f * p; scaleY = 1f - .08f * p
-                    translationX = 24.dp.toPx() * p
-                    shape = RoundedCornerShape(32.dp * p)
-                    clip = p > 0f
-                },
-            ) { pages ->
-                when (Page.valueOf(pages.last())) {
+            PageStack(stack, onPop = ::back) { page ->
+                when (Page.valueOf(page)) {
                     Page.HOME -> HushScreen(
                         device.status, device.nc, device.pending, device.ncConfirmed, device.error, device.battery, granted, saved != null,
                         onMode = ::requestMode, onSettings = { open(Page.EARBUDS) },
