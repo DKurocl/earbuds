@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget spacing; WidgetLayout mirrors these numbers when choosing a variant. -->
+    <dimen name="w_pad">8dp</dimen>
+    <dimen name="w_gap">4dp</dimen>
+</resources>

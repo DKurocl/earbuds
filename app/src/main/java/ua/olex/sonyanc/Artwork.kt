@@ -13,7 +13,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 
 /** Official Material icons; the release shrinker retains only referenced vectors. */
-enum class Glyph { QUIET, AMBIENT, OFF, TUNE, BACK, REFRESH, CHECK, BLUETOOTH, WIDGET, COPY, EARBUDS, PALETTE, HAPTICS, INFO, EQ, SETTINGS, CLOSE, EDIT, BUG, CLEAR, ADD }
+enum class Glyph { QUIET, AMBIENT, OFF, TUNE, BACK, REFRESH, CHECK, BLUETOOTH, WIDGET, COPY, EARBUDS, PALETTE, HAPTICS, INFO, EQ, SETTINGS, CLOSE, EDIT, BUG, CLEAR, ADD, FIND, BATTERY, LINK }
 
 @Composable
 fun HushIcon(glyph: Glyph, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
@@ -39,6 +39,9 @@ fun HushIcon(glyph: Glyph, modifier: Modifier = Modifier, color: Color = Materia
         Glyph.BUG -> Icons.Rounded.BugReport
         Glyph.CLEAR -> Icons.Rounded.DeleteSweep
         Glyph.ADD -> Icons.Rounded.Add
+        Glyph.FIND -> Icons.Rounded.LocationOn
+        Glyph.BATTERY -> Icons.Rounded.BatteryFull
+        Glyph.LINK -> Icons.Rounded.BluetoothConnected
     }
     Icon(vector,contentDescription=null,modifier=modifier.size(24.dp),tint=color)
 }

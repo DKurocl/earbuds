@@ -15,12 +15,12 @@ class NavigationUiTest {
         compose.onNodeWithText("DSEE").assertIsDisplayed()
         compose.onNodeWithText("Device controls").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithText("Earbuds").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }    @Test fun leavingTheAppStopsConnectionOwnership() {
         compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         assertTrue("Connection or polling still owned after onStop",Headphones.idle)
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        compose.onNodeWithText("Earbuds").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }
 
 }

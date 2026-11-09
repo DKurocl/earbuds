@@ -223,6 +223,8 @@ object Headphones {
         }
         if (!usage.active) { conn.close(); return false }
         _state.update { it.copy(status = Status.CONNECTED, error = null) }
+        // A working control link proves Android's Bluetooth link is up.
+        if (Prefs.linked(app) != true) { Prefs.setLinked(app, true); Widgets.refreshAll(app) }
         startInfoLoop()
         return true
     }
@@ -256,6 +258,39 @@ object Headphones {
         if (_state.value.pending == null && !conn.send(SonyProtocol.NC_GET)) return@withLock false
         startInfoLoop()
         conn.connected
+    }
+
+    /**
+     * One-shot sync when Android reports the earbuds connected. Holds a background lease only:
+     * no polling starts, and the control socket closes on return unless a screen is open.
+     * Applies [apply] if given, then reads the battery so widgets and the cache are current.
+     */
+    suspend fun syncOnConnect(apply: SonyProtocol.Mode?): Boolean {
+        hold(foreground = false)
+        try {
+            var ok = false
+            for (attempt in 0..1) {
+                // The earbuds can refuse RFCOMM while A2DP/HFP are still being set up.
+                if (attempt > 0) delay(1500)
+                ok = connectAndSync()
+                if (ok || usage.foreground) break
+            }
+            if (!ok) {
+                // A background attempt must not leave an error banner for the next launch.
+                if (!usage.foreground) _state.update {
+                    it.copy(error = null, status = if (it.status == Status.FAILED) Status.DISCONNECTED else it.status)
+                }
+                return false
+            }
+            if (apply != null) {
+                val base = _state.value.shownNc ?: SonyProtocol.NcState(apply)
+                withTimeoutOrNull(4000) { request(base.copy(mode = apply)).await() }
+            }
+            withTimeoutOrNull(3000) { queryBattery() }
+            return true
+        } finally {
+            release(foreground = false)
+        }
     }
 
     /** Reads codec and battery now, connecting first if needed. */
@@ -526,7 +561,7 @@ object Headphones {
                     val merged = SonyProtocol.parseBattery(p, it.battery ?: SonyProtocol.Battery()) ?: it.battery
                     it.copy(battery = merged, batterySeenAt = now, liveBatteryParts = it.liveBatteryParts + live)
                 }
-                updated.battery?.let { Prefs.saveBattery(app, it, now) }
+                updated.battery?.let { Prefs.saveBattery(app, it, now); Widgets.refreshAll(app) }
             }
         }
     }

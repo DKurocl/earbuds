@@ -22,6 +22,7 @@ fun DeviceInfoContent(
     deviceName: String, status: Headphones.Status, codec: CodecProtocol.State?, firmware: String?,
     refreshing: Boolean, onBack: () -> Unit = {}, onRefresh: () -> Unit = {}, onBluetooth: () -> Unit = {},
     onDiagnostics: () -> Unit = {}, onTurnOff: () -> Unit = {}, ldacBlocked: Boolean = false, onPreferQuality: () -> Unit = {},
+    onFind: () -> Unit = {},
 ) {
     var confirmOff by remember { mutableStateOf(false) }
     val connected = status == Headphones.Status.CONNECTED
@@ -52,7 +53,8 @@ fun DeviceInfoContent(
             }
         }
         ListGroup {
-            item { NavRow(it, Glyph.BLUETOOTH, "Android Bluetooth settings", "Pairing, multipoint, spatial audio, LE Audio", onClick = onBluetooth) }
+            item { NavRow(it, Glyph.FIND, "Find earbuds", "Location and ring, in Find Hub", onClick = onFind) }
+            item { NavRow(it, Glyph.BLUETOOTH, "Android Bluetooth settings", "Pairing and spatial audio", onClick = onBluetooth) }
             item { NavRow(it, Glyph.BUG, "Diagnostics", "Connection log for troubleshooting", onClick = onDiagnostics) }
         }
         if (connected) ListGroup {
@@ -75,10 +77,11 @@ data class PairedDevice(val address: String, val name: String)
 @Composable
 fun AppSettingsContent(
     devices: List<PairedDevice>, selected: String?, displayName: String, dynamicColor: Boolean, haptics: Boolean,
-    canAddTile: Boolean, canPinWidget: Boolean, version: String,
+    canAddTile: Boolean, canPinWidget: Boolean, version: String, onConnect: OnConnect = OnConnect.KEEP,
     onBack: () -> Unit = {}, onSelect: (PairedDevice) -> Unit = {}, onRename: () -> Unit = {},
     onDynamicColor: (Boolean) -> Unit = {}, onHaptics: (Boolean) -> Unit = {},
     onAddTile: () -> Unit = {}, onPinWidget: () -> Unit = {}, onBluetooth: () -> Unit = {}, onDiagnostics: () -> Unit = {},
+    onPinBatteryWidget: () -> Unit = {}, onOnConnect: (OnConnect) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
@@ -91,14 +94,20 @@ fun AppSettingsContent(
             }
             if (devices.isEmpty()) item { NavRow(it, Glyph.BLUETOOTH, "Pair your WF-1000XM5", "Open Android Bluetooth settings", onClick = onBluetooth) }
             item { NavRow(it, Glyph.EDIT, "Name", displayName, onClick = onRename) }
+            item {
+                ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
+                    onOnConnect(OnConnect.entries[i])
+                }
+            }
         }
         ListGroup("Appearance") {
             item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Match the colors of your wallpaper", dynamicColor, onChange = onDynamicColor) }
-            item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "Vibrate lightly when you change modes", haptics, onChange = onHaptics) }
+            item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "A tap when you choose, a pulse when the earbuds confirm", haptics, onChange = onHaptics) }
         }
         if (canAddTile || canPinWidget) ListGroup("Shortcuts") {
             if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Cycle noise control from the notification shade", onClick = onAddTile) }
-            if (canPinWidget) item { NavRow(it, Glyph.WIDGET, "Add home screen widget", "Noise control on your home screen", onClick = onPinWidget) }
+            if (canPinWidget) item { NavRow(it, Glyph.WIDGET, "Add noise control widget", "ANC, Ambient and Off on your home screen", onClick = onPinWidget) }
+            if (canPinWidget) item { NavRow(it, Glyph.BATTERY, "Add battery widget", "Left, case and right at a glance", onClick = onPinBatteryWidget) }
         }
         ListGroup("About") {
             item { NavRow(it, Glyph.BUG, "Diagnostics", "Connection log for troubleshooting", onClick = onDiagnostics) }
@@ -117,7 +126,7 @@ fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () ->
         IconButton(onClick = onClear, enabled = log.isNotEmpty(), modifier = Modifier.semantics { contentDescription = "Clear log" }) { HushIcon(Glyph.CLEAR) }
     }) {
         Text(
-            "Commands sent to the earbuds (→) and their replies (←). Close Sony Sound Connect if it holds the control connection.",
+            "Commands sent to the earbuds (→) and their replies (←).",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),
         )
         Surface(shape = RoundedCornerShape(24.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
