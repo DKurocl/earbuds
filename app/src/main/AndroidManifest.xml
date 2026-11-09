@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Only for the opt-in case battery reminder; requested when it is turned on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- "Ambient for a moment" returns on time: one exact alarm, only while that timer runs.
+         Sideloaded personal app, so the install-time permission is fine. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- "Find" opens Google Find Hub, where the earbuds are registered. -->
     <queries>
@@ -44,6 +47,7 @@
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
         </service>
+        <receiver android:name=".AmbientTimerReceiver" android:exported="false" />
         <!-- ACL broadcasts for the saved earbuds; exempt from implicit-broadcast limits. -->
         <receiver android:name=".ConnectionReceiver" android:exported="true">
             <intent-filter>

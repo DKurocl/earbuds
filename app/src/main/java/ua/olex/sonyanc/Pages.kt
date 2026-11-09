@@ -83,6 +83,7 @@ fun AppSettingsContent(
     onPinBatteryWidget: () -> Unit = {}, onOnConnect: (OnConnect) -> Unit = {},
     caseReminder: Boolean = false, onCaseReminder: (Boolean) -> Unit = {},
     tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
+    ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
@@ -99,6 +100,11 @@ fun AppSettingsContent(
             item {
                 ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
                     onOnConnect(OnConnect.entries[i])
+                }
+            }
+            item {
+                ChoiceRow(it, Glyph.TIMER, "Ambient for a moment", AmbientTimer.CHOICES.map { m -> m to "$m minutes, then back" }, ambientMinutes) { m ->
+                    onAmbientMinutes(m)
                 }
             }
             item {

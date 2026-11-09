@@ -67,6 +67,15 @@ object Prefs {
     fun tileTwoWay(ctx: Context) = p(ctx).getBoolean("tile_two_way", false)
     fun setTileTwoWay(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("tile_two_way", value).apply()
 
+    // ---- "Ambient for a moment" ----
+    fun ambientMinutes(ctx: Context) = p(ctx).getInt("ambient_minutes", 5)
+    fun setAmbientMinutes(ctx: Context, value: Int) = p(ctx).edit().putInt("ambient_minutes", value).apply()
+    fun timerUntil(ctx: Context) = p(ctx).getLong("timer_until", 0L)
+    fun timerReturn(ctx: Context) = p(ctx).getString("timer_return", null)?.let { runCatching { SonyProtocol.Mode.valueOf(it) }.getOrNull() }
+    fun setTimer(ctx: Context, until: Long, back: SonyProtocol.Mode) =
+        p(ctx).edit().putLong("timer_until", until).putString("timer_return", back.name).apply()
+    fun clearTimer(ctx: Context) = p(ctx).edit().remove("timer_until").remove("timer_return").apply()
+
     /** Version for which the widget picker previews were last generated. */
     fun previewVersion(ctx: Context): Long = p(ctx).getLong("preview_version", 0L)
     fun setPreviewVersion(ctx: Context, value: Long) = p(ctx).edit().putLong("preview_version", value).apply()

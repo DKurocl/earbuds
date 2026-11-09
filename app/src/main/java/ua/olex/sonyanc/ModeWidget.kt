@@ -38,6 +38,7 @@ class ModeWidget : AppWidgetProvider() {
         if(intent.action!=ACTION_SET) return
         val mode=intent.getStringExtra(EXTRA_MODE)?.let {runCatching{SonyProtocol.Mode.valueOf(it)}.getOrNull()} ?: return
         Headphones.init(ctx)
+        AmbientTimer.cancel(ctx) // a manual choice wins over "Ambient for a moment"
         val pending=goAsync()
         val generation=latestTap.incrementAndGet()
         CoroutineScope(Dispatchers.IO).launch {
@@ -187,7 +188,9 @@ class ModeWidget : AppWidgetProvider() {
             val b=last?.first
             v.setTextViewText(R.id.w_title,Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5")
             // One centered line: "WF-1000XM5 · Updated 14:32".
-            v.setTextViewText(R.id.w_status,BatteryWidget.status(ctx,b,last?.second ?: 0L,linked,Prefs.lastSeen(ctx)).takeIf{it.isNotEmpty()}?.let{"·  $it"} ?: "")
+            val status=AmbientTimer.until(ctx)?.let{"Back to ${AmbientTimer.returnMode(ctx).short} at "+android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(it))}
+                ?: BatteryWidget.status(ctx,b,last?.second ?: 0L,linked,Prefs.lastSeen(ctx))
+            v.setTextViewText(R.id.w_status,status.takeIf{it.isNotEmpty()}?.let{"·  $it"} ?: "")
             val bb=b ?: SonyProtocol.Battery()
             val spoken=listOf(
                 BatteryWidget.bindRing(ctx,v,R.id.w_left_box,R.id.w_left_ring,R.id.w_left_art,R.id.w_left_value,R.id.w_left_label,R.id.w_left_charge,"Left",bb.left,bb.leftCharging,null,away,true),

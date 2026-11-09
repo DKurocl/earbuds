@@ -374,6 +374,7 @@ object Headphones {
             var batteryDue = 0L
             var batteryRetry = 8_000L
             var equalizerAsked = false
+            var chatAsked = false
             while (usage.foreground && conn.connected) {
                 _state.first { it.pending == null || !it.connected }
                 if (!usage.foreground || !conn.connected) break
@@ -384,6 +385,8 @@ object Headphones {
                 if (!usage.foreground || !conn.connected) break
                 // One equalizer read per connection, so Home can name the current preset.
                 if (_equalizer.value == null && !equalizerAsked) { equalizerAsked = true; readEqualizer() }
+                // Speak-to-Chat once per connection, for its toggle in the dock.
+                if (AdvancedSettings.Key.CHAT !in _advanced.value && !chatAsked) { chatAsked = true; readAdvanced(AdvancedSettings.Key.CHAT) }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= batteryDue) {
                     queryBattery()
