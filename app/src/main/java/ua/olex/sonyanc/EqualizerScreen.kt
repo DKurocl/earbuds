@@ -46,8 +46,12 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
             finally { busy = false }
         }
     }
+    // The last known sound shows at once while the earbuds are asked again; controls stay
+    // disabled until the live answer arrives (busy), so nothing is ever written from the cache.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val cached = remember { Prefs.cachedEqualizer(ctx) }
     EqualizerContent(
-        eq, busy, failed && eq == null, onBack,
+        eq ?: cached.takeIf { busy }, busy, failed && eq == null, onBack,
         onRetry = { scope.launch { load() } },
         onPreset = { write(preset = it) },
         onBands = { write(bands = it) },

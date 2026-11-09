@@ -67,6 +67,44 @@ object Prefs {
     fun tileTwoWay(ctx: Context) = p(ctx).getBoolean("tile_two_way", false)
     fun setTileTwoWay(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("tile_two_way", value).apply()
 
+    // ---- last values read from the earbuds, shown (read-only) while a page reads them again ----
+    fun cachedAdvanced(ctx: Context): Map<AdvancedSettings.Key, List<Int>> =
+        p(ctx).getString("cache_advanced", null).orEmpty().split(';').mapNotNull { row ->
+            val (k, v) = row.split(':').takeIf { it.size == 2 } ?: return@mapNotNull null
+            val key = AdvancedSettings.Key.entries.firstOrNull { it.name == k } ?: return@mapNotNull null
+            val values = v.split(',').map { it.toIntOrNull() ?: return@mapNotNull null }
+            if (key.valid(values)) key to values else null
+        }.toMap()
+    fun cacheAdvanced(ctx: Context, all: Map<AdvancedSettings.Key, List<Int>>) = p(ctx).edit()
+        .putString("cache_advanced", all.entries.joinToString(";") { (k, v) -> "${k.name}:${v.joinToString(",")}" }).apply()
+    fun cachedFeatures(ctx: Context): Map<DeviceSettingsProtocol.Feature, Boolean> =
+        p(ctx).getString("cache_features", null).orEmpty().split(';').mapNotNull { row ->
+            val (k, v) = row.split(':').takeIf { it.size == 2 } ?: return@mapNotNull null
+            DeviceSettingsProtocol.Feature.entries.firstOrNull { it.name == k }?.let { it to (v == "1") }
+        }.toMap()
+    fun cacheFeatures(ctx: Context, all: Map<DeviceSettingsProtocol.Feature, Boolean>) = p(ctx).edit()
+        .putString("cache_features", all.entries.joinToString(";") { (k, v) -> "${k.name}:${if (v) 1 else 0}" }).apply()
+    fun cachedEqualizer(ctx: Context): EqualizerProtocol.State? = p(ctx).getString("cache_eq", null)?.let { raw ->
+        val parts = raw.split('|')
+        val preset = parts.getOrNull(0)?.toIntOrNull()?.takeIf { it in EqualizerProtocol.presets } ?: return null
+        val bands = parts.getOrNull(1).orEmpty().split(',').filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: return null }
+        if (bands.size !in listOf(0, 6) || bands.any { it !in -10..10 }) null else EqualizerProtocol.State(preset, bands)
+    }
+    fun cacheEqualizer(ctx: Context, eq: EqualizerProtocol.State) =
+        p(ctx).edit().putString("cache_eq", "${eq.preset}|${eq.bands.joinToString(",")}").apply()
+
+    // ---- real battery use (BatteryLog) ----
+    fun batteryLog(ctx: Context) = BatteryLog.decode(p(ctx).getString("battery_log", null))
+    fun addBatterySample(ctx: Context, s: BatterySample) {
+        val log = batteryLog(ctx)
+        val next = BatteryLog.add(log, s)
+        if (next !== log) p(ctx).edit().putString("battery_log", BatteryLog.encode(next)).apply()
+    }
+    /** Measured percent per minute for [mode], or null while there is too little real use. */
+    fun drainRate(ctx: Context, mode: SonyProtocol.Mode?) = BatteryLog.rate(batteryLog(ctx), mode)
+    fun session(ctx: Context) = p(ctx).getInt("session", 0)
+    fun nextSession(ctx: Context) = p(ctx).edit().putInt("session", session(ctx) + 1).apply()
+
     // ---- "Ambient for a moment" ----
     fun ambientMinutes(ctx: Context) = p(ctx).getInt("ambient_minutes", 5)
     fun setAmbientMinutes(ctx: Context, value: Int) = p(ctx).edit().putInt("ambient_minutes", value).apply()

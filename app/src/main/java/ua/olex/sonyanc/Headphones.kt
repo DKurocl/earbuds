@@ -533,7 +533,7 @@ object Headphones {
         if (type == CMD) AdvancedSettings.firmware(p)?.let { fw -> _state.update { it.copy(firmware = fw) }; return }
         AdvancedSettings.parse(type, p)?.let { (key, value) ->
             advancedInquiries[key] = p[1].toInt() and 255
-            _advanced.update { it + (key to value) }
+            Prefs.cacheAdvanced(app, _advanced.updateAndGet { it + (key to value) })
             return
         }
         if (type != CMD) return
@@ -542,8 +542,8 @@ object Headphones {
             _state.update { it.copy(codec = codec) }
             return
         }
-        DeviceSettingsProtocol.parse(p)?.let { (feature, value) -> _features.update { it + (feature to value) }; return }
-        EqualizerProtocol.parse(p)?.let { _equalizer.value = it; return }
+        DeviceSettingsProtocol.parse(p)?.let { (feature, value) -> Prefs.cacheFeatures(app, _features.updateAndGet { it + (feature to value) }); return }
+        EqualizerProtocol.parse(p)?.let { _equalizer.value = it; Prefs.cacheEqualizer(app, it); return }
         SonyProtocol.parseNc(p)?.let { setNc(it, confirmed = true); return }
         val live = SonyProtocol.liveBatteryParts(p)
         if (batteryFamily(p) != null) {
@@ -554,7 +554,14 @@ object Headphones {
                     val merged = SonyProtocol.parseBattery(p, it.battery ?: SonyProtocol.Battery()) ?: it.battery
                     it.copy(battery = merged, batterySeenAt = now, liveBatteryParts = it.liveBatteryParts + live)
                 }
-                updated.battery?.let { Prefs.saveBattery(app, it, now); Widgets.refreshAll(app) }
+                updated.battery?.let { b ->
+                    Prefs.saveBattery(app, b, now)
+                    // Feed the owner's real drain model with the emptier earbud.
+                    listOfNotNull(b.left, b.right).minOrNull()?.let { level ->
+                        Prefs.addBatterySample(app, BatterySample(now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app)))
+                    }
+                    Widgets.refreshAll(app)
+                }
             }
         }
     }
