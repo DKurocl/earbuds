@@ -30,7 +30,7 @@ predictive back.
 
 | Page | Content |
 |---|---|
-| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles. Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off (soft connected group, 56 dp); in ANC Speak-to-Chat and "Ambient · N min"; in Ambient the timer countdown, level slider, Low / Medium / High / Voice pills. |
+| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → Battery page; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off (soft connected group, 56 dp); in ANC Speak-to-Chat and "Ambient · N min"; in Ambient the timer countdown, level slider, Low / Medium / High / Voice pills. |
 | Equalizer | Centered soft preset pills (Off, Custom first; Saved 1/2 are the earbuds' slots). Custom: five vertical bands with a fixed pill thumb, thin fill from 0 dB, haptic tick per dB; Clear Bass slider; Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |

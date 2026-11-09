@@ -129,7 +129,7 @@ fun HushScreen(
                     }
 
                     ListGroup("More controls") {
-                        item { NavRow(it, Glyph.BATTERY, "Battery", "Last 7 days and how long a charge really lasts", onClick = onBatteryDetails) }
+                        // Battery opens from the listening-time tiles above; no second entry here.
                         item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
                         item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls, Speak-to-Chat, voice prompts", onClick = onEarbuds) }
                         item {
