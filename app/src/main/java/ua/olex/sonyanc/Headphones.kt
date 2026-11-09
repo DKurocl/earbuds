@@ -6,7 +6,6 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.SystemClock
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -166,7 +165,7 @@ object Headphones {
     fun clearError() = _state.update { it.copy(error = null) }
 
     fun hasPermission(ctx: Context): Boolean = ctx.checkSelfPermission(
-        if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_CONNECT else Manifest.permission.BLUETOOTH
+        Manifest.permission.BLUETOOTH_CONNECT
     ) == PackageManager.PERMISSION_GRANTED
 
     fun bondedDevices(ctx: Context): List<BluetoothDevice> {
@@ -203,6 +202,9 @@ object Headphones {
         val adapter = app.getSystemService(BluetoothManager::class.java)?.adapter
         if (adapter?.isEnabled != true) return fail("Turn on Bluetooth")
         val dev = savedDevice() ?: return fail("Select your WF-1000XM5")
+        // Earbuds in the case: say so at once instead of waiting seconds for RFCOMM to time out.
+        // Only when Android reports no audio link and no connect broadcast says otherwise.
+        if (Prefs.linked(app) != true && !audioLinked(adapter)) return fail("Earbuds aren't connected. Take them out of the case.")
         _state.update {
             it.copy(status = Status.CONNECTING, ncConfirmed = false, liveBatteryParts = emptySet(), codec = null, firmware = null)
         }
@@ -228,6 +230,11 @@ object Headphones {
         startInfoLoop()
         return true
     }
+
+    private fun audioLinked(adapter: android.bluetooth.BluetoothAdapter): Boolean = runCatching {
+        adapter.getProfileConnectionState(android.bluetooth.BluetoothProfile.A2DP) == android.bluetooth.BluetoothAdapter.STATE_CONNECTED ||
+            adapter.getProfileConnectionState(android.bluetooth.BluetoothProfile.HEADSET) == android.bluetooth.BluetoothAdapter.STATE_CONNECTED
+    }.getOrDefault(true)
 
     private fun fail(message: String): Boolean {
         _state.update { it.copy(status = Status.FAILED, error = message) }
@@ -265,7 +272,7 @@ object Headphones {
      * no polling starts, and the control socket closes on return unless a screen is open.
      * Applies [apply] if given, then reads the battery so widgets and the cache are current.
      */
-    suspend fun syncOnConnect(apply: SonyProtocol.Mode?): Boolean {
+    suspend fun syncOnConnect(apply: SonyProtocol.Mode?, scene: Scene? = null): Boolean {
         hold(foreground = false)
         try {
             var ok = false
@@ -282,7 +289,8 @@ object Headphones {
                 }
                 return false
             }
-            if (apply != null) {
+            if (scene != null) withTimeoutOrNull(5000) { applyScene(scene) }
+            else if (apply != null) {
                 val base = _state.value.shownNc ?: SonyProtocol.NcState(apply)
                 withTimeoutOrNull(4000) { request(base.copy(mode = apply)).await() }
             }

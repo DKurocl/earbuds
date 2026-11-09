@@ -80,6 +80,9 @@ fun HushScreen(
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
         }
+    }, bottomBar = {
+        // Noise control lives in a dock at the bottom: on a 6.8" phone that is where the thumb is.
+        if (granted && hasDevice) ModeDock(state, pending, ::choose)
     }) { insets ->
         Column(
             Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
@@ -108,24 +111,6 @@ fun HushScreen(
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
                         if (!ready) BigAction(Glyph.REFRESH, if (status == Headphones.Status.CONNECTING) "Connecting…" else "Connect",
                             enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SectionTitle("Noise control")
-                        Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Mode.entries.forEachIndexed { index, mode ->
-                                ModeSegment(mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, Modifier.weight(1f)) {
-                                    choose((state ?: NcState(mode)).copy(mode = mode))
-                                }
-                            }
-                        }
-                        AnimatedVisibility(
-                            state?.mode == Mode.AMBIENT,
-                            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Top) + fadeIn(),
-                            exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.Top) + fadeOut(),
-                        ) {
-                            AmbientPanel((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), ::choose)
-                        }
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -314,73 +299,118 @@ private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onCl
     }
 }
 
-/** Connected button group segment: outer corners round, inner tight; the selected one morphs to a pill. */
+/**
+ * The noise-control dock: a floating card above the navigation bar. Ambient options open
+ * above the three modes, so the mode buttons never move under the thumb.
+ */
+@Composable
+private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(32.dp), color = Surfaces.card, shadowElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+    ) {
+        Column(Modifier.padding(8.dp)) {
+            AnimatedVisibility(
+                state?.mode == Mode.AMBIENT,
+                enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Bottom) + fadeIn(),
+                exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.Bottom) + fadeOut(),
+            ) {
+                AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose)
+            }
+            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Mode.entries.forEachIndexed { index, mode ->
+                    ModeSegment(mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, Modifier.weight(1f)) {
+                        onChoose((state ?: NcState(mode)).copy(mode = mode))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Connected button group segment, M3 Expressive: soft corners everywhere (outer full,
+ * inner 16 dp), the selected one morphs to a full pill, a press squeezes to 18 dp.
+ */
 @Composable
 private fun ModeSegment(mode: Mode, index: Int, count: Int, selected: Boolean, applying: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val spec = spring<androidx.compose.ui.unit.Dp>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
-    val outer = 32.dp
-    val inner = 10.dp
-    fun target(isOuter: Boolean) = when { pressed -> 14.dp; selected -> outer; isOuter -> outer; else -> inner }
+    val spec = MaterialTheme.motionScheme.fastSpatialSpec<androidx.compose.ui.unit.Dp>()
+    val full = 28.dp
+    val inner = 16.dp
+    fun target(isOuter: Boolean) = when { pressed -> 18.dp; selected || isOuter -> full; else -> inner }
     val start by animateDpAsState(target(index == 0), spec, label = "start")
     val end by animateDpAsState(target(index == count - 1), spec, label = "end")
-    val bg by animateColorAsState(if (selected) cs.primary else cs.surfaceContainerHighest, tween(200), label = "bg")
-    val fg by animateColorAsState(if (selected) cs.onPrimary else cs.onSurfaceVariant, tween(200), label = "fg")
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(
-            Modifier.fillMaxWidth().height(64.dp)
-                .clip(RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end))
-                .background(bg)
-                .selectable(selected = selected, interactionSource = interaction, indication = ripple(), role = Role.RadioButton, onClick = onClick)
-                .semantics { contentDescription = mode.label },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (applying) LoadingIndicator(Modifier.size(28.dp), color = fg)
-            else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(26.dp), fg)
-        }
-        Text(mode.short, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 2,
-            color = if (selected) cs.onSurface else cs.onSurfaceVariant)
+    val bg by animateColorAsState(if (selected) cs.primary else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = "bg")
+    val fg by animateColorAsState(if (selected) cs.onPrimary else cs.onSurface, MaterialTheme.motionScheme.fastEffectsSpec(), label = "fg")
+    Row(
+        modifier.height(56.dp)
+            .clip(RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end))
+            .background(bg)
+            .selectable(selected = selected, interactionSource = interaction, indication = ripple(), role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = mode.label }
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (applying) LoadingIndicator(Modifier.size(24.dp), color = fg)
+        else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(22.dp), fg)
+        Spacer(Modifier.width(8.dp))
+        Text(mode.short, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Clip)
     }
 }
 
+/** Level (with a haptic tick per step), soft preset pills and voice focus, compact for the dock. */
 @Composable
-private fun AmbientPanel(state: NcState, onChange: (NcState) -> Unit) {
+private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val feedback = LocalHapticFeedback.current
     var level by remember { mutableFloatStateOf(state.level.toFloat()) }
     var dragging by remember { mutableStateOf(false) }
     LaunchedEffect(state.level, dragging) { if (!dragging) level = state.level.toFloat() }
-    Surface(shape = RoundedCornerShape(24.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Ambient level", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text("${level.roundToInt()}", style = MaterialTheme.typography.titleMedium, color = cs.primary)
-            }
-            Slider(
-                value = level, valueRange = 0f..20f,
-                onValueChange = { dragging = true; level = it.roundToInt().toFloat() },
-                onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
-            )
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf("Low" to 5, "Medium" to 12, "High" to 20).forEachIndexed { index, (label, value) ->
-                    SegmentedButton(selected = state.level == value, onClick = { onChange(state.copy(level = value)) },
-                        shape = SegmentedButtonDefaults.itemShape(index, 3), icon = {}) { Text(label) }
-                }
-            }
-            HorizontalDivider(color = cs.outlineVariant.copy(alpha = .5f), modifier = Modifier.padding(vertical = 4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("Voice focus", style = MaterialTheme.typography.titleMedium)
-                    Text("Lets voices through, lowers other sounds", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                }
-                Switch(
-                    checked = state.voice, onCheckedChange = { onChange(state.copy(voice = it)) },
-                    thumbContent = if (state.voice) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                    modifier = Modifier.semantics { contentDescription = "Voice focus" },
+    val presets = listOf("Low" to 5, "Medium" to 12, "High" to 20)
+    Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Ambient level", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text("${level.roundToInt()}", style = MaterialTheme.typography.titleMedium, color = cs.primary)
+        }
+        Slider(
+            value = level, valueRange = 0f..20f,
+            onValueChange = {
+                dragging = true
+                val step = it.roundToInt()
+                if (step != level.roundToInt()) feedback.performHapticFeedback(
+                    if (presets.any { p -> p.second == step }) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick,
                 )
+                level = step.toFloat()
+            },
+            onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            presets.forEach { (label, value) ->
+                SoftChip(label, selected = state.level == value, modifier = Modifier.weight(1f)) { onChange(state.copy(level = value)) }
             }
+            SoftChip("Voice", selected = state.voice, glyph = if (state.voice) Glyph.CHECK else null, modifier = Modifier.weight(1.15f),
+                description = "Voice focus") { onChange(state.copy(voice = !state.voice)) }
+        }
+    }
+}
+
+/** A fully rounded toggle pill; selected fills with the secondary container. */
+@Composable
+private fun SoftChip(label: String, selected: Boolean, modifier: Modifier = Modifier, glyph: Glyph? = null, description: String = label, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val bg by animateColorAsState(if (selected) cs.secondaryContainer else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = "chip")
+    Surface(
+        onClick = onClick, shape = CircleShape, color = bg,
+        contentColor = if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant,
+        modifier = modifier.height(40.dp).semantics { contentDescription = description; stateDescription = if (selected) "On" else "Off" },
+    ) {
+        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 6.dp)) {
+            if (glyph != null) { HushIcon(glyph, Modifier.size(16.dp), LocalContentColor.current); Spacer(Modifier.width(4.dp)) }
+            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
 }
