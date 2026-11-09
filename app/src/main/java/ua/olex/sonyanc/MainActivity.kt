@@ -83,6 +83,7 @@ fun App(
     val scope = rememberCoroutineScope()
     val device by Headphones.state.collectAsStateWithLifecycle()
     val equalizer by Headphones.equalizer.collectAsStateWithLifecycle()
+    val advancedHome by Headphones.advanced.collectAsStateWithLifecycle()
     var granted by remember { mutableStateOf(Headphones.hasPermission(ctx)) }
     var saved by remember { mutableStateOf(Prefs.deviceAddress(ctx)) }
     var devices by remember { mutableStateOf(emptyList<PairedDevice>()) }
@@ -129,7 +130,17 @@ fun App(
     // Two-stage haptics: the tap ticks at once (HushScreen); the earbuds' acknowledgement
     // plays the mode's own pulse. Only the newest tap may report, so bursts stay quiet.
     var tapGeneration by remember { mutableIntStateOf(0) }
+    // "Ambient for a moment": the end time drives the dock's countdown.
+    var ambientUntil by remember { mutableStateOf(AmbientTimer.until(ctx)) }
+    var ambientMinutes by remember { mutableIntStateOf(Prefs.ambientMinutes(ctx)) }
+    LaunchedEffect(startTick, ambientUntil) {
+        // Picks up a timer that ended (or was cancelled from the widget) while away.
+        ambientUntil = AmbientTimer.until(ctx)
+        ambientUntil?.let { kotlinx.coroutines.delay(it - System.currentTimeMillis() + 300); ambientUntil = AmbientTimer.until(ctx) }
+    }
     fun requestMode(state: NcState) {
+        // Choosing a mode yourself always wins over a running timer.
+        if (ambientUntil != null) { AmbientTimer.cancel(ctx); ambientUntil = null }
         val before = Headphones.state.value.shownNc?.mode
         val receipt = Headphones.request(state)
         val mine = ++tapGeneration
@@ -197,6 +208,21 @@ fun App(
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
                         batterySeenAt = device.batterySeenAt,
                         onFind = ::findHub,
+                        speakToChat = advancedHome[AdvancedSettings.Key.CHAT]?.firstOrNull()?.let { it == 0 }?.takeIf { device.connected },
+                        onSpeakToChat = { on ->
+                            scope.launch {
+                                val ok = Headphones.writeAdvancedField(AdvancedSettings.Key.CHAT, 0, if (on) 0 else 1)
+                                if (haptics) if (ok) Haptics.confirm(ctx, null) else Haptics.reject(ctx)
+                                if (!ok) show("Speak-to-Chat change not confirmed. Try again.")
+                            }
+                        },
+                        ambientMinutes = ambientMinutes, ambientUntil = ambientUntil,
+                        onAmbientFor = {
+                            val from = Headphones.state.value.shownNc ?: NcState(Mode.ANC)
+                            AmbientTimer.start(ctx, ambientMinutes, from)
+                            ambientUntil = AmbientTimer.until(ctx)
+                        },
+                        onStayInAmbient = { AmbientTimer.cancel(ctx); ambientUntil = null },
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && !device.connected && Prefs.linked(ctx) == false },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
@@ -262,6 +288,7 @@ fun App(
                             } else notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         },
                         tileTwoWay = tileTwoWay, onTileTwoWay = { tileTwoWay = it; Prefs.setTileTwoWay(ctx, it) },
+                        ambientMinutes = ambientMinutes, onAmbientMinutes = { ambientMinutes = it; Prefs.setAmbientMinutes(ctx, it) },
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                     )
                     Page.DIAGNOSTICS -> {

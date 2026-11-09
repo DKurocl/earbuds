@@ -30,6 +30,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -60,6 +62,8 @@ fun HushScreen(
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
     batterySeenAt: Long? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null,
+    speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
+    ambientMinutes: Int = 5, ambientUntil: Long? = null, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val state = pending ?: nc
@@ -81,7 +85,7 @@ fun HushScreen(
         }
     }, bottomBar = {
         // Noise control lives in a dock at the bottom: on a 6.8" phone that is where the thumb is.
-        if (granted && hasDevice) ModeDock(state, pending, ::choose)
+        if (granted && hasDevice) ModeDock(state, pending, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
     }) { insets ->
         Column(
             Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
@@ -186,6 +190,11 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
     val disc = cs.surfaceContainerHigh
     val page = Surfaces.page
     val progress by animateFloatAsState((value ?: 0) / 100f, MaterialTheme.motionScheme.slowEffectsSpec(), label = "battery $label")
+    // Runs only while this ring is charging; otherwise no animation frame is ever requested.
+    val phase = if (charging && value != null) {
+        val waves = rememberInfiniteTransition(label = "charging $label")
+        waves.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "phase").value
+    } else 0f
     Column(
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.semantics(mergeDescendants = true) {
@@ -210,7 +219,20 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
                 val arcTopLeft = Offset(center.x - radius, center.y - radius)
                 val arcSize = Size(radius * 2, radius * 2)
                 drawArc(track, start, sweep, false, arcTopLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                if (progress > 0f) drawArc(color, start, sweep * progress, false, arcTopLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                if (progress > 0f && charging && value != null) {
+                    // Charging: the arc breathes as a gentle wave travelling along the ring.
+                    val amp = RING_WAVE.toPx()
+                    val wave = Path()
+                    val steps = 120
+                    for (i in 0..steps) {
+                        val deg = start + sweep * progress * i / steps
+                        val rad = Math.toRadians(deg.toDouble())
+                        val r = radius + amp * kotlin.math.sin(rad * 14 + phase).toFloat()
+                        val p = Offset(center.x + r * kotlin.math.cos(rad).toFloat(), center.y + r * kotlin.math.sin(rad).toFloat())
+                        if (i == 0) wave.moveTo(p.x, p.y) else wave.lineTo(p.x, p.y)
+                    }
+                    drawPath(wave, color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                } else if (progress > 0f) drawArc(color, start, sweep * progress, false, arcTopLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 // Chip outline in page color, so it never touches the ring ends.
                 drawCircle(page, chipOuter, Offset(center.x, CHIP.toPx() / 2))
                 drawCircle(if (value == null) track else color, CHIP.toPx() / 2, Offset(center.x, CHIP.toPx() / 2))
@@ -242,6 +264,7 @@ private val CHIP_OUTLINE = 3.dp
 private val RING_RADIUS = 38.dp
 private val RING_STROKE = 5.dp
 private val RING_GAP = 3.dp
+private val RING_WAVE = 1.4.dp
 private val RING_BOX = RING_RADIUS * 2 + RING_STROKE + CHIP / 2 + 4.dp
 // A square at 1/√2 of the disc fits inside it entirely, so the product is never clipped.
 private val ART = (RING_RADIUS - RING_STROKE / 2 - RING_GAP) * 2 * 0.70f
@@ -275,8 +298,14 @@ private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onCl
  * The noise-control dock: a floating card above the navigation bar. Ambient options open
  * above the three modes, so the mode buttons never move under the thumb.
  */
+/** What the dock offers besides the modes: Speak-to-Chat and "Ambient for a moment". */
+class DockExtras(
+    val speakToChat: Boolean?, val onSpeakToChat: (Boolean) -> Unit,
+    val minutes: Int, val until: Long?, val onAmbientFor: () -> Unit, val onStay: () -> Unit,
+)
+
 @Composable
-private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit) {
+private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
     Surface(
         shape = RoundedCornerShape(32.dp), color = Surfaces.card, shadowElevation = 6.dp,
         modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
@@ -287,7 +316,23 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
                 enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Bottom) + fadeIn(),
                 exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.Bottom) + fadeOut(),
             ) {
-                AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose)
+                AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
+            }
+            // With noise cancelling on: talk without taking the earbuds out.
+            AnimatedVisibility(
+                state?.mode == Mode.ANC,
+                enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Bottom) + fadeIn(),
+                exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.Bottom) + fadeOut(),
+            ) {
+                Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    extras.speakToChat?.let { on ->
+                        SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f)) {
+                            extras.onSpeakToChat(!on)
+                        }
+                    }
+                    SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f),
+                        description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
+                }
             }
             Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Mode.entries.forEachIndexed { index, mode ->
@@ -335,7 +380,7 @@ private fun ModeSegment(mode: Mode, index: Int, count: Int, selected: Boolean, a
 
 /** Level (with a haptic tick per step), soft preset pills and voice focus, compact for the dock. */
 @Composable
-private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit) {
+private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras: DockExtras) {
     val cs = MaterialTheme.colorScheme
     val feedback = LocalHapticFeedback.current
     var level by remember { mutableFloatStateOf(state.level.toFloat()) }
@@ -343,6 +388,22 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit) {
     LaunchedEffect(state.level, dragging) { if (!dragging) level = state.level.toFloat() }
     val presets = listOf("Low" to 5, "Medium" to 12, "High" to 20)
     Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // A running "Ambient for a moment": the way back, and one tap to stay.
+        extras.until?.let { until ->
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(until) { while (now < until) { kotlinx.coroutines.delay(1000); now = System.currentTimeMillis() } }
+            Surface(
+                onClick = extras.onStay, shape = CircleShape, color = cs.tertiaryContainer, contentColor = cs.onTertiaryContainer,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).semantics { contentDescription = "Back to noise cancelling soon. Tap to stay in Ambient" },
+            ) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    HushIcon(Glyph.TIMER, Modifier.size(18.dp), cs.onTertiaryContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Back to ANC in " + AmbientTimer.countdown(until - now), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    Text("Stay", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Ambient level", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text("${level.roundToInt()}", style = MaterialTheme.typography.titleMedium, color = cs.primary)

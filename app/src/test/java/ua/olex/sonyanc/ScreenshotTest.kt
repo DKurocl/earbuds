@@ -63,6 +63,7 @@ class ScreenshotTest {
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = false), granted = true, hasDevice = true,
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            speakToChat = true,
         )
     }
 
@@ -71,6 +72,7 @@ class ScreenshotTest {
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            ambientUntil = System.currentTimeMillis() + 252_000L,
         )
     }
 
