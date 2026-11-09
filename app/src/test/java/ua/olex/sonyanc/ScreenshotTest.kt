@@ -85,6 +85,57 @@ class ScreenshotTest {
         )
     }
 
+    private val settingsFixture = mapOf(
+        AdvancedSettings.Key.CHAT to listOf(0, 1), AdvancedSettings.Key.CHAT_CONFIG to listOf(0, 1),
+        AdvancedSettings.Key.SIDETONE to listOf(0, 7, 9), AdvancedSettings.Key.TOUCH to listOf(2, 0, 32),
+        AdvancedSettings.Key.CYCLE to listOf(1, 53, 1, 0, 1), AdvancedSettings.Key.GESTURES to listOf(0),
+        AdvancedSettings.Key.POWER to listOf(16, 0), AdvancedSettings.Key.QUALITY to listOf(0),
+        AdvancedSettings.Key.GUIDANCE to listOf(0, 1), AdvancedSettings.Key.GUIDANCE_VOLUME to listOf(0),
+    )
+
+    @Config(qualifiers = "w448dp-h1500dp-night-xxhdpi")
+    @Test fun earbudSettings() = shoot("page-settings") {
+        EarbudSettingsContent(settingsFixture, DeviceSettingsProtocol.Feature.entries.associateWith { true })
+    }
+
+    @Config(qualifiers = "w448dp-h1100dp-night-xxhdpi")
+    @Test fun equalizer() = shoot("page-equalizer") {
+        EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)
+    }
+
+    @Test fun deviceInfo() = shoot("page-info") {
+        DeviceInfoContent("WF-1000XM5", Headphones.Status.CONNECTED, CodecProtocol.State(0x02), "2.0.1", refreshing = false, ldacBlocked = true)
+    }
+
+    @Config(qualifiers = "w448dp-h1200dp-night-xxhdpi")
+    @Test fun appSettings() = shoot("page-app") {
+        AppSettingsContent(
+            listOf(PairedDevice("00:11", "WF-1000XM5")), "00:11", "WF-1000XM5", dynamicColor = true, haptics = true,
+            canAddTile = true, canPinWidget = true, version = "1.2.0", scenes = Scenes.defaults,
+        )
+    }
+
+    @Test fun diagnostics() = shoot("page-diagnostics") {
+        DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"))
+    }
+
+    @Test fun permission() = shoot("home-permission") {
+        HushScreen(
+            status = Headphones.Status.DISCONNECTED, nc = null, pending = null, fresh = false, error = null, battery = null,
+            granted = false, hasDevice = false, onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+        )
+    }
+
+    @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
+    @Test fun homeLight() = shoot("home-light") {
+        HushScreen(
+            status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
+            fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 18, caseCharging = false), granted = true, hasDevice = true,
+            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            scenes = Scenes.defaults,
+        )
+    }
+
     private fun gallery(name: String, battery: Boolean) = shoot(name) {
         val sizes = if (battery)
             listOf(252 to 104, 164 to 104, 84 to 104, 340 to 208, 252 to 150, 252 to 80)

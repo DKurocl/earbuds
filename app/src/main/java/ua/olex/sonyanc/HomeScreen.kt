@@ -419,12 +419,12 @@ private fun SoftChip(label: String, selected: Boolean, modifier: Modifier = Modi
 private fun SetupCard(title: String, body: String, action: String, glyph: Glyph, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Surface(shape = RoundedCornerShape(20.dp), color = cs.primaryContainer, modifier = Modifier.size(64.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(shape = CircleShape, color = cs.primaryContainer, modifier = Modifier.size(72.dp)) {
                 Box(contentAlignment = Alignment.Center) { HushIcon(glyph, Modifier.size(32.dp), cs.onPrimaryContainer) }
             }
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text(body, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text(body, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
             Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(action) }
         }
     }

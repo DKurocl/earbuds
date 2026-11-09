@@ -3,7 +3,8 @@ package ua.olex.sonyanc
 /** V2 wire facts cross-checked against Gadgetbridge; no vendor app or account is used. */
 object EqualizerProtocol {
     data class State(val preset:Int,val bands:List<Int>)
-    val presets=linkedMapOf(0x00 to "Off",0x10 to "Bright",0x11 to "Excited",0x12 to "Mellow",0x13 to "Relaxed",0x14 to "Vocal",0x15 to "Treble boost",0x16 to "Bass boost",0x17 to "Speech",0xA0 to "Custom",0xA1 to "Custom 1",0xA2 to "Custom 2")
+    /** Shown in this order: Off and the editable Custom first; A1/A2 are the earbuds' own memory slots. */
+    val presets=linkedMapOf(0x00 to "Off",0xA0 to "Custom",0x10 to "Bright",0x11 to "Excited",0x12 to "Mellow",0x13 to "Relaxed",0x14 to "Vocal",0x15 to "Treble boost",0x16 to "Bass boost",0x17 to "Speech",0xA1 to "Saved 1",0xA2 to "Saved 2")
     val get=byteArrayOf(0x56,0x00)
     fun parse(payload:ByteArray):State? {
         if(payload.size<4 || (payload[0].toInt() and 255) !in listOf(0x57,0x59) || payload[1].toInt()!=0) return null

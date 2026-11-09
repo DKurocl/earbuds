@@ -1,0 +1,5 @@
+# Startup profile for the app's own code (the libraries ship theirs). profileinstaller writes it
+# on first launch of the sideloaded APK, so ART compiles these ahead of time instead of JIT-ing
+# them on every cold start. The app is small: everything in its package is hot.
+HSPLua/olex/sonyanc/**;->**(**)**
+Lua/olex/sonyanc/**;

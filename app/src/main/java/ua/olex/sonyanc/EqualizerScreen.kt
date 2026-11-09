@@ -2,7 +2,12 @@
 
 package ua.olex.sonyanc
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -14,10 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
@@ -74,12 +76,13 @@ fun EqualizerContent(
             else -> {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionTitle("Preset")
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         EqualizerProtocol.presets.forEach { (code, name) ->
-                            FilterChip(
-                                selected = state.preset == code, enabled = !busy, onClick = { onPreset(code) }, label = { Text(name) },
-                                leadingIcon = if (state.preset == code) ({ HushIcon(Glyph.CHECK, Modifier.size(FilterChipDefaults.IconSize), cs.onSecondaryContainer) }) else null,
-                            )
+                            PresetPill(name, state.preset == code, !busy) { onPreset(code) }
                         }
                     }
                 }
@@ -109,13 +112,10 @@ private fun BandsCard(state: EqualizerProtocol.State, busy: Boolean, onBands: (L
         }
         Surface(shape = RoundedCornerShape(24.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Box {
-                    ResponseCurve(bands.drop(1), Modifier.matchParentSize().padding(top = 28.dp, bottom = 28.dp))
-                    Row(Modifier.fillMaxWidth()) {
-                        bands.drop(1).forEachIndexed { i, value ->
-                            BandSlider(BAND_LABELS[i] + " Hz", BAND_LABELS[i], value, !busy, Modifier.weight(1f),
-                                onChange = { set(i + 1, it) }, onDone = { onBands(bands) })
-                        }
+                Row(Modifier.fillMaxWidth()) {
+                    bands.drop(1).forEachIndexed { i, value ->
+                        BandSlider(BAND_LABELS[i] + " Hz", BAND_LABELS[i], value, !busy, Modifier.weight(1f),
+                            onChange = { set(i + 1, it) }, onDone = { onBands(bands) })
                     }
                 }
                 HorizontalDivider(color = cs.outlineVariant.copy(alpha = .5f), modifier = Modifier.padding(horizontal = 8.dp))
@@ -139,22 +139,32 @@ private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 
 private fun valueAt(y: Float, height: Float) = (10 - y / height * 20).roundToInt().coerceIn(-10, 10)
 
-/** A tall rounded track filled from the 0 dB line to the value; drag or tap anywhere on it. */
+/**
+ * A tall soft track with a fixed-size pill thumb at the value and a thin fill from 0 dB to it,
+ * so +1 and +6 look like the same control at different heights. Drag or tap anywhere; a tick
+ * per dB step and a firmer one at 0 dB.
+ */
 @Composable
 private fun BandSlider(
     description: String, label: String, value: Int, enabled: Boolean, modifier: Modifier,
     onChange: (Int) -> Unit, onDone: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val feedback = LocalHapticFeedback.current
     val active = if (enabled) cs.primary else cs.onSurface.copy(alpha = .38f)
     val track = cs.surfaceContainerHighest
+    val current by rememberUpdatedState(value)
     // Gesture coroutines outlive recompositions; always call the latest callbacks.
-    val change by rememberUpdatedState(onChange)
+    val change by rememberUpdatedState { v: Int ->
+        if (v != current) feedback.performHapticFeedback(if (v == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
+        onChange(v)
+    }
     val done by rememberUpdatedState(onDone)
+    val shown by animateFloatAsState(value.toFloat(), MaterialTheme.motionScheme.fastSpatialSpec(), label = description)
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(signed(value), style = MaterialTheme.typography.labelLarge, color = if (value != 0) cs.primary else cs.onSurfaceVariant)
         Canvas(
-            Modifier.width(40.dp).height(200.dp)
+            Modifier.width(44.dp).height(208.dp)
                 .pointerInput(enabled) {
                     if (!enabled) return@pointerInput
                     detectVerticalDragGestures(
@@ -174,42 +184,35 @@ private fun BandSlider(
                 },
         ) {
             val w = size.width
-            val r = CornerRadius(w / 2, w / 2)
-            drawRoundRect(track, cornerRadius = r)
+            val thumbH = 22.dp.toPx()
+            val thumbW = w - 8.dp.toPx()
+            drawRoundRect(track, cornerRadius = CornerRadius(w / 2, w / 2))
+            // Value range kept inside the rounded ends so the thumb never touches them.
+            val inset = w / 2
             val zero = size.height / 2
-            val y = size.height * (10 - value) / 20f
-            val top = minOf(zero, y)
-            val bottom = maxOf(zero, y)
-            if (bottom - top > 0f) drawRoundRect(active, Offset(0f, top), Size(w, bottom - top), r)
-            // Centre (0 dB) tick and the value handle.
-            drawLine(cs.outline.copy(alpha = .5f), Offset(w * .3f, zero), Offset(w * .7f, zero), 2.dp.toPx(), StrokeCap.Round)
-            drawLine(if (enabled) cs.onPrimary else cs.surface, Offset(w * .25f, y.coerceIn(w / 2, size.height - w / 2)),
-                Offset(w * .75f, y.coerceIn(w / 2, size.height - w / 2)), 4.dp.toPx(), StrokeCap.Round)
+            val y = inset + (size.height - 2 * inset) * (10 - shown) / 20f
+            val bar = 8.dp.toPx()
+            val top = minOf(zero, y); val bottom = maxOf(zero, y)
+            if (bottom - top > 1f) drawRoundRect(active.copy(alpha = .45f), Offset((w - bar) / 2, top), Size(bar, bottom - top), CornerRadius(bar / 2, bar / 2))
+            drawLine(cs.outline.copy(alpha = .6f), Offset(w * .32f, zero), Offset(w * .68f, zero), 2.dp.toPx(), StrokeCap.Round)
+            drawRoundRect(active, Offset((w - thumbW) / 2, y - thumbH / 2), Size(thumbW, thumbH), CornerRadius(thumbH / 2, thumbH / 2))
         }
         Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 
-/** Smooth line through the band values behind the sliders, so the overall shape reads at a glance. */
+/** A soft, fully rounded preset pill: tonal when chosen, quiet otherwise. */
 @Composable
-private fun ResponseCurve(values: List<Int>, modifier: Modifier) {
-    val color = MaterialTheme.colorScheme.primary
-    Canvas(modifier) {
-        if (values.isEmpty()) return@Canvas
-        val step = size.width / values.size
-        val points = values.mapIndexed { i, v -> Offset(step * (i + .5f), size.height * (10 - v) / 20f) }
-        val line = Path().apply {
-            moveTo(0f, points.first().y)
-            lineTo(points.first().x, points.first().y)
-            for (i in 1 until points.size) {
-                val a = points[i - 1]; val b = points[i]
-                val mid = (a.x + b.x) / 2
-                cubicTo(mid, a.y, mid, b.y, b.x, b.y)
-            }
-            lineTo(size.width, points.last().y)
+private fun PresetPill(name: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val bg by animateColorAsState(if (selected) cs.primary else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = name)
+    Surface(
+        onClick = onClick, enabled = enabled, shape = CircleShape, color = bg,
+        contentColor = if (selected) cs.onPrimary else cs.onSurface,
+        modifier = Modifier.heightIn(min = 40.dp).semantics { this.selected = selected; role = Role.RadioButton },
+    ) {
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+            Text(name, style = MaterialTheme.typography.labelLarge)
         }
-        val fill = Path().apply { addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
-        drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = .18f), color.copy(alpha = 0f))))
-        drawPath(line, color.copy(alpha = .45f), style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
     }
 }
