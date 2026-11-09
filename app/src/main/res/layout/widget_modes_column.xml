@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Column of three, for narrow and tall widgets. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UselessParent" android:id="@android:id/background"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/w_bg" android:padding="@dimen/w_pad">
+<LinearLayout android:id="@+id/w_group"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:layout_gravity="center"
+    android:orientation="vertical" android:baselineAligned="false">
+    <LinearLayout android:id="@+id/w_anc"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:gravity="center" android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:clickable="true" android:focusable="true"
+        android:background="@drawable/w_tile_top">
+        <ImageView android:id="@+id/w_anc_icon"
+            android:layout_width="24dp" android:layout_height="24dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/w_icon_noise_control_off" />
+        <TextView android:id="@+id/w_anc_label"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:fontFamily="google-sans-text-medium"
+            android:includeFontPadding="false" android:singleLine="true" android:ellipsize="none"
+            android:importantForAccessibility="no"
+            android:textSize="14sp" android:textColor="@color/w_off_text"
+            android:text="@string/shortcut_anc" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/w_amb"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="@dimen/w_gap"
+        android:gravity="center" android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:clickable="true" android:focusable="true"
+        android:background="@drawable/w_tile_middle">
+        <ImageView android:id="@+id/w_amb_icon"
+            android:layout_width="24dp" android:layout_height="24dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/w_icon_hearing" />
+        <TextView android:id="@+id/w_amb_label"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:fontFamily="google-sans-text-medium"
+            android:includeFontPadding="false" android:singleLine="true" android:ellipsize="none"
+            android:importantForAccessibility="no"
+            android:textSize="14sp" android:textColor="@color/w_off_text"
+            android:text="@string/shortcut_ambient" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/w_off"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="@dimen/w_gap"
+        android:gravity="center" android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:clickable="true" android:focusable="true"
+        android:background="@drawable/w_tile_bottom">
+        <ImageView android:id="@+id/w_off_icon"
+            android:layout_width="24dp" android:layout_height="24dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/w_icon_power_settings_new" />
+        <TextView android:id="@+id/w_off_label"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:paddingStart="8dp" android:fontFamily="google-sans-text-medium"
+            android:includeFontPadding="false" android:singleLine="true" android:ellipsize="none"
+            android:importantForAccessibility="no"
+            android:textSize="14sp" android:textColor="@color/w_off_text"
+            android:text="@string/shortcut_off" />
+    </LinearLayout>
+</LinearLayout>
+</FrameLayout>

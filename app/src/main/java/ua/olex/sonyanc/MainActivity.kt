@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Headphones.init(this)
         consumeIntent(intent)
+        // Picker previews are a binder call per widget; keep them off the first frame.
+        Thread { Widgets.publishPreviews(applicationContext) }.start()
         enableEdgeToEdge()
         setContent {
             var dynamic by remember { mutableStateOf(Prefs.dynamicColor(this)) }
@@ -111,6 +113,25 @@ fun App(
     val widgetManager = remember { AppWidgetManager.getInstance(ctx) }
     fun bluetooth() = ctx.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     fun refreshInfo() { scope.launch { Headphones.refreshInfo() } }
+    /** Google Find Hub, where the earbuds are registered; its web page if the app is missing. */
+    fun findHub() {
+        val app = ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.adm")
+        ctx.startActivity(app ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/android/find/")))
+    }
+    var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
+    // Two-stage haptics: the tap ticks at once (HushScreen); the earbuds' acknowledgement
+    // plays the mode's own pulse. Only the newest tap may report, so bursts stay quiet.
+    var tapGeneration by remember { mutableIntStateOf(0) }
+    fun requestMode(state: NcState) {
+        val before = Headphones.state.value.shownNc?.mode
+        val receipt = Headphones.request(state)
+        val mine = ++tapGeneration
+        scope.launch {
+            val ok = receipt.await()
+            if (!haptics || mine != tapGeneration) return@launch
+            if (ok) Haptics.confirm(ctx, if (state.mode != before) state.mode else null) else Haptics.reject(ctx)
+        }
+    }
     LaunchedEffect(startTick, granted, saved) {
         granted = Headphones.hasPermission(ctx)
         if (!granted) return@LaunchedEffect
@@ -123,7 +144,7 @@ fun App(
     }
     LaunchedEffect(shortcutMode, granted, saved) {
         if (shortcutMode != null && granted && saved != null) {
-            Headphones.request((Headphones.state.value.nc ?: NcState(shortcutMode)).copy(mode = shortcutMode))
+            requestMode((Headphones.state.value.nc ?: NcState(shortcutMode)).copy(mode = shortcutMode))
             onShortcutConsumed()
         }
     }
@@ -196,7 +217,7 @@ fun App(
                 when (Page.valueOf(pages.last())) {
                     Page.HOME -> HushScreen(
                         device.status, device.nc, device.pending, device.ncConfirmed, device.error, device.battery, granted, saved != null,
-                        onMode = { Headphones.request(it) }, onSettings = { open(Page.EARBUDS) },
+                        onMode = ::requestMode, onSettings = { open(Page.EARBUDS) },
                         onConnect = { scope.launch { Headphones.connectAndSync() } },
                         onPermission = { if (Build.VERSION.SDK_INT >= 31) permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) },
                         onBluetooth = ::bluetooth, onPick = { open(Page.APP) },
@@ -208,6 +229,8 @@ fun App(
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
                         batterySeenAt = device.batterySeenAt, scenes = scenes, equalizer = equalizer,
                         onScene = ::applyScene, onSaveScene = { creatingScene = true }, onEditScene = { editingScene = it },
+                        onFind = ::findHub,
+                        lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && !device.connected && Prefs.linked(ctx) == false },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
                     Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) }, startTick)
@@ -231,6 +254,7 @@ fun App(
                             },
                             refreshing = device.codecRefreshing || device.batteryRefreshing || turningOff,
                             onBack = ::back, onRefresh = ::refreshInfo, onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
+                            onFind = ::findHub,
                             onTurnOff = {
                                 scope.launch {
                                     turningOff = true
@@ -262,6 +286,8 @@ fun App(
                             ) {}
                         },
                         onPinWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, ModeWidget::class.java), null, null) },
+                        onPinBatteryWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, BatteryWidget::class.java), null, null) },
+                        onConnect = onConnect, onOnConnect = { onConnect = it; Prefs.setOnConnect(ctx, it) },
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                     )
                     Page.DIAGNOSTICS -> {

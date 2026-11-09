@@ -38,7 +38,6 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,6 +60,7 @@ fun HushScreen(
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
     batterySeenAt: Long? = null, scenes: List<Scene> = emptyList(), equalizer: EqualizerProtocol.State? = null,
     onScene: (Scene) -> Unit = {}, onSaveScene: () -> Unit = {}, onEditScene: (Scene) -> Unit = {},
+    onFind: () -> Unit = {}, lastSeen: Long? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val state = pending ?: nc
@@ -71,12 +71,11 @@ fun HushScreen(
         onMode(value)
     }
     Scaffold(containerColor = Surfaces.page, topBar = {
+        // No logo or app name: the device header below says what this is. Settings stay in reach.
         Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.End,
         ) {
-            HushMark(Modifier.size(28.dp)); Spacer(Modifier.width(12.dp))
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).semantics { contentDescription = "Settings" }) {
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
@@ -86,7 +85,7 @@ fun HushScreen(
             Modifier.padding(insets).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Header(deviceName, status, codec, batteryRefreshing, onRename)
+            Header(deviceName, status, codec, batteryRefreshing, onRename, lastSeen)
 
             // Setup cards already explain a missing permission or device; the banner is for link problems.
             AnimatedVisibility(error != null && granted && hasDevice, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
@@ -103,9 +102,11 @@ fun HushScreen(
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        // The control link opens and closes by itself, so there is no Disconnect here:
+                        // it would not disconnect the audio and only made the next tap slower.
                         BigAction(Glyph.BLUETOOTH, "Bluetooth", onClick = onBluetooth)
-                        if (ready) BigAction(Glyph.CLOSE, "Disconnect", onClick = onDisconnect)
-                        else BigAction(Glyph.REFRESH, if (status == Headphones.Status.CONNECTING) "Connecting…" else "Connect",
+                        BigAction(Glyph.FIND, "Find", onClick = onFind)
+                        if (!ready) BigAction(Glyph.REFRESH, if (status == Headphones.Status.CONNECTING) "Connecting…" else "Connect",
                             enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
                     }
 
@@ -165,7 +166,7 @@ fun HushScreen(
 }
 
 @Composable
-private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, onRename: () -> Unit) {
+private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, onRename: () -> Unit, lastSeen: Long? = null) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -179,7 +180,10 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
         Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val line = when (status) {
                 Headphones.Status.CONNECTED -> "Connected" + (codec?.takeIf { it.isKnown }?.let { " · ${it.label}" } ?: "")
-                else -> statusText(status)
+                Headphones.Status.CONNECTING -> statusText(status)
+                // Android reported the earbuds gone (case, range or Bluetooth off).
+                else -> lastSeen?.let { "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS) }
+                    ?: statusText(status)
             }
             Text(line, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             if (status == Headphones.Status.CONNECTING || busy) LoadingIndicator(Modifier.size(20.dp))
@@ -189,22 +193,26 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
 
 @Composable
 private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit) {
-    // One decode of the product photo shared by both earbud rings.
-    val buds = ImageBitmap.imageResource(R.drawable.wf1000xm5_silver)
+    // One decode of the bud cutout shared by both earbud rings; the right one is mirrored.
+    val bud = ImageBitmap.imageResource(R.drawable.wf1000xm5_bud)
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).clickable(enabled = ready, onClickLabel = "Refresh battery", onClick = onRefresh)
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        BatteryRing("Left", b.left, b.leftCharging, 0 in live) { BudArt(buds, mirrored = false) }
+        BatteryRing("Left", b.left, b.leftCharging, 0 in live) { BudArt(bud, mirrored = false) }
         BatteryRing("Case", b.case, b.caseCharging, 2 in live) {
             Image(painterResource(R.drawable.wf1000xm5_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
         }
-        BatteryRing("Right", b.right, b.rightCharging, 1 in live) { BudArt(buds, mirrored = true) }
+        BatteryRing("Right", b.right, b.rightCharging, 1 in live) { BudArt(bud, mirrored = true) }
     }
 }
 
-/** Ring with a status chip in the top gap, like Pixel's device details. */
+/**
+ * Pixel "Device details" battery: the product on a filled disc, a thin ring around it with a
+ * gap, and a status chip sitting on the ring at the top. The ring starts and ends at the chip's
+ * outline, so the chip reads as cut out of the ring rather than stacked on it.
+ */
 @Composable
 private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boolean, art: @Composable () -> Unit) {
     val cs = MaterialTheme.colorScheme
@@ -218,54 +226,75 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
     }
     val color = if (live || value == null) ringColor else ringColor.copy(alpha = .55f)
     val track = cs.surfaceContainerHighest
-    val progress by animateFloatAsState((value ?: 0) / 100f, tween(700, easing = FastOutSlowInEasing), label = "battery $label")
+    val disc = cs.surfaceContainerHigh
+    val page = Surfaces.page
+    val progress by animateFloatAsState((value ?: 0) / 100f, MaterialTheme.motionScheme.slowEffectsSpec(), label = "battery $label")
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.semantics(mergeDescendants = true) {
             contentDescription = "$label battery"
             stateDescription = (value?.let { "$it percent" } ?: "Unavailable") +
                 if (charging) ", charging" else if (!live && value != null) ", last known" else ""
         },
     ) {
-        Box(Modifier.size(100.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxSize().padding(6.dp)) {
-                val stroke = 6.dp.toPx()
-                val gap = 44f
-                val start = -90f + gap / 2
-                val sweep = 360f - gap
-                val inset = Offset(stroke / 2, stroke / 2)
-                val arc = Size(size.width - stroke, size.height - stroke)
-                drawArc(track, start, sweep, false, topLeft = inset, size = arc, style = Stroke(stroke, cap = StrokeCap.Round))
-                if (progress > 0f) drawArc(color, start, sweep * progress, false, topLeft = inset, size = arc, style = Stroke(stroke, cap = StrokeCap.Round))
+        Box(Modifier.size(RING_BOX), contentAlignment = Alignment.TopCenter) {
+            Canvas(Modifier.fillMaxSize()) {
+                val stroke = RING_STROKE.toPx()
+                val radius = RING_RADIUS.toPx()
+                val center = Offset(size.width / 2, CHIP.toPx() / 2 + radius)
+                // Filled disc behind the art, separated from the ring by a hairline of page color.
+                drawCircle(disc, radius - stroke / 2 - RING_GAP.toPx(), center)
+                // The ring stops at the chip's outline, plus room for the round caps.
+                val chipOuter = CHIP.toPx() / 2 + CHIP_OUTLINE.toPx()
+                val half = Math.toDegrees(kotlin.math.asin((chipOuter / radius).coerceAtMost(1f).toDouble())).toFloat() +
+                    Math.toDegrees((stroke / 2 / radius).toDouble()).toFloat()
+                val start = -90f + half
+                val sweep = 360f - 2 * half
+                val arcTopLeft = Offset(center.x - radius, center.y - radius)
+                val arcSize = Size(radius * 2, radius * 2)
+                drawArc(track, start, sweep, false, arcTopLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                if (progress > 0f) drawArc(color, start, sweep * progress, false, arcTopLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                // Chip outline in page color, so it never touches the ring ends.
+                drawCircle(page, chipOuter, Offset(center.x, CHIP.toPx() / 2))
+                drawCircle(if (value == null) track else color, CHIP.toPx() / 2, Offset(center.x, CHIP.toPx() / 2))
             }
-            Box(Modifier.size(54.dp), contentAlignment = Alignment.Center) { art() }
-            Surface(shape = CircleShape, color = if (value == null) track else color, modifier = Modifier.align(Alignment.TopCenter).size(26.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        when {
-                            value == null -> Icons.AutoMirrored.Rounded.BatteryUnknown
-                            charging -> Icons.Rounded.BatteryChargingFull
-                            value <= 20 -> Icons.Rounded.BatteryAlert
-                            else -> Icons.Rounded.BatteryFull
-                        }, contentDescription = null, tint = chipContent, modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
+            Box(
+                Modifier.padding(top = CHIP / 2 + RING_RADIUS - ART / 2).size(ART),
+                contentAlignment = Alignment.Center,
+            ) { art() }
+            Icon(
+                when {
+                    value == null -> Icons.AutoMirrored.Rounded.BatteryUnknown
+                    charging -> Icons.Rounded.BatteryChargingFull
+                    value <= 20 -> Icons.Rounded.BatteryAlert
+                    else -> Icons.Rounded.BatteryFull
+                }, contentDescription = null, tint = chipContent,
+                modifier = Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp),
+            )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value?.let { "$it%" } ?: "—", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
-                color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface)
-            Text(label, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-        }
+        Text(
+            "$label: " + (value?.let { "$it%" } ?: "—"), style = MaterialTheme.typography.titleMedium, maxLines = 1,
+            color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
+        )
     }
 }
 
-/** One bud cropped out of the product photo; the right one is the same shot mirrored. */
+// Ring geometry, measured from Pixel's Bluetooth device details on a Pixel 10 Pro XL.
+private val CHIP = 26.dp
+private val CHIP_OUTLINE = 3.dp
+private val RING_RADIUS = 38.dp
+private val RING_STROKE = 5.dp
+private val RING_GAP = 3.dp
+private val RING_BOX = RING_RADIUS * 2 + RING_STROKE + CHIP / 2 + 4.dp
+// A square at 1/√2 of the disc fits inside it entirely, so the product is never clipped.
+private val ART = (RING_RADIUS - RING_STROKE / 2 - RING_GAP) * 2 * 0.70f
+
+/** The bud cutout, centered; the right bud is the same shot mirrored. */
 @Composable
 private fun BudArt(image: ImageBitmap, mirrored: Boolean) {
     Image(
-        image, null, contentScale = ContentScale.Crop, alignment = Alignment.CenterEnd,
-        modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = if (mirrored) -1f else 1f }.clip(RoundedCornerShape(4.dp)),
+        image, null, contentScale = ContentScale.Fit,
+        modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = if (mirrored) -1f else 1f },
     )
 }
 

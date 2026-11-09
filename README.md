@@ -1,6 +1,47 @@
 # Earbuds
 
-Formerly Hush. A personal, offline **Sony WF-1000XM5** controller for Android. English only.
+Formerly Hush. A personal, offline **Sony WF-1000XM5** controller for one **Pixel 10 Pro XL**.
+English only. Roadmap (Ukrainian): [docs/PLAN.md](docs/PLAN.md).
+
+## New in 1.2
+
+- Battery rings rebuilt after Pixel's device details: product on a filled disc, a thin ring
+  that stops at the status chip's outline, a centered single-bud cutout that never clips.
+- Earbuds-connected events (ACL broadcasts, no service): battery read and widgets refreshed
+  when the earbuds leave the case; optional **When earbuds connect** mode; "Disconnected · 25
+  minutes ago" and dimmed widget buttons while they are away.
+- Two-stage haptics: a tick on touch, the mode's own pulse when the earbuds confirm, a double
+  click on failure.
+- **Find** (Google Find Hub) replaces Disconnect, which only closed the control link.
+- Noise-control widget renders an exact layout for every launcher size (row with labels under
+  or beside icons, icons only, or a column), M3E connected button group shapes, measured labels.
+- Optional battery widget: three rings, one ring at 1×1, absolute "Updated 14:32".
+- Large slots (lock-screen hub ≈ 416 × 275 dp, home 4×2) turn the noise-control widget into a
+  dashboard: status, battery rings, listening estimate, modes and up to three scene chips.
+  Both widgets declare `home_screen|keyguard`.
+- Home has no logo or app name at the top: only the settings button.
+- Generated widget picker previews on Android 15+.
+
+## Stable updates (one-time owner setup)
+
+CI signs with a throwaway debug key unless an owner key is configured, so updates may need a
+reinstall. To install every future build over the previous one:
+
+```sh
+keytool -genkeypair -v -keystore earbuds.jks -alias earbuds -keyalg RSA -keysize 4096 -validity 36500
+base64 -w0 earbuds.jks   # copy the output
+```
+
+Add repository secrets (Settings → Secrets and variables → Actions): `HUSH_KEYSTORE_B64` (the
+base64 output), `HUSH_KEYSTORE_PASSWORD`, `HUSH_KEY_ALIAS` (`earbuds`), `HUSH_KEY_PASSWORD`.
+Keep the `.jks` file safe and never commit it. Uninstall the old build once (its signature
+differs); from then on updates install in place. `versionCode` is the CI run number + 1000.
+
+## Screenshots without an emulator
+
+`gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots=true` renders Home and
+every widget size with Robolectric native graphics into `app/build/screenshots`. Skipped in
+normal test runs. Add `-ProbolectricRepo=<maven mirror>` where Maven Central is throttled.
 
 ## Interface
 

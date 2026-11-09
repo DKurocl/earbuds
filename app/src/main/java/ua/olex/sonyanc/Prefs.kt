@@ -35,17 +35,46 @@ object Prefs {
         val at = prefs.getLong("battery_at", 0L).takeIf { it > 0 } ?: return null
         val b = SonyProtocol.Battery(
             level(prefs.getInt("battery_left", 0)), level(prefs.getInt("battery_right", 0)), level(prefs.getInt("battery_case", 0)),
+            prefs.getBoolean("charging_left", false), prefs.getBoolean("charging_right", false), prefs.getBoolean("charging_case", false),
         )
         return if (b.left == null && b.right == null && b.case == null) null else b to at
     }
 
     fun saveBattery(ctx: Context, b: SonyProtocol.Battery, at: Long) = p(ctx).edit()
         .putInt("battery_left", b.left ?: 0).putInt("battery_right", b.right ?: 0).putInt("battery_case", b.case ?: 0)
+        .putBoolean("charging_left", b.leftCharging).putBoolean("charging_right", b.rightCharging).putBoolean("charging_case", b.caseCharging)
         .putLong("battery_at", at).apply()
 
-    fun clearBattery(ctx: Context) = p(ctx).edit().remove("battery_at").apply()
+    fun clearBattery(ctx: Context) = p(ctx).edit().remove("battery_at").remove("linked").remove("last_seen").apply()
+
+    // ---- Android's Bluetooth link, from ACL broadcasts (see ConnectionReceiver) ----
+    /** True/false once a broadcast or a working control link said so; null while unknown. */
+    fun linked(ctx: Context): Boolean? = p(ctx).takeIf { it.contains("linked") }?.getBoolean("linked", false)
+    fun setLinked(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("linked", value).apply()
+    /** When the earbuds last disconnected from the phone (usually: went back in the case). */
+    fun lastSeen(ctx: Context): Long = p(ctx).getLong("last_seen", 0L)
+    fun setLastSeen(ctx: Context, at: Long) = p(ctx).edit().putLong("last_seen", at).apply()
+
+    fun onConnect(ctx: Context): OnConnect = OnConnect.from(p(ctx).getString("on_connect", null))
+    fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).apply()
+
+    /** Version for which the widget picker previews were last generated. */
+    fun previewVersion(ctx: Context): Long = p(ctx).getLong("preview_version", 0L)
+    fun setPreviewVersion(ctx: Context, value: Long) = p(ctx).edit().putLong("preview_version", value).apply()
 
     // ---- scenes ----
     fun scenes(ctx: Context): List<Scene> = p(ctx).getString("scenes", null)?.let(Scenes::decode) ?: Scenes.defaults
     fun saveScenes(ctx: Context, scenes: List<Scene>) = p(ctx).edit().putString("scenes", Scenes.encode(scenes)).apply()
+}
+
+/** What to do with noise control when the earbuds connect to the phone. */
+enum class OnConnect(val label: String, val mode: SonyProtocol.Mode?) {
+    KEEP("Don't change", null),
+    ANC("Noise cancelling", SonyProtocol.Mode.ANC),
+    AMBIENT("Ambient sound", SonyProtocol.Mode.AMBIENT),
+    OFF("Noise control off", SonyProtocol.Mode.OFF);
+
+    companion object {
+        fun from(name: String?) = entries.firstOrNull { it.name == name } ?: KEEP
+    }
 }

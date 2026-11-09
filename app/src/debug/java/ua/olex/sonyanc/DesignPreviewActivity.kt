@@ -6,6 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +47,8 @@ private fun Scene(scene: String) {
             canAddTile = true, canPinWidget = true, version = "1.0.0",
         )
         "diagnostics" -> DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"))
-        "widgets" -> WidgetGallery()
+        "widgets" -> WidgetGallery(battery = false)
+        "widgets-battery" -> WidgetGallery(battery = true)
         else -> {
             var state by remember { mutableStateOf(SonyProtocol.NcState(if (scene == "ambient") SonyProtocol.Mode.AMBIENT else SonyProtocol.Mode.ANC, level = 12)) }
             HushScreen(
@@ -61,18 +64,36 @@ private fun Scene(scene: String) {
     }
 }
 
+/** Real launcher slots on a Pixel 10 Pro XL (5-column grid ≈ 84 × 104 dp per cell), plus extremes. */
+private val modeSizes = listOf(
+    "4×1" to (340 to 96), "5×1" to (424 to 96), "3×1" to (252 to 96), "2×1" to (164 to 96),
+    "4×1 short" to (340 to 56), "2×2" to (164 to 208), "4×2" to (340 to 208),
+)
+private val batterySizes = listOf(
+    "3×1" to (252 to 104), "2×1" to (164 to 104), "1×1" to (84 to 104), "4×2" to (340 to 208), "3×2" to (252 to 208),
+)
+
 @Composable
-private fun WidgetGallery() {
+private fun WidgetGallery(battery: Boolean) {
     Surface(color = Color(0xFF111724), modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            listOf(360 to SonyProtocol.Mode.AMBIENT, 280 to SonyProtocol.Mode.ANC, 200 to SonyProtocol.Mode.OFF).forEach { (width, mode) ->
-                Text("$width dp · launcher slot 104 dp", color = Color(0xFFCAD1E4), style = MaterialTheme.typography.labelLarge)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val modes = SonyProtocol.Mode.entries
+            (if (battery) batterySizes else modeSizes).forEachIndexed { i, (name, size) ->
+                val (w, h) = size
+                Text("$name · $w × $h dp", color = Color(0xFFCAD1E4), style = MaterialTheme.typography.labelLarge)
                 AndroidView(factory = { ctx ->
                     FrameLayout(ctx).apply {
-                        val views = ModeWidget.viewsForSize(ctx, width.toFloat(), mode, interactive = false)
+                        val views = if (battery) BatteryWidget.viewsFor(
+                            ctx, w.toFloat(), h.toFloat(),
+                            if (i == 3) SonyProtocol.Battery(18, 64, null, rightCharging = true) else SonyProtocol.Battery(82, 79, 56, caseCharging = true),
+                            System.currentTimeMillis(), linked = i != 4, lastSeen = System.currentTimeMillis() - 3_600_000, interactive = false,
+                        ) else ModeWidget.viewsFor(ctx, w.toFloat(), h.toFloat(), modes[i % 3], interactive = false, linked = i != 6)
                         addView(views.apply(ctx, this), FrameLayout.LayoutParams(-1, -1))
                     }
-                }, modifier = Modifier.width(width.dp).height(104.dp))
+                }, modifier = Modifier.width(w.dp).height(h.dp))
             }
         }
     }

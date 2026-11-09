@@ -5,5 +5,10 @@
     <color name="w_on_text">#FFFFFFFF</color>
     <color name="w_off">#FFE8DEF8</color>
     <color name="w_off_text">#FF1D192B</color>
+    <color name="w_sub_text">#FF49454F</color>
+    <color name="w_track">#FFDED8E1</color>
+    <color name="w_ripple">#1F1D192B</color>
+    <color name="w_good">#FF1E8E3E</color>
+    <color name="w_low">#FFB3261E</color>
+    <color name="w_unknown">#FFCAC4D0</color>
 </resources>
-
