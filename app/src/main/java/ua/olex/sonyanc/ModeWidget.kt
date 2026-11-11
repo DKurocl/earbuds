@@ -111,7 +111,7 @@ class ModeWidget : AppWidgetProvider() {
                               interactive:Boolean=true,linked:Boolean?=Prefs.linked(ctx),
                               battery:Pair<SonyProtocol.Battery,Long>?=Prefs.lastBattery(ctx)):RemoteViews {
         WidgetLayout.dashboard(width,height,Widgets.lineHeight(ctx,16f,"google-sans-text-medium"),
-            Widgets.lineHeight(ctx,15f,"google-sans-text-medium"),Widgets.lineHeight(ctx,12f),
+            Widgets.lineHeight(ctx,14f,"google-sans-text-medium"),Widgets.lineHeight(ctx,13f),
             SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)})?.let {
             return dashboard(ctx,it,current,pending,interactive,linked,battery)
         }
@@ -164,28 +164,10 @@ class ModeWidget : AppWidgetProvider() {
             }
         }
 
-        /** "5 h 30 min left · case +12 h 20 min": the numbers bright and medium weight, the words quiet. */
-        private fun listening(ctx:Context,b:SonyProtocol.Battery,mode:SonyProtocol.Mode?):CharSequence? {
-            val rate=Prefs.drainRate(ctx,mode)
-            val buds=BatteryLife.budsMinutes(b,mode,rate) ?: return null
-            val case=BatteryLife.caseMinutes(b,mode,rate)?.takeIf{it>=10}
-            val strong=ctx.getColor(if(buds<60) R.color.w_low else R.color.w_off_text)
-            val out=android.text.SpannableStringBuilder()
-            fun number(text:String,color:Int) {
-                val start=out.length
-                out.append(text)
-                out.setSpan(android.text.style.ForegroundColorSpan(color),start,out.length,0)
-                out.setSpan(android.text.style.TypefaceSpan("google-sans-text-medium"),start,out.length,0)
-            }
-            number(BatteryLife.short(buds),strong)
-            out.append(" left")
-            if(case!=null) {out.append("   ·   case ");number("+"+BatteryLife.short(case),ctx.getColor(R.color.w_off_text))}
-            return out
-        }
-
         /**
-         * Lock-screen hub and large home slots: name and status, three battery rings, the
-         * listening time and the mode group, all from cached state.
+         * Lock-screen hub and large home slots: name and status, the listening time beside three
+         * battery rings, and the mode group, all from cached state. Sizes come from
+         * [WidgetLayout.dashboard]; the big number takes the largest size that fits its column.
          */
         private fun dashboard(ctx:Context,spec:WidgetLayout.DashboardSpec,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                               interactive:Boolean,linked:Boolean?,last:Pair<SonyProtocol.Battery,Long>?):RemoteViews {
@@ -193,20 +175,33 @@ class ModeWidget : AppWidgetProvider() {
             val away=linked==false
             val b=last?.first
             v.setTextViewText(R.id.w_title,Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5")
-            // One centered line: "WF-1000XM5 · Updated 14:32".
             val status=AmbientTimer.until(ctx)?.let{"Back to ${AmbientTimer.returnMode(ctx).short} at "+android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(it))}
                 ?: BatteryWidget.status(ctx,b,last?.second ?: 0L,linked,Prefs.lastSeen(ctx))
-            v.setTextViewText(R.id.w_status,status.takeIf{it.isNotEmpty()}?.let{"·  $it"} ?: "")
+            v.setTextViewText(R.id.w_status,status)
+
+            // The big number: how long you can listen; the case adds the second line.
+            val rate=Prefs.drainRate(ctx,current)
+            val buds=b?.let{BatteryLife.budsMinutes(it,current,rate)}
+            val case=b?.let{BatteryLife.caseMinutes(it,current,rate)}?.takeIf{it>=10}
+            val hero=buds?.let{BatteryLife.short(it)} ?: (current?.label ?: "Earbuds")
+            v.setTextViewText(R.id.w_hero,hero)
+            v.setTextColor(R.id.w_hero,ctx.getColor(if(buds!=null && buds<60) R.color.w_low else R.color.w_off_text))
+            val heroSp=(32 downTo 18 step 2).firstOrNull{Widgets.textWidth(ctx,hero,it.toFloat(),"google-sans-medium")<=spec.heroWidth} ?: 18
+            v.setTextViewTextSize(R.id.w_hero,TypedValue.COMPLEX_UNIT_SP,heroSp.toFloat())
+            // Without a reading the header already says what to do; the big text names the mode.
+            v.setTextViewText(R.id.w_hero_sub,"of listening")
+            v.setViewVisibility(R.id.w_hero_sub,if(buds!=null) View.VISIBLE else View.GONE)
+            v.setTextViewText(R.id.w_estimate,case?.let{"Case adds "+BatteryLife.short(it)} ?: "")
+            v.setViewVisibility(R.id.w_estimate,if(spec.estimate && case!=null) View.VISIBLE else View.GONE)
+
             val bb=b ?: SonyProtocol.Battery()
             val spoken=listOf(
-                BatteryWidget.bindRing(ctx,v,R.id.w_left_box,R.id.w_left_ring,R.id.w_left_art,R.id.w_left_value,R.id.w_left_label,R.id.w_left_charge,"Left",bb.left,bb.leftCharging,null,true),
-                BatteryWidget.bindRing(ctx,v,R.id.w_case_box,R.id.w_case_ring,R.id.w_case_art,R.id.w_case_value,R.id.w_case_label,R.id.w_case_charge,"Case",bb.case,bb.caseCharging,null,true),
-                BatteryWidget.bindRing(ctx,v,R.id.w_right_box,R.id.w_right_ring,R.id.w_right_art,R.id.w_right_value,R.id.w_right_label,R.id.w_right_charge,"Right",bb.right,bb.rightCharging,null,true),
+                BatteryWidget.bindRing(ctx,v,R.id.w_left_box,R.id.w_left_ring,R.id.w_left_art,R.id.w_left_value,R.id.w_left_label,R.id.w_left_charge,"Left",bb.left,bb.leftCharging,spec.ring,false),
+                BatteryWidget.bindRing(ctx,v,R.id.w_case_box,R.id.w_case_ring,R.id.w_case_art,R.id.w_case_value,R.id.w_case_label,R.id.w_case_charge,"Case",bb.case,bb.caseCharging,spec.ring,false),
+                BatteryWidget.bindRing(ctx,v,R.id.w_right_box,R.id.w_right_ring,R.id.w_right_art,R.id.w_right_value,R.id.w_right_label,R.id.w_right_charge,"Right",bb.right,bb.rightCharging,spec.ring,false),
             )
-            v.setContentDescription(R.id.w_batteries,"Battery: "+spoken.joinToString(", "))
-            val estimate=b?.let{listening(ctx,it,current)}
-            v.setTextViewText(R.id.w_estimate,estimate ?: "")
-            v.setViewVisibility(R.id.w_estimate,if(spec.estimate && estimate!=null) View.VISIBLE else View.GONE)
+            v.setContentDescription(R.id.w_batteries,(buds?.let{"$hero of listening. "} ?: "")+"Battery: "+spoken.joinToString(", "))
+            v.setViewLayoutHeight(R.id.w_modes,spec.modes,TypedValue.COMPLEX_UNIT_DIP)
             bindTiles(ctx,v,current,pending,away,spec.labels,24f,interactive)
             if(interactive) {
                 val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

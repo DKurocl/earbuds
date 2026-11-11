@@ -97,3 +97,9 @@ WF-1000XM5's own shape, traced from the product render (`docs/icon/bud_glyph.py`
 `ic_case_mark`. When the earbuds are away nothing is dimmed or greyed: the last reading is still
 the truth, and the status line says when the earbuds left ("Disconnected 10:18"). Mode buttons
 keep their colors too; a tap connects.
+
+Large slots (lock-screen hub 416 × 275, home 4×2) get the dashboard: the name with the status on
+the right ("Updated 14:32", "Back to ANC at 14:40"); a middle row that takes every dp the header
+and the buttons leave, with how long you can listen as the big number (largest size that fits its
+column, red under an hour) and the case's share under it, beside the three rings as large as the
+row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `WidgetLayout.dashboard`.

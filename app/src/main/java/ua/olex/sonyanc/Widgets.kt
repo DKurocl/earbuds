@@ -25,6 +25,7 @@ internal object WidgetLayout {
     private const val MAX_ROW_FLAT = 64f
     private const val MAX_COLUMN_TILE = 64f
     private const val MAX_RING = 84f
+    private const val MAX_DASH_RING = 64f
 
     enum class ModeVariant { ROW, INLINE, COLUMN }
 
@@ -61,23 +62,33 @@ internal object WidgetLayout {
         }
     }
 
-    /** Large slots get the dashboard; the listening-time line appears only when it fits. */
-    data class DashboardSpec(val estimate: Boolean, val labels: Boolean)
+    /**
+     * Large slots get the dashboard. The middle row takes all the height the header and the mode
+     * buttons leave: the listening time on the left, three rings on the right as large as both
+     * the height (ring and its percentage) and the width (at most 55 %, so the time keeps room)
+     * allow. [estimate] shows the case line under the time; [labels] the mode names.
+     */
+    data class DashboardSpec(val estimate: Boolean, val labels: Boolean, val ring: Float, val modes: Float, val heroWidth: Float)
 
     /**
      * The lock-screen hub slot on a Pixel 10 Pro XL is about 416 × 275 dp; a home 4×2 about 340 × 208.
      * Returns null when the slot is too small for status, batteries and modes together.
-     * @param title, value, small: measured line heights in dp (16, 15 and 12 sp).
+     * @param title, value, small: measured line heights in dp (16, 14 and 13 sp).
      */
     fun dashboard(width: Float, height: Float, title: Float, value: Float, small: Float, label: Float = 54f): DashboardSpec? {
         val w = width - 2 * 16f
-        val h = height - 2 * 14f
-        val batteries = maxOf(44f, value + 2 + small)
-        val base = title + 12 + batteries + 14 + 64
-        if (w < 280f || h < base) return null
-        val estimate = h >= base + 10 + small
+        val h = height - 2 * 16f
+        val modes = if (h >= 220f) 64f else 56f
+        val middle = h - title - 2 * 12f - modes
+        val ring = minOf(MAX_DASH_RING, middle - (6 + value), w * 0.55f / 3 - 12)
+        if (w < 280f || ring < 36f) return null
         val tile = (w - 2 * GAP) / 3
-        return DashboardSpec(estimate, labels = tile >= 2 * TILE_PAD + ICON + 8 + label)
+        return DashboardSpec(
+            estimate = middle >= 34f + 4 + 2 * small + 2,
+            labels = tile >= 2 * TILE_PAD + ICON + 8 + label,
+            ring = ring, modes = modes,
+            heroWidth = w - 3 * ring - 2 * 12 - 8,
+        )
     }
 
     /** [ring] is the outer ring diameter. Compact shows one ring (the emptier earbud) and the case as text. */
