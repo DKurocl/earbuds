@@ -351,16 +351,22 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
             }
             // Material's connected button group: the pressed button widens and its neighbours give
             // way (animateWidth), the chosen one morphs into a pill.
+            val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
             ButtonGroup(
+                overflowIndicator = {}, // three buttons always fit
                 modifier = Modifier.fillMaxWidth().selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
             ) {
                 Mode.entries.forEachIndexed { index, mode ->
-                    val interaction = remember { MutableInteractionSource() }
-                    ModeButton(
-                        mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, interaction,
-                        Modifier.weight(1f).animateWidth(interaction),
-                    ) { onChoose((state ?: NcState(mode)).copy(mode = mode)) }
+                    customItem(
+                        buttonGroupContent = {
+                            ModeButton(
+                                mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, interactions[index],
+                                Modifier.weight(1f).animateWidth(interactions[index]),
+                            ) { onChoose((state ?: NcState(mode)).copy(mode = mode)) }
+                        },
+                        menuContent = {},
+                    )
                 }
             }
         }
@@ -382,7 +388,7 @@ private fun ModeButton(
             count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
             else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
         },
-        colors = ToggleButtonDefaults.toggleButtonColors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
+        colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
         modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)
