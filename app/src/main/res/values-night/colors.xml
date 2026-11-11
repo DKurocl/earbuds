@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="w_bg">@android:color/system_neutral1_900</color>
+    <!-- Widgets wear the wallpaper's secondary palette like Google's own (Weather, Calendar):
+         the background at tone 20, buttons and discs one step up so they stand off it. -->
+    <color name="w_bg">@android:color/system_accent2_800</color>
     <color name="w_on">@android:color/system_accent1_200</color>
     <color name="w_on_text">@android:color/system_accent1_800</color>
-    <color name="w_off">@android:color/system_neutral2_800</color>
+    <color name="w_off">@android:color/system_accent2_700</color>
     <color name="w_off_text">@android:color/system_neutral1_100</color>
-    <color name="w_sub_text">@android:color/system_neutral2_300</color>
-    <color name="w_track">@android:color/system_neutral2_700</color>
+    <color name="w_sub_text">@android:color/system_accent2_200</color>
+    <color name="w_track">@android:color/system_accent2_600</color>
     <!-- Battery rings follow the wallpaper like Pixel's own battery widget; only low is red. -->
     <color name="w_ring">@android:color/system_accent1_200</color>
     <color name="w_low">#FFF2B8B5</color>
     <color name="w_unknown">@android:color/system_neutral2_600</color>
     <color name="w_on_ring">@android:color/system_accent1_800</color>
-    <color name="w_disc_fill">@android:color/system_accent1_800</color>
+    <color name="w_disc_fill">@android:color/system_accent1_700</color>
     <color name="w_glyph">@android:color/system_accent1_100</color>
 </resources>

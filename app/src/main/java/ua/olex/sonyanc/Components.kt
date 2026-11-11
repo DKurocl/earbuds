@@ -125,8 +125,10 @@ fun InfoRow(shape: ListItemShapes, glyph: Glyph?, title: String, value: String) 
 
 /**
  * A setting switch. The whole row toggles; the row itself stays neutral and the switch shows
- * the state, as in Android settings. [checked] null means the earbuds did not report the
- * setting: the row then says why and is not toggleable at all.
+ * the state, as in Android settings. While [busy] (the earbuds are being asked, or a change is
+ * on its way) the row looks exactly the same and ignores taps: the last known value is shown
+ * and quietly corrected if the earbuds answer otherwise, so nothing jumps. [checked] null means
+ * the setting was never read: the row says so and is not toggleable.
  */
 @Composable
 fun SwitchRow(
@@ -140,15 +142,15 @@ fun SwitchRow(
     val haptics = LocalHapticFeedback.current
     SegmentedListItem(
         onClick = {
+            if (busy) return@SegmentedListItem
             // The same toggle feel as Android's own settings switches.
             haptics.performHapticFeedback(if (checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
             onChange(!checked)
         },
-        shapes = shape, enabled = enabled && !busy, colors = rowColors(),
+        shapes = shape, enabled = enabled, colors = rowColors(),
         leadingContent = leading(glyph), supportingContent = summary?.let { { Text(it) } },
         trailingContent = {
-            if (busy) LoadingIndicator(Modifier.size(32.dp))
-            else Switch(
+            Switch(
                 checked = checked, onCheckedChange = null, enabled = enabled,
                 thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), MaterialTheme.colorScheme.primary) }) else null,
             )
@@ -168,10 +170,10 @@ fun ChoiceRow(
         InfoRow(shape, glyph, title, if (busy) "Reading…" else "Not available")
         return
     }
-    NavRow(
-        shape, glyph, title, choices.firstOrNull { it.first == selected }?.second ?: "Device setting",
-        enabled = !busy && enabled, trailing = if (busy) ({ LoadingIndicator(Modifier.size(32.dp)) }) else null,
-    ) { open = true }
+    // Same quiet rule as SwitchRow: the last known value, no spinner, taps wait for the answer.
+    NavRow(shape, glyph, title, choices.firstOrNull { it.first == selected }?.second ?: "Device setting", enabled = enabled) {
+        if (!busy) open = true
+    }
     if (open) ChoiceDialog(title, choices, selected, onDismiss = { open = false }) { open = false; onSelect(it) }
 }
 

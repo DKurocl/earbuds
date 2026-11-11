@@ -82,10 +82,10 @@ class ScreenshotTest {
 
     @Test fun backSwipe30() = backSwipe("back-swipe-30", PagePose(swipe = { 0.3f }, dy = { 120f }))
     @Test fun backSwipe100() = backSwipe("back-swipe-100", PagePose(swipe = { 1f }, dy = { 400f }))
-    /** Let go at 70 %: the page is halfway out. */
-    @Test fun backCommit() = backSwipe("back-commit", PagePose(swipe = { 0.7f }, slide = { 0.5f }))
-    /** Opening a page (or the back arrow), halfway. */
-    @Test fun pageOpen() = backSwipe("page-open", PagePose(slide = { 0.5f }))
+    /** Let go at 70 %: a quarter into the ending. */
+    @Test fun backCommit() = backSwipe("back-commit", PagePose(swipe = { 0.7f }, settle = { 0.25f }))
+    /** Opening a page, 40 % in. */
+    @Test fun pageOpen() = backSwipe("page-open", PagePose(settle = { 0.4f }, opening = { true }))
 
     @Test fun homeAmbient() = shoot("home-ambient") {
         HushScreen(
