@@ -27,7 +27,7 @@
         android:clickable="true" android:focusable="true"
         android:gravity="center_vertical" android:orientation="horizontal" android:baselineAligned="false">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:orientation="vertical" android:paddingEnd="8dp" tools:ignore="RtlSymmetry">
+            android:orientation="vertical" android:paddingEnd="8dp" tools:ignore="RtlSymmetry,NestedWeights">
             <TextView android:id="@+id/w_hero"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:fontFamily="google-sans-medium" android:includeFontPadding="false" android:singleLine="true"

@@ -26,6 +26,8 @@ internal object WidgetLayout {
     private const val MAX_COLUMN_TILE = 64f
     private const val MAX_RING = 84f
     private const val MAX_DASH_RING = 64f
+    /** Slots at least this tall span two launcher rows. */
+    private const val TWO_ROWS = 140f
 
     enum class ModeVariant { ROW, INLINE, COLUMN }
 
@@ -50,7 +52,8 @@ internal object WidgetLayout {
         val tile = (w - 2 * GAP) / 3
         val inline = tile >= 2 * TILE_PAD + ICON + 8 + label
         val stackedHeight = minOf(h, MAX_ROW_STACKED, tile)
-        val stacked = tile >= 2 * TILE_PAD + label && stackedHeight >= ICON + 4 + line + 16
+        // A one-row slot (3×1) shows icons only; names under icons only in taller slots.
+        val stacked = height >= TWO_ROWS && tile >= 2 * TILE_PAD + label && stackedHeight >= ICON + 4 + line + 16
         val flat = minOf(h, MAX_ROW_FLAT, tile)
         return when {
             // Wide enough for "icon label" side by side: the calmest layout, one line high.
@@ -109,7 +112,8 @@ internal object WidgetLayout {
             MAX_RING,
         )
         val status = ring(!compact, true) >= if (compact) 36f else 52f
-        val labels = !compact && ring(true, status) >= 40f
+        // One row (3×1): the glyphs already say which is which; names only in taller slots.
+        val labels = !compact && height >= TWO_ROWS && ring(true, status) >= 40f
         return BatterySpec(compact, ring(labels, status).coerceAtLeast(20f), labels, status)
     }
 }

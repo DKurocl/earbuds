@@ -12,13 +12,20 @@ class WidgetLayoutTest {
 
     private fun modes(w: Int, h: Int, scale: Float = 1f) = WidgetLayout.modes(w.toFloat(), h.toFloat(), label * scale, line * scale)
 
-    @Test fun oneRowSlotsKeepLabelsAndFitTheirHeight() {
+    @Test fun oneRowSlotsShowIconsOnlyUnlessNamesFitBeside() {
+        // 3×1: icons only, as the owner asked; wider one-row slots put the name beside the icon.
+        assertFalse(modes(252, 96).labels)
+        for (w in listOf(340, 424)) assertEquals(INLINE, modes(w, 96).variant)
         for (w in listOf(252, 340, 424)) {
             val s = modes(w, 96)
-            assertTrue("$w: labels", s.labels)
             assertTrue("$w: fits", s.group <= 96 - 2 * WidgetLayout.PAD)
             assertNotEquals(COLUMN, s.variant)
         }
+    }
+
+    @Test fun oneRowBatteryHasNoNames() {
+        assertFalse(WidgetLayout.battery(252f, 104f, 18f, 15f).labels)
+        assertTrue(WidgetLayout.battery(252f, 150f, 18f, 15f).labels)
     }
 
     @Test fun wideShortSlotsPutLabelsBesideIcons() {

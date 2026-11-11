@@ -19,21 +19,24 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 - **Type**: Pixel phones expose Google Sans as system families (`google-sans-flex`,
   `google-sans`, `google-sans-text`). The theme uses them when present, otherwise the default
   sans. No font files are bundled.
-- **Motion**: `MotionScheme.expressive()`. Pages move like Android's own predictive back between
-  screens (`Navigation.kt`): while the finger moves, the page shrinks to 90 % toward the far edge
-  (8 dp from it) with 32 dp corners and a shadow, follows the finger a little up and down, and the
-  previous page waits underneath, dimmed and already live. Letting go sends the page off that edge
-  (300 ms, emphasized); cancelling springs it back. Opening a page slides it in from the right over
-  the old one (400 ms, emphasized); the back arrow is the reverse. Pages keep their saved state
-  while covered. `PredictiveBackHandler`, `enableOnBackInvokedCallback`.
+- **Motion**: `MotionScheme.expressive()`. Pages move exactly like Android's own screens
+  (`Navigation.kt`, values from AOSP's CrossActivityBackAnimation): under a back swipe the page
+  shrinks to 0.9 toward the far edge (8 dp margin), following the finger up and down, through
+  Android's back-gesture curve; the previous page waits behind it at 0.9, 96 dp to the left, under
+  a scrim (0.8 dark, 0.2 light). Letting go plays the system's 450 ms ending: the page slides
+  96 dp further and fades out in its first fifth while the previous one grows to the screen. The
+  back arrow plays the same ending; opening a page is its mirror. Pose and page swaps happen in
+  one snapshot, so no frame ever shows a page in the wrong place, and the page beneath stays
+  composed for an instant start. `PredictiveBackHandler`, `enableOnBackInvokedCallback`.
 - **Lists**: `ListGroup` of Material's `SegmentedListItem`s: 16 dp outside, 4 dp between, 2 dp
   apart, and the pressed row morphs to fully rounded corners. Primary-colored section titles.
   - `SwitchRow`: the whole row toggles; the row stays neutral and the switch shows the state
     (Android settings), announced as a switch. A setting the earbuds did not report says
     "Not available" and is not toggleable at all.
   - `ChoiceRow`: shows the current value; opens a radio dialog (`ChoiceDialog`).
-  - Loading shows "Reading…" in the row and one indicator in the top bar; a row spinner
-    appears only while that one setting is being written.
+  - Settings show their last known values at once and keep their shape while the earbuds are
+    asked again; only the top bar shows that a read is running, and a row quietly updates if
+    the answer differs. Rows ignore taps while their own setting is being read or written.
 - **Pages**: `PageScaffold` = `LargeFlexibleTopAppBar` that collapses on scroll, back arrow, actions.
 - **Messages**: write failures appear as a snackbar (`LocalMessages`); link problems as a
   banner under the device header (`ErrorBanner`).
@@ -89,6 +92,10 @@ one geometry, and an SVG preview. The case is 48 dp wide, inside the 66 dp safe 
 - Ear-tip fit test, in-ear detection status, Adaptive Sound Control.
 
 ## Widgets: colors and the away state
+
+Backgrounds wear the wallpaper's secondary palette like Google's own widgets (Weather, Calendar):
+tone 20 in dark (`system_accent2_800`), tone 95 in light; buttons and discs one step up. One-row
+slots (3×1) show icons and percentages only; names appear in taller slots.
 
 Like Pixel's own battery widget: each part is a flat glyph in a tonal disc (`w_disc_fill`, the
 wallpaper's primary container) inside a ring in the wallpaper's accent (`w_ring`); only a level
