@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ClipData
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import ua.olex.sonyanc.SonyProtocol.Mode
 import ua.olex.sonyanc.SonyProtocol.NcState
@@ -61,7 +63,16 @@ class MainActivity : ComponentActivity() {
     }
 
     // A started screen owns the control link; leaving the app releases it at once.
-    override fun onStart() { super.onStart(); Headphones.hold(); startTick.intValue++ }
+    override fun onStart() {
+        super.onStart()
+        Headphones.hold()
+        startTick.intValue++
+        // Open the control link before the first frame is drawn: the first tap on a mode then
+        // finds it ready instead of waiting for the UI to start connecting.
+        if (Headphones.hasPermission(this) && Prefs.deviceAddress(this) != null) {
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { Headphones.connectAndSync() }
+        }
+    }
     override fun onStop() { Headphones.release(); super.onStop() }
 }
 
@@ -105,11 +116,21 @@ fun App(
     }
     var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
     var caseReminder by remember { mutableStateOf(Prefs.caseReminder(ctx)) }
+    val notificationsAllowed = { ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED }
+    var budsReminder by remember { mutableStateOf(Prefs.budsReminder(ctx) && notificationsAllowed()) }
+    val budsNotificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        budsReminder = granted; Prefs.setBudsReminder(ctx, granted)
+        if (!granted) show("Notifications are off for Earbuds, so the heads-up can't be shown.")
+    }
     var tileTwoWay by remember { mutableStateOf(Prefs.tileTwoWay(ctx)) }
     // The reminder is the only notification; ask for the permission only when it is turned on.
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         caseReminder = granted; Prefs.setCaseReminder(ctx, granted)
         if (!granted) show("Notifications are off for Earbuds, so the reminder can't be shown.")
+    }
+    // Allowed while a timer runs: show its Live Update at once.
+    val timerNotificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) AmbientTimer.until(ctx)?.let { LiveTimer.show(ctx, it, AmbientTimer.returnMode(ctx)) }
     }
     // Two-stage haptics: the tap ticks at once (HushScreen); the earbuds' acknowledgement
     // plays the mode's own pulse. Only the newest tap may report, so bursts stay quiet.
@@ -186,6 +207,9 @@ fun App(
                             val from = Headphones.state.value.shownNc ?: NcState(Mode.ANC)
                             AmbientTimer.start(ctx, ambientMinutes, from)
                             ambientUntil = AmbientTimer.until(ctx)
+                            // The countdown can live in the status bar; ask once it is wanted.
+                            if (ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                                timerNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         },
                         onStayInAmbient = { AmbientTimer.cancel(ctx); ambientUntil = null },
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && !device.connected && Prefs.linked(ctx) == false },
@@ -252,6 +276,11 @@ fun App(
                             else if (ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                                 caseReminder = true; Prefs.setCaseReminder(ctx, true)
                             } else notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        },
+                        budsReminder = budsReminder, onBudsReminder = { on ->
+                            if (!on) { budsReminder = false; Prefs.setBudsReminder(ctx, false); LowBattery.onAway(ctx) }
+                            else if (notificationsAllowed()) { budsReminder = true; Prefs.setBudsReminder(ctx, true) }
+                            else budsNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         },
                         tileTwoWay = tileTwoWay, onTileTwoWay = { tileTwoWay = it; Prefs.setTileTwoWay(ctx, it) },
                         ambientMinutes = ambientMinutes, onAmbientMinutes = { ambientMinutes = it; Prefs.setAmbientMinutes(ctx, it) },

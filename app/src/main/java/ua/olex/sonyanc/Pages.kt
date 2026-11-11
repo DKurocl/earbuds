@@ -82,6 +82,7 @@ fun AppSettingsContent(
     onAddTile: () -> Unit = {}, onPinWidget: () -> Unit = {}, onBluetooth: () -> Unit = {}, onDiagnostics: () -> Unit = {},
     onPinBatteryWidget: () -> Unit = {}, onOnConnect: (OnConnect) -> Unit = {},
     caseReminder: Boolean = false, onCaseReminder: (Boolean) -> Unit = {},
+    budsReminder: Boolean = false, onBudsReminder: (Boolean) -> Unit = {},
     tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {},
 ) {
@@ -110,6 +111,10 @@ fun AppSettingsContent(
             item {
                 SwitchRow(it, Glyph.BATTERY, "Case battery reminder",
                     "When the case is at ${CaseReminder.THRESHOLD} % or less as you take the earbuds out or put them away", caseReminder, onChange = onCaseReminder)
+            }
+            item {
+                SwitchRow(it, Glyph.EARBUDS, "Low earbud battery",
+                    "A heads-up at ${LowBattery.THRESHOLD} % while you listen, with the time left", budsReminder, onChange = onBudsReminder)
             }
         }
         ListGroup("Appearance") {
