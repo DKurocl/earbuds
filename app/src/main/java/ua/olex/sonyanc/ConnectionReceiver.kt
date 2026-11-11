@@ -41,13 +41,14 @@ class ConnectionReceiver : BroadcastReceiver() {
         CaseReminder.clear(ctx)
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
-        val onConnect = Prefs.onConnect(ctx)
+        // "When earbuds connect", or the home mode when the phone is at home (Places).
+        val apply = Places.modeOnConnect(ctx)
         val pending = goAsync()
         scope.launch {
             try {
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS)
-                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(onConnect.mode) }
+                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(apply) }
                 CaseReminder.onEarbudsOut(ctx)
             } finally {
                 pending.finish()

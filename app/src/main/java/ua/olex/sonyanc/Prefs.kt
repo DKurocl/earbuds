@@ -56,6 +56,15 @@ object Prefs {
     fun setLastSeen(ctx: Context, at: Long) = p(ctx).edit().putLong("last_seen", at).apply()
 
     fun onConnect(ctx: Context): OnConnect = OnConnect.from(p(ctx).getString("on_connect", null))
+    /** "At home" (Places): null means the same as everywhere. */
+    fun homeMode(ctx: Context): OnConnect? = p(ctx).getString("home_mode", null)?.let { n -> OnConnect.entries.firstOrNull { it.name == n } }
+    fun setHomeMode(ctx: Context, value: OnConnect?) = p(ctx).edit().putString("home_mode", value?.name).apply()
+    fun home(ctx: Context): Pair<Double, Double>? {
+        val lat = p(ctx).getString("home_lat", null)?.toDoubleOrNull() ?: return null
+        val lon = p(ctx).getString("home_lon", null)?.toDoubleOrNull() ?: return null
+        return lat to lon
+    }
+    fun setHome(ctx: Context, lat: Double, lon: Double) = p(ctx).edit().putString("home_lat", lat.toString()).putString("home_lon", lon.toString()).apply()
     fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).apply()
 
     fun caseReminder(ctx: Context) = p(ctx).getBoolean("case_reminder", false)

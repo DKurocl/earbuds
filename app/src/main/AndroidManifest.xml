@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Only for the opt-in case battery reminder; requested when it is turned on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- "At home": compare the last known location with home when the earbuds connect. Coarse is
+         enough for a 250 m circle; "all the time" because the connect happens in the background. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- Android 16+: the Ambient timer may show as a Live Update (status-bar chip). -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- "Ambient for a moment" returns on time: one exact alarm, only while that timer runs.
