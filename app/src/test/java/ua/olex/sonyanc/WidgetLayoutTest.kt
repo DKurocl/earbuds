@@ -104,6 +104,17 @@ class WidgetLayoutTest {
         val s = WidgetLayout.dashboard(416f, 275f, 20f, 18f, 15f, label)
         assertNotNull(s); s!!
         assertTrue(s.estimate); assertTrue(s.labels)
+        // The slot is filled: big rings and full-height buttons, and the time keeps a real column.
+        assertTrue(s.ring >= 56f); assertEquals(64f, s.modes); assertTrue(s.heroWidth >= 150f)
+    }
+
+    @Test fun dashboardMiddleNeverOverflows() {
+        for (w in listOf(300, 340, 416, 480)) for (h in listOf(190, 208, 240, 275, 320)) {
+            val s = WidgetLayout.dashboard(w.toFloat(), h.toFloat(), 20f, 18f, 15f, label) ?: continue
+            val middle = h - 32 - 20 - 24 - s.modes
+            assertTrue("$w×$h ring", s.ring + 6 + 18 <= middle + 0.01f)
+            assertTrue("$w×$h width", 3 * s.ring + 24 + 8 + s.heroWidth <= w - 32 + 0.01f)
+        }
     }
 
     @Test fun homeFourByTwoGetsADashboardWithoutClippedLabels() {
