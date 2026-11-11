@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -135,8 +137,14 @@ fun SwitchRow(
         InfoRow(shape, glyph, title, if (busy) "Reading…" else "Not available")
         return
     }
+    val haptics = LocalHapticFeedback.current
     SegmentedListItem(
-        onClick = { onChange(!checked) }, shapes = shape, enabled = enabled && !busy, colors = rowColors(),
+        onClick = {
+            // The same toggle feel as Android's own settings switches.
+            haptics.performHapticFeedback(if (checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+            onChange(!checked)
+        },
+        shapes = shape, enabled = enabled && !busy, colors = rowColors(),
         leadingContent = leading(glyph), supportingContent = summary?.let { { Text(it) } },
         trailingContent = {
             if (busy) LoadingIndicator(Modifier.size(32.dp))

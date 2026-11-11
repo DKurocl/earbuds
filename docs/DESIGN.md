@@ -4,9 +4,10 @@ Reference: Pixel Buds device details and Android 16 Settings. The app should rea
 Google app on a Pixel: wallpaper colors, Google Sans, grouped lists, large collapsing titles,
 predictive back.
 
-Components come from Material 3 Expressive itself (`material3 1.5.0-alpha18`, the newest that
-builds without AGP 9 and SDK 37), not imitations: `SegmentedListItem`, `ButtonGroup` with
-`ToggleButton`, `LargeFlexibleTopAppBar`, `LoadingIndicator`. Measures not taken from a component
+Components come from Material 3 Expressive itself (`material3 1.5.0-rc01` on SDK 37: the owner's
+Pixel runs Android 17), not imitations: `SegmentedListItem`, `ButtonGroup` with `ToggleButton`,
+`LargeFlexibleTopAppBar`, `VerticalSlider` and `Slider` with `CenteredTrack`, `FilledTonalIconButton`
+with its press morph, `LoadingIndicator`, emphasized type. Measures not taken from a component
 come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroupSmallTokens`,
 `ListTokens`), read from the library sources.
 
@@ -41,8 +42,8 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 | Page | Content |
 |---|---|
-| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → Battery page; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat and "Ambient · N min"; in Ambient the timer countdown, level slider, Low / Medium / High / Voice pills. |
-| Equalizer | Centered soft preset pills (Off, Custom first; Saved 1/2 are the earbuds' slots). Custom: five vertical bands with a fixed pill thumb, thin fill from 0 dB, haptic tick per dB; Clear Bass slider; Reset. Fixed presets offer "Use Custom". |
+| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → Battery page; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
+| Equalizer | Presets as Material toggle buttons (round; the chosen one squares off), Off and Custom first; Saved 1/2 are the earbuds' slots. Custom: five `VerticalSlider`s with the centered track (fill from 0 dB), whole-dB steps, a haptic tick per dB and a firmer one at 0; Clear Bass is a centered `Slider`; Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |
 | App settings | Device picker only when needed, display name, When earbuds connect, Ambient for a moment length, case battery reminder, wallpaper colors, haptics, Quick Settings tile and its cycle, both widgets, diagnostics, version. |
