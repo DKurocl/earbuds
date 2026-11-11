@@ -349,47 +349,49 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
                         description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                 }
             }
-            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Material's connected button group: the pressed button widens and its neighbours give
+            // way (animateWidth), the chosen one morphs into a pill.
+            ButtonGroup(
+                modifier = Modifier.fillMaxWidth().selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            ) {
                 Mode.entries.forEachIndexed { index, mode ->
-                    ModeSegment(mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, Modifier.weight(1f)) {
-                        onChoose((state ?: NcState(mode)).copy(mode = mode))
-                    }
+                    val interaction = remember { MutableInteractionSource() }
+                    ModeButton(
+                        mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, interaction,
+                        Modifier.weight(1f).animateWidth(interaction),
+                    ) { onChoose((state ?: NcState(mode)).copy(mode = mode)) }
                 }
             }
         }
     }
 }
 
-/**
- * Connected button group segment, M3 Expressive: soft corners everywhere (outer full,
- * inner 16 dp), the selected one morphs to a full pill, a press squeezes to 18 dp.
- */
+/** One mode in the connected group: Material's toggle button with the connected shapes. */
 @Composable
-private fun ModeSegment(mode: Mode, index: Int, count: Int, selected: Boolean, applying: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ModeButton(
+    mode: Mode, index: Int, count: Int, selected: Boolean, applying: Boolean,
+    interaction: MutableInteractionSource, modifier: Modifier, onClick: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val spec = MaterialTheme.motionScheme.fastSpatialSpec<androidx.compose.ui.unit.Dp>()
-    val full = 28.dp
-    val inner = 16.dp
-    fun target(isOuter: Boolean) = when { pressed -> 18.dp; selected || isOuter -> full; else -> inner }
-    val start by animateDpAsState(target(index == 0), spec, label = "start")
-    val end by animateDpAsState(target(index == count - 1), spec, label = "end")
-    val bg by animateColorAsState(if (selected) cs.primary else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = "bg")
-    val fg by animateColorAsState(if (selected) cs.onPrimary else cs.onSurface, MaterialTheme.motionScheme.fastEffectsSpec(), label = "fg")
-    Row(
-        modifier.height(56.dp)
-            .clip(RoundedCornerShape(topStart = start, bottomStart = start, topEnd = end, bottomEnd = end))
-            .background(bg)
-            .selectable(selected = selected, interactionSource = interaction, indication = ripple(), role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = mode.label }
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+    ToggleButton(
+        checked = selected,
+        onCheckedChange = { onClick() },
+        shapes = when (index) {
+            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+            count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+        },
+        colors = ToggleButtonDefaults.toggleButtonColors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        interactionSource = interaction,
+        modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)
+            .semantics { role = Role.RadioButton; contentDescription = mode.label },
     ) {
-        if (applying) LoadingIndicator(Modifier.size(24.dp), color = fg)
-        else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(22.dp), fg)
-        Spacer(Modifier.width(8.dp))
-        Text(mode.short, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Clip)
+        if (applying) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
+        else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(24.dp), LocalContentColor.current)
+        Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+        Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible)
     }
 }
 

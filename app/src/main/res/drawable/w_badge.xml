@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Charging badge on a ring, like the app's chip: ring color, outlined in the widget background. -->
+<!-- Charging badge on a ring, like the app's chip: theme color, outlined in the widget background. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="@color/w_good" />
+    <solid android:color="@color/w_ring" />
     <stroke android:width="2dp" android:color="@color/w_bg" />
 </shape>

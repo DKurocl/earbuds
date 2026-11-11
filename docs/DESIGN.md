@@ -4,6 +4,12 @@ Reference: Pixel Buds device details and Android 16 Settings. The app should rea
 Google app on a Pixel: wallpaper colors, Google Sans, grouped lists, large collapsing titles,
 predictive back.
 
+Components come from Material 3 Expressive itself (`material3 1.5.0-alpha18`, the newest that
+builds without AGP 9 and SDK 37), not imitations: `SegmentedListItem`, `ButtonGroup` with
+`ToggleButton`, `LargeFlexibleTopAppBar`, `LoadingIndicator`. Measures not taken from a component
+come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroupSmallTokens`,
+`ListTokens`), read from the library sources.
+
 ## Foundations (`Theme.kt`, `Components.kt`)
 
 - **Color**: dynamic color by default; a blue fallback scheme matches the icon. Page background
@@ -19,14 +25,15 @@ predictive back.
   (300 ms, emphasized); cancelling springs it back. Opening a page slides it in from the right over
   the old one (400 ms, emphasized); the back arrow is the reverse. Pages keep their saved state
   while covered. `PredictiveBackHandler`, `enableOnBackInvokedCallback`.
-- **Lists**: `ListGroup` + rows. Group corners are 24 dp outside and 4 dp between items, 2 dp
-  gaps, a primary-colored section title. Rows are at least 64 dp: icon, title, summary.
-  - `SwitchRow`: the whole row toggles. A setting the earbuds did not report says
+- **Lists**: `ListGroup` of Material's `SegmentedListItem`s: 16 dp outside, 4 dp between, 2 dp
+  apart, and the pressed row morphs to fully rounded corners. Primary-colored section titles.
+  - `SwitchRow`: the whole row toggles; the row stays neutral and the switch shows the state
+    (Android settings), announced as a switch. A setting the earbuds did not report says
     "Not available" and is not toggleable at all.
   - `ChoiceRow`: shows the current value; opens a radio dialog (`ChoiceDialog`).
   - Loading shows "Reading…" in the row and one indicator in the top bar; a row spinner
     appears only while that one setting is being written.
-- **Pages**: `PageScaffold` = `LargeTopAppBar` that collapses on scroll, back arrow, actions.
+- **Pages**: `PageScaffold` = `LargeFlexibleTopAppBar` that collapses on scroll, back arrow, actions.
 - **Messages**: write failures appear as a snackbar (`LocalMessages`); link problems as a
   banner under the device header (`ErrorBanner`).
 
@@ -34,7 +41,7 @@ predictive back.
 
 | Page | Content |
 |---|---|
-| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → Battery page; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off (soft connected group, 56 dp); in ANC Speak-to-Chat and "Ambient · N min"; in Ambient the timer countdown, level slider, Low / Medium / High / Voice pills. |
+| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → Battery page; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat and "Ambient · N min"; in Ambient the timer countdown, level slider, Low / Medium / High / Voice pills. |
 | Equalizer | Centered soft preset pills (Off, Custom first; Saved 1/2 are the earbuds' slots). Custom: five vertical bands with a fixed pill thumb, thin fill from 0 dB, haptic tick per dB; Clear Bass slider; Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |
@@ -79,3 +86,13 @@ one geometry, and an SVG preview. The case is 48 dp wide, inside the 66 dp safe 
 ## Not done yet (needs captures from the real earbuds first)
 
 - Ear-tip fit test, in-ear detection status, Adaptive Sound Control.
+
+## Widgets: colors and the away state
+
+Like Pixel's own battery widget: each part is a flat glyph in a tonal disc (`w_disc_fill`, the
+wallpaper's primary container) inside a ring in the wallpaper's accent (`w_ring`); only a level
+of 20 % or less (not charging) turns the ring and number red. The earbud glyph is the
+WF-1000XM5's own shape, traced from the product render (`docs/icon/bud_glyph.py`); the case is
+`ic_case_mark`. When the earbuds are away nothing is dimmed or greyed: the last reading is still
+the truth, and the status line says when the earbuds left ("Disconnected 10:18"). Mode buttons
+keep their colors too; a tap connects.
