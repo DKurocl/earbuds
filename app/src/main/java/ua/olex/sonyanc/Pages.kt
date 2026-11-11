@@ -110,6 +110,7 @@ fun AppSettingsContent(
     homeSummary: String = "Not set", onSetHome: () -> Unit = {},
     tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {},
+    liveLink: Boolean? = null, onLiveLink: (Boolean) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
@@ -123,6 +124,12 @@ fun AppSettingsContent(
             }
             if (devices.isEmpty()) item { NavRow(it, Glyph.BLUETOOTH, "Pair your WF-1000XM5", "Open Android Bluetooth settings", onClick = onBluetooth) }
             item { NavRow(it, Glyph.EDIT, "Name", displayName, onClick = onRename) }
+            // Android's companion link; absent where presence events are not available.
+            if (liveLink != null) item {
+                SwitchRow(it, Glyph.LINK, "Stay in sync",
+                    "Stays connected while the earbuds are out, so changes made on the earbuds show at once and taps are instant",
+                    liveLink, onChange = onLiveLink)
+            }
             item {
                 ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
                     onOnConnect(OnConnect.entries[i])

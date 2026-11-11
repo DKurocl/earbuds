@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Android 12+ -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -18,6 +18,9 @@
     <!-- "Ambient for a moment" returns on time: one exact alarm, only while that timer runs.
          Sideloaded personal app, so the install-time permission is fine. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- "Stay in sync": Android binds LinkService while the companion earbuds are connected. -->
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
 
     <!-- "Find" opens Google Find Hub, where the earbuds are registered. -->
     <queries>
@@ -29,7 +32,7 @@
         android:theme="@style/Theme.Hush"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true">
@@ -52,6 +55,20 @@
             android:icon="@drawable/w_icon_noise_control_off" android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
+        <!-- App Functions for Gemini (EarbudsFunctions.kt; the service and schema are generated). -->
+        <service android:name=".EarbudsFunctionService" android:exported="true"
+            android:enabled="@bool/android16" tools:targetApi="36"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE">
+            <property android:name="android.app.appfunctions.schema" android:value="app_functions_schema.xsd" />
+            <property android:name="android.app.appfunctions.v2" android:value="earbuds_functions.xml" />
+            <intent-filter><action android:name="android.app.appfunctions.AppFunctionService" /></intent-filter>
+        </service>
+        <!-- Bound by Android only while the companion earbuds are connected (LiveLink). -->
+        <service android:name=".LinkService" android:exported="true"
+            android:enabled="@bool/android16" tools:targetApi="36"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter><action android:name="android.companion.CompanionDeviceService" /></intent-filter>
         </service>
         <receiver android:name=".AmbientTimerReceiver" android:exported="false" />
         <receiver android:name=".LowBatteryReceiver" android:exported="false" />

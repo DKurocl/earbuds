@@ -188,6 +188,58 @@ object Headphones {
         if (!usage.active) { cancelModes(); conn.close() }
     }
 
+    // ---- staying connected while the earbuds are present (LiveLink) ---------------------
+    private var stayJob: Job? = null
+    /** Battery read on the open channel for firmware that does not push its levels. */
+    private const val STAY_BATTERY_MS = 15 * 60_000L
+
+    /** Android reports the companion earbuds connected (true) or gone (false). */
+    @Synchronized fun stay(on: Boolean) {
+        if (on == usage.staying) return
+        usage.stay(on)
+        stayJob?.cancel()
+        stayJob = null
+        if (on) stayJob = scope.launch { keepLinked() }
+        else if (!usage.active) { cancelModes(); conn.close() }
+    }
+
+    val staying get() = usage.staying
+
+    /**
+     * Keeps the control channel open while the earbuds are out of the case: reconnects with a
+     * backoff when it drops and otherwise waits. The earbuds' own notifications update the mode
+     * and battery (decode); only firmware that never pushes its battery gets a slow read.
+     */
+    private suspend fun keepLinked() {
+        // Let Android finish A2DP/HFP before the control channel, as ConnectionReceiver does.
+        delay(ConnectionReceiver.SETTLE_MS)
+        var backoff = 2_000L
+        var batteryDue = 0L
+        while (usage.staying) {
+            if (!conn.connected) {
+                if (!connectAndSync()) {
+                    // A background attempt must not leave an error banner for the next launch.
+                    if (!usage.foreground) _state.update {
+                        it.copy(error = null, status = if (it.status == Status.FAILED) Status.DISCONNECTED else it.status)
+                    }
+                    delay(backoff)
+                    backoff = (backoff * 2).coerceAtMost(60_000L)
+                    continue
+                }
+                backoff = 2_000L
+                withTimeoutOrNull(3000) { queryBattery() }
+                batteryDue = now() + STAY_BATTERY_MS
+            }
+            val wait = if (batteryPushed) Long.MAX_VALUE else (batteryDue - now()).coerceAtLeast(1_000L)
+            val dropped = withTimeoutOrNull(wait) { _state.first { !it.connected } } != null
+            // A screen polls on its own (startInfoLoop); in the background read once per period.
+            if (!dropped && usage.staying && !batteryPushed && !usage.foreground) {
+                queryBattery()
+                batteryDue = now() + STAY_BATTERY_MS
+            }
+        }
+    }
+
     private fun clearDeviceSettings() {
         _features.value = emptyMap()
         _advanced.value = emptyMap()

@@ -106,6 +106,7 @@ class WidgetAnimationTest {
             val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             Canvas(b).apply { drawColor(Color.parseColor("#0B1530")) }.also { host.draw(it) }
             File(dir, "widget-anim-$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            Goldens.check("widget-anim-$name", b)
         }
         assertEquals(listOf(false, true, true), ids.map { root.findViewById<View>(it).isEnabled })
         assertTrue("first appearance is still", transitions(root).none { it.isRunning })

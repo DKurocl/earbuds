@@ -70,7 +70,11 @@ class MainActivity : ComponentActivity() {
         // Open the control link before the first frame is drawn: the first tap on a mode then
         // finds it ready instead of waiting for the UI to start connecting.
         if (Headphones.hasPermission(this) && Prefs.deviceAddress(this) != null) {
-            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { Headphones.connectAndSync() }
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                Headphones.connectAndSync()
+                // Re-arms "Stay in sync" after an update; a no-op when it is off.
+                LiveLink.ensureObserving(this@MainActivity)
+            }
         }
     }
     override fun onStop() { Headphones.release(); super.onStop() }
@@ -147,6 +151,19 @@ fun App(
         if (!granted) show("Notifications are off for Earbuds, so the heads-up can't be shown.")
     }
     var tileTwoWay by remember { mutableStateOf(Prefs.tileTwoWay(ctx)) }
+    // "Stay in sync" (LiveLink): Android's companion consent dialog, then presence events.
+    var liveLink by remember { mutableStateOf(LiveLink.enabled(ctx)) }
+    val companionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        LiveLink.confirmed(ctx, result.resultCode == android.app.Activity.RESULT_OK) { liveLink = it }
+    }
+    fun setLiveLink(on: Boolean) {
+        if (!on) { LiveLink.disable(ctx); liveLink = false; return }
+        LiveLink.enable(ctx, confirm = { sender -> companionLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build()) }) { ok ->
+            liveLink = ok
+            if (ok && Prefs.linked(ctx) == true) Headphones.stay(true)
+            else show("Couldn't link to the earbuds. Make sure they're connected and try again.")
+        }
+    }
     // The reminder is the only notification; ask for the permission only when it is turned on.
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         caseReminder = granted; Prefs.setCaseReminder(ctx, granted)
@@ -278,6 +295,7 @@ fun App(
                         onBack = ::back,
                         onSelect = { picked ->
                             scope.launch {
+                                LiveLink.forget(ctx); liveLink = false
                                 Headphones.selectDevice(picked.address, picked.name)
                                 saved = picked.address
                                 back()
@@ -318,6 +336,7 @@ fun App(
                         },
                         tileTwoWay = tileTwoWay, onTileTwoWay = { tileTwoWay = it; Prefs.setTileTwoWay(ctx, it) },
                         ambientMinutes = ambientMinutes, onAmbientMinutes = { ambientMinutes = it; Prefs.setAmbientMinutes(ctx, it) },
+                        liveLink = if (LiveLink.supported && saved != null) liveLink else null, onLiveLink = ::setLiveLink,
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                     )
                     Page.DIAGNOSTICS -> {

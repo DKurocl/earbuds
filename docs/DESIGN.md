@@ -1,6 +1,6 @@
-# Earbuds design (1.3)
+# Earbuds design (1.4)
 
-Reference: Pixel Buds device details and Android 16 Settings. The app should read like a
+Reference: Pixel Buds device details and Android 17 Settings. The app should read like a
 Google app on a Pixel: wallpaper colors, Google Sans, grouped lists, large collapsing titles,
 predictive back.
 
@@ -45,18 +45,21 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 | Page | Content |
 |---|---|
-| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → Battery page; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
+| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → the Battery page grows out of the tile; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
 | Equalizer | Presets as Material toggle buttons (round; the chosen one squares off), Off and Custom first; Saved 1/2 are the earbuds' slots. Custom: five `VerticalSlider`s with the centered track (fill from 0 dB), whole-dB steps, a haptic tick per dB and a firmer one at 0; Clear Bass is a centered `Slider`; Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |
-| App settings | Device picker only when needed, display name, When earbuds connect, Ambient for a moment length, case battery reminder, wallpaper colors, haptics, Quick Settings tile and its cycle, both widgets, diagnostics, version. |
+| App settings | Device picker only when needed, display name, Stay in sync, When earbuds connect, At home (+ Home), Ambient for a moment length, case battery reminder, low earbud battery, wallpaper colors, haptics, Quick Settings tile and its cycle, both widgets, diagnostics, version. |
 | Diagnostics | Command log with copy and clear. |
 
 The home screen has no logo or app name (only the settings button); the CI visual check greps for the device name "WF-1000XM5".
 `DesignPreviewActivity` (debug only) renders every page from fixtures:
 `anc`, `ambient`, `error`, `permission`, `settings`, `settings-loading`, `equalizer`,
 `equalizer-preset`, `info`, `app`, `diagnostics`, `widgets`, `widgets-battery`.
-`ScreenshotTest` (JVM, Robolectric, `-Pscreenshots=true`) renders every page and widget size to PNG.
+`ScreenshotTest` (JVM, Robolectric, `-Pscreenshots=true`) renders every page, motion pose and widget size
+to PNG and compares each with its golden (`app/src/screenshotTest/goldens`, quarter size; more than
+0.2 % of pixels off fails, with a diff image). `-PrecordGoldens=true` rewrites them; CI runs the
+comparison in its own job.
 
 Widget mode buttons (`docs/widget/segments.py` generates the drawables and layouts): each button is
 a left cap, a stretching middle and a right cap, and a cap is half as wide as the button is tall, so
@@ -89,7 +92,7 @@ one geometry, and an SVG preview. The case is 48 dp wide, inside the 66 dp safe 
 
 ## Not done yet (needs captures from the real earbuds first)
 
-- Ear-tip fit test, in-ear detection status, Adaptive Sound Control.
+- Ear-tip fit test, in-ear detection status. (Activity-based Adaptive Sound Control was declined.)
 
 ## Widgets: colors and the away state
 
@@ -123,3 +126,21 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 - **Large text**: one-line labels shrink to fit (`TextAutoSize`) at the largest font sizes;
   renders at 150 % and 200 % are part of `ScreenshotTest`, and `AccessibilityUiTest` runs
   Google's Accessibility Test Framework on every page on the emulator.
+
+## The paper ideal (1.4)
+
+- **Stay in sync** (`LiveLink`): with one consent in Android's own companion dialog, Earbuds becomes
+  the earbuds' companion app like Pixel Buds' or a watch's. Android binds `LinkService` while the
+  earbuds are connected (presence events, Android 16+) and Earbuds keeps the control channel open:
+  the earbuds' notifications update mode and battery everywhere at once (a mode changed by touch
+  on the earbuds shows in the widget), and taps need no connection first. No foreground service,
+  notification or polling; only firmware that never pushes its battery gets one read per 15 min.
+- **Container transform**: the listening tiles open the Battery page by growing it out of the tile
+  (scaled to the tile's width, cut to its height, 28 → 0 dp corners, emphasized, 450 ms), and Back
+  returns it into the tile, after the predictive swipe too. `PageOrigins` carries the tile's bounds;
+  `PageLayers` draws it, so `ScreenshotTest` poses it like the slide.
+- **Gemini** (`EarbudsFunctions`, App Functions): set noise control, Ambient for N minutes, read the
+  battery as numbers and a sentence. The KDoc is the description the assistant reads; the service
+  and its schema are generated by KSP.
+- **New phone**: device-to-device transfer brings the settings (`data_extraction_rules.xml`); the cloud
+  still gets nothing.

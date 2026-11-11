@@ -52,6 +52,7 @@ class ScreenshotTest {
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         root.draw(Canvas(bitmap))
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        Goldens.check(name, bitmap)
     }
 
     private fun shoot(name: String, content: @Composable () -> Unit) {
@@ -86,6 +87,14 @@ class ScreenshotTest {
     @Test fun backCommit() = backSwipe("back-commit", PagePose(swipe = { 0.7f }, settle = { 0.25f }))
     /** Opening a page, 40 % in. */
     @Test fun pageOpen() = backSwipe("page-open", PagePose(settle = { 0.4f }, opening = { true }))
+
+    /** The "Listening left" tile on the 448 × 960 dp render (px), where Battery grows from. */
+    private val tile = androidx.compose.ui.geometry.Rect(48f, 915f, 660f, 1305f)
+    /** Container transform: Battery grows out of the tile, 30 % and 70 % in. */
+    @Test fun cardOpen30() = backSwipe("card-open-30", PagePose(settle = { 0.3f }, opening = { true }, origin = { tile }))
+    @Test fun cardOpen70() = backSwipe("card-open-70", PagePose(settle = { 0.7f }, opening = { true }, origin = { tile }))
+    /** Back swipe let go at 60 %: the page returns into the tile, halfway. */
+    @Test fun cardClose() = backSwipe("card-close", PagePose(swipe = { 0.6f }, settle = { 0.5f }, origin = { tile }))
 
     /** Accessibility: the largest font sizes Android offers must not clip or overlap. */
     @Config(fontScale = 2.0f)

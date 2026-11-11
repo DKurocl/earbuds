@@ -1,4 +1,4 @@
-# WF-1000XM5 replacement audit — Hush 0.9.0
+# WF-1000XM5 replacement audit — Earbuds 1.4
 
 Goal: independent everyday control, with no Sony app, account, network permission, notification service or simulated settings.
 
@@ -14,7 +14,11 @@ Goal: independent everyday control, with no Sony app, account, network permissio
 | EQ and Clear Bass | Device presets and six editable values, readback |
 | DSEE | Read-gated switch |
 | Wearing auto-pause | Corrected F6 01 inquiry, read-gated switch |
-| Home widget / launcher shortcuts | Direct on-demand mode selection |
+| Home and lock-screen widgets / launcher shortcuts | Mode buttons on every size, a dashboard (listening time, rings) in large slots |
+| Live state | "Stay in sync": the control channel stays open while the earbuds are connected (Android companion presence), so changes made on the earbuds show at once |
+| Voice assistant control | Gemini App Functions: noise control, Ambient for a moment, battery |
+| Battery history and alerts | 7-day chart, measured battery life and health; case reminder and low earbud battery (opt-in) |
+| Automatic mode | When earbuds connect, and a separate mode at home |
 | Quick Settings | Optional cycling tile, no notification |
 | Device nickname | Local display name, independent of Bluetooth name |
 | Connection refresh / diagnostics | Reconnect, codec, battery, exportable command log |
@@ -43,7 +47,7 @@ Each control is read when opened. Writes are enabled only after the device retur
 | Function | Delivery / limitation |
 |---|---|
 | Pairing and forgetting | Android Bluetooth settings |
-| Multipoint and host switching | Android device settings on the owner's Pixel; no independent Hush protocol control yet |
+| Multipoint and host switching | Android device settings; declined by the owner |
 | Spatial audio / head tracking | Android settings; no Hush DSP or fake toggle |
 | LE Audio | Android settings; Hush's RFCOMM controls may be unavailable in LE-only operation |
 | Playback / volume | Existing system player and earbud actions; no duplicate player in Hush |
@@ -52,13 +56,12 @@ Each control is read when opened. Writes are enabled only after the device retur
 | Voice language packages | Download/transfer not implemented; existing language preserved |
 | Firmware updates / automatic updates | Not implemented; Sony app still required for update delivery |
 | Ear-tip seal measurement | Not implemented; requires a verified device measurement session |
-| Adaptive Sound Control | No activity/location background service implemented |
+| Adaptive Sound Control | "At home" uses location at connect only; activity-based switching declined by the owner |
 | 360 Reality Audio personalization | Sony/service provisioning not implemented |
 | Safe-listening history / Auto Play / Auto Switch | Not implemented; not presented as functioning |
 | Initialize / factory reset | Deliberately absent from routine controls |
-| Usage history / charging alerts | No tracking or notification system |
 
-Hush is not yet a complete replacement for firmware servicing, ear-tip measurement, adaptive behavior or Sony/partner provisioning. Installing this APK does not establish parity. Routine controls can work independently; remaining device paths need captures and physical verification.
+Earbuds is not a replacement for firmware servicing, ear-tip measurement, adaptive behavior or Sony/partner provisioning. Installing this APK does not establish parity. Routine controls can work independently; remaining device paths need captures and physical verification.
 
 ## Evidence and protocol references
 
@@ -70,7 +73,7 @@ Hush is not yet a complete replacement for firmware servicing, ear-tip measureme
 
 The two earbuds now use the same front-facing shot mirrored in layout, at equal size. No differently angled pair is cropped into the rings. The case uses the existing transparent photo. Dark background uses a Material container surface, action buttons use secondary-container colors, battery green is #43C465, and inactive/unknown states remain visually separate from current readings. ANC labels are compact and retain a fixed row height.
 
-## 0.9.0 verification and behavior
+## 0.9.0 verification and behavior (historical)
 
 The full CI path runs debug and release JVM tests, lint for both variants, debug/release assembly, Android UI test assembly, emulator UI tests, light/dark/large-text screenshots and an optimized release installation/smoke check. UI fixtures test rendering and interaction only, and stream tests test transport mechanics only. Neither establishes physical device compatibility. Actual run results are recorded separately after completion.
 
@@ -78,7 +81,7 @@ Regression coverage includes fragmented/escaped frames, both command tables, ACK
 
 Disconnected settings are invalidated immediately. Writes require a live session and recognized current state. Write readback is matched to return packets rather than notifications; independent setting reads no longer hold the global command mutex while awaiting payloads. Editing one touch field merges with the newest device values. Ambient touch aliases compare semantically. Noise commands superseded during connection are discarded before transmission.
 
-## Idle behavior
+## Idle behavior (0.9.0; see DESIGN.md for 1.4)
 
 There is no persistent service, alarm, scheduled worker or notification. Leaving the last foreground screen cancels polling and immediately closes the control socket, including an in-flight connection attempt. Late UI queries cannot reconnect without a live screen/action lease. Widgets and the optional Quick Settings tile acquire a separate short action lease; this never enables battery/codec polling, and the socket closes when that command finishes. Opening a sheet again after returning to the foreground refreshes its device state. Android may retain the process in its normal cache; this does not keep a control connection or polling loop running.
 
