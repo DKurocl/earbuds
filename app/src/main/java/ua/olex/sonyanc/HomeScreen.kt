@@ -386,7 +386,8 @@ private fun ModeButton(
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
         modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)
-            .semantics { role = Role.RadioButton; contentDescription = mode.label },
+            // One of three, like radio buttons: announced and tested as selected, not as on/off.
+            .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label },
     ) {
         if (applying) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
         else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(24.dp), LocalContentColor.current)
