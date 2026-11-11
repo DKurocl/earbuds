@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -19,6 +18,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -42,7 +44,8 @@ fun PageScaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         containerColor = page,
         topBar = {
-            LargeTopAppBar(
+            // M3 Expressive's large flexible app bar: the title collapses into the bar on scroll.
+            LargeFlexibleTopAppBar(
                 title = { Text(title, maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Back" }) { HushIcon(Glyph.BACK) }
@@ -62,28 +65,22 @@ fun PageScaffold(
     }
 }
 
-/** Grouped list corners: large outside the group, small between items (Android 16 settings). */
-fun groupShape(index: Int, count: Int): Shape {
-    val big = 24.dp
-    val small = 4.dp
-    return RoundedCornerShape(
-        topStart = if (index == 0) big else small, topEnd = if (index == 0) big else small,
-        bottomStart = if (index == count - 1) big else small, bottomEnd = if (index == count - 1) big else small,
-    )
-}
-
 class GroupScope {
-    internal val items = mutableListOf<@Composable (Shape) -> Unit>()
-    fun item(content: @Composable (Shape) -> Unit) { items += content }
+    internal val items = mutableListOf<@Composable (ListItemShapes) -> Unit>()
+    fun item(content: @Composable (ListItemShapes) -> Unit) { items += content }
 }
 
+/**
+ * A group of Material 3 segmented list items, as in Android 16 settings: 16 dp outside, 4 dp
+ * between, 2 dp apart, and the pressed row morphs to fully rounded corners.
+ */
 @Composable
 fun ListGroup(title: String? = null, build: GroupScope.() -> Unit) {
     val scope = GroupScope().apply(build)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         title?.let { SectionTitle(it) }
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            scope.items.forEachIndexed { i, item -> item(groupShape(i, scope.items.size)) }
+        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            scope.items.forEachIndexed { i, item -> item(ListItemDefaults.segmentedShapes(index = i, count = scope.items.size)) }
         }
     }
 }
@@ -96,89 +93,77 @@ fun SectionTitle(text: String) {
     )
 }
 
-/** The common row body: optional icon, title, optional summary, optional trailing content. */
 @Composable
-private fun RowBody(glyph: Glyph?, title: String, summary: String?, enabled: Boolean, trailing: (@Composable () -> Unit)?) {
-    val cs = MaterialTheme.colorScheme
-    val alpha = if (enabled) 1f else .5f
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        glyph?.let { HushIcon(it, color = cs.onSurfaceVariant.copy(alpha = alpha)) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = cs.onSurface.copy(alpha = alpha))
-            summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant.copy(alpha = alpha)) }
-        }
-        trailing?.invoke()
-    }
-}
+private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surfaces.card)
+
+private fun leading(glyph: Glyph?): (@Composable () -> Unit)? = glyph?.let { { HushIcon(it, color = LocalContentColor.current) } }
 
 @Composable
 fun NavRow(
-    shape: Shape, glyph: Glyph?, title: String, summary: String? = null,
+    shape: ListItemShapes, glyph: Glyph?, title: String, summary: String? = null,
     enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, onClick: () -> Unit,
 ) {
-    Surface(onClick = onClick, enabled = enabled, shape = shape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
-        RowBody(glyph, title, summary, enabled, trailing)
-    }
+    SegmentedListItem(
+        onClick = onClick, shapes = shape, enabled = enabled, colors = rowColors(),
+        leadingContent = leading(glyph), trailingContent = trailing,
+        supportingContent = summary?.let { { Text(it) } },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(title) }
 }
 
+/** A value to read, not to tap. */
 @Composable
-fun InfoRow(shape: Shape, glyph: Glyph?, title: String, value: String) {
-    Surface(shape = shape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
-        RowBody(glyph, title, value, true, null)
-    }
+fun InfoRow(shape: ListItemShapes, glyph: Glyph?, title: String, value: String) {
+    ListItem(
+        headlineContent = { Text(title) }, supportingContent = { Text(value) }, leadingContent = leading(glyph),
+        colors = ListItemDefaults.colors(containerColor = Surfaces.card),
+        modifier = Modifier.fillMaxWidth().clip(shape.shape),
+    )
 }
 
 /**
- * A setting switch. The whole row toggles. [checked] null means the earbuds did not report
- * the setting: the row then says why and is not toggleable at all.
+ * A setting switch. The whole row toggles; the row itself stays neutral and the switch shows
+ * the state, as in Android settings. [checked] null means the earbuds did not report the
+ * setting: the row then says why and is not toggleable at all.
  */
 @Composable
 fun SwitchRow(
-    shape: Shape, glyph: Glyph?, title: String, summary: String?,
+    shape: ListItemShapes, glyph: Glyph?, title: String, summary: String?,
     checked: Boolean?, busy: Boolean = false, enabled: Boolean = true, onChange: (Boolean) -> Unit,
 ) {
-    val usable = checked != null && !busy && enabled
-    val shownSummary = when {
-        busy && checked == null -> "Reading…"
-        checked == null -> "Not available"
-        else -> summary
+    if (checked == null) {
+        InfoRow(shape, glyph, title, if (busy) "Reading…" else "Not available")
+        return
     }
-    val toggle = if (checked != null && !busy) Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange) else Modifier
-    Surface(shape = shape, color = Surfaces.card, modifier = Modifier.fillMaxWidth().then(toggle)) {
-        RowBody(glyph, title, shownSummary, checked != null) {
-            when {
-                busy && checked != null -> LoadingIndicator(Modifier.size(32.dp))
-                checked != null -> Switch(
-                    checked = checked, onCheckedChange = null, enabled = usable,
-                    thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), MaterialTheme.colorScheme.primary) }) else null,
-                )
-            }
-        }
-    }
+    SegmentedListItem(
+        onClick = { onChange(!checked) }, shapes = shape, enabled = enabled && !busy, colors = rowColors(),
+        leadingContent = leading(glyph), supportingContent = summary?.let { { Text(it) } },
+        trailingContent = {
+            if (busy) LoadingIndicator(Modifier.size(32.dp))
+            else Switch(
+                checked = checked, onCheckedChange = null, enabled = enabled,
+                thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), MaterialTheme.colorScheme.primary) }) else null,
+            )
+        },
+        modifier = Modifier.fillMaxWidth().semantics { role = Role.Switch; toggleableState = ToggleableState(checked) },
+    ) { Text(title) }
 }
 
 /** A multiple-choice setting: shows the current value and opens a radio dialog, like Android settings. */
 @Composable
 fun ChoiceRow(
-    shape: Shape, glyph: Glyph?, title: String, choices: List<Pair<Int, String>>, selected: Int?,
+    shape: ListItemShapes, glyph: Glyph?, title: String, choices: List<Pair<Int, String>>, selected: Int?,
     busy: Boolean = false, enabled: Boolean = true, onSelect: (Int) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val summary = when {
-        busy && selected == null -> "Reading…"
-        selected == null -> "Not available"
-        else -> choices.firstOrNull { it.first == selected }?.second ?: "Device setting"
+    if (selected == null) {
+        InfoRow(shape, glyph, title, if (busy) "Reading…" else "Not available")
+        return
     }
-    Surface(
-        onClick = { open = true }, enabled = selected != null && !busy && enabled,
-        shape = shape, color = Surfaces.card, modifier = Modifier.fillMaxWidth(),
-    ) {
-        RowBody(glyph, title, summary, selected != null) { if (busy && selected != null) LoadingIndicator(Modifier.size(32.dp)) }
-    }
+    NavRow(
+        shape, glyph, title, choices.firstOrNull { it.first == selected }?.second ?: "Device setting",
+        enabled = !busy && enabled, trailing = if (busy) ({ LoadingIndicator(Modifier.size(32.dp)) }) else null,
+    ) { open = true }
     if (open) ChoiceDialog(title, choices, selected, onDismiss = { open = false }) { open = false; onSelect(it) }
 }
 

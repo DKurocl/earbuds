@@ -7,8 +7,11 @@
     <color name="w_off_text">@android:color/system_neutral1_100</color>
     <color name="w_sub_text">@android:color/system_neutral2_300</color>
     <color name="w_track">@android:color/system_neutral2_700</color>
-    <color name="w_good">#FF6DD58C</color>
+    <!-- Battery rings follow the wallpaper like Pixel's own battery widget; only low is red. -->
+    <color name="w_ring">@android:color/system_accent1_200</color>
     <color name="w_low">#FFF2B8B5</color>
     <color name="w_unknown">@android:color/system_neutral2_600</color>
-    <color name="w_on_good">#FF0A3818</color>
+    <color name="w_on_ring">@android:color/system_accent1_800</color>
+    <color name="w_disc_fill">@android:color/system_accent1_800</color>
+    <color name="w_glyph">@android:color/system_accent1_100</color>
 </resources>

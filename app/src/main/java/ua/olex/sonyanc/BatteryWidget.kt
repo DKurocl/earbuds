@@ -29,8 +29,9 @@ class BatteryWidget : AppWidgetProvider() {
     companion object {
         /** Picker preview only. */
         internal val SAMPLE = SonyProtocol.Battery(82, 79, 56, caseCharging = true)
+        /** The device glyph sits inside its tonal disc with this margin, as in Pixel's battery widget. */
+        private const val GLYPH_INSET = 0.2f
         private val FALLBACK = listOf(SizeF(110f, 110f), SizeF(250f, 110f), SizeF(250f, 150f), SizeF(340f, 200f))
-        private const val STALE_ALPHA = 140
 
         fun refreshAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
@@ -62,38 +63,38 @@ class BatteryWidget : AppWidgetProvider() {
         }
 
         /**
-         * One ring: level, color (green, red at 20 % or less unless charging, grey when unknown),
-         * a bolt while charging, and dimmed when the earbuds are away. Returns the spoken text.
+         * One ring: level, the wallpaper's accent (red at 20 % or less unless charging, grey when
+         * unknown) and a bolt while charging. Away from the phone it keeps its colors: the last
+         * reading is still the truth, and the status line says when it was taken. Returns the
+         * spoken text.
          */
         internal fun bindRing(
             ctx: Context, v: RemoteViews, box: Int, ring: Int, art: Int, value: Int, label: Int, charge: Int,
-            name: String, level: Int?, charging: Boolean, size: Float?, stale: Boolean, showLabel: Boolean,
+            name: String, level: Int?, charging: Boolean, size: Float?, showLabel: Boolean,
         ): String {
             val color = ctx.getColor(when {
                 level == null -> R.color.w_unknown
                 level <= 20 && !charging -> R.color.w_low
-                else -> R.color.w_good
+                else -> R.color.w_ring
             })
             v.setProgressBar(ring, 100, level ?: 0, false)
-            val tint = if (stale) (color and 0x00FFFFFF) or (STALE_ALPHA shl 24) else color
-            v.setColorStateList(ring, "setProgressTintList", android.content.res.ColorStateList.valueOf(tint))
+            v.setColorStateList(ring, "setProgressTintList", android.content.res.ColorStateList.valueOf(color))
             if (size != null) {
                 v.setViewLayoutWidth(box, size, TypedValue.COMPLEX_UNIT_DIP)
                 v.setViewLayoutHeight(box, size, TypedValue.COMPLEX_UNIT_DIP)
                 val artSize = size * 0.78f
                 v.setViewLayoutWidth(art, artSize, TypedValue.COMPLEX_UNIT_DIP)
                 v.setViewLayoutHeight(art, artSize, TypedValue.COMPLEX_UNIT_DIP)
-                val inset = (artSize * 0.13f * ctx.resources.displayMetrics.density).toInt()
+                val inset = (artSize * GLYPH_INSET * ctx.resources.displayMetrics.density).toInt()
                 v.setViewPadding(art, inset, inset, inset, inset)
             }
             if (size == null) {
-                val inset = (34f * 0.13f * ctx.resources.displayMetrics.density).toInt()
+                val inset = (34f * GLYPH_INSET * ctx.resources.displayMetrics.density).toInt()
                 v.setViewPadding(art, inset, inset, inset, inset)
             }
-            v.setInt(art, "setImageAlpha", if (stale) STALE_ALPHA else 255)
             v.setTextViewText(value, level?.let { "$it%" } ?: "—")
             val text = ctx.getColor(if (level != null && level <= 20 && !charging) R.color.w_low else R.color.w_off_text)
-            v.setTextColor(value, if (stale) (text and 0x00FFFFFF) or (STALE_ALPHA shl 24) else text)
+            v.setTextColor(value, text)
             // Charging shows as a badge on the ring (like the app's chip), not as a glyph after the number.
             v.setViewVisibility(charge, if (charging && level != null) View.VISIBLE else View.GONE)
             val badge = ((size ?: 44f) * 0.38f).coerceIn(16f, 26f)
@@ -111,13 +112,11 @@ class BatteryWidget : AppWidgetProvider() {
         ): RemoteViews {
             val spec = WidgetLayout.battery(width, height, value = Widgets.lineHeight(ctx, 15f, "google-sans-text-medium") , small = Widgets.lineHeight(ctx, 12f))
             val v = RemoteViews(ctx.packageName, if (spec.compact) R.layout.widget_battery_compact else R.layout.widget_battery)
-            // Away from the phone the levels are a memory, not a reading: dim them.
-            val stale = linked == false
             val b = battery ?: SonyProtocol.Battery()
             val spoken = mutableListOf<String>()
 
             fun part(box: Int, ring: Int, art: Int, value: Int, label: Int, charge: Int, name: String, level: Int?, charging: Boolean) {
-                spoken += bindRing(ctx, v, box, ring, art, value, label, charge, name, level, charging, spec.ring, stale, spec.labels)
+                spoken += bindRing(ctx, v, box, ring, art, value, label, charge, name, level, charging, spec.ring, spec.labels)
             }
 
             if (spec.compact) {
@@ -127,6 +126,7 @@ class BatteryWidget : AppWidgetProvider() {
                 val level = if (useRight) right else left
                 val charging = if (useRight) b.rightCharging else b.leftCharging
                 part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, R.id.w_left_charge, "Earbuds", level, charging)
+                v.setImageViewResource(R.id.w_left_art, if (useRight) R.drawable.w_glyph_bud_right else R.drawable.w_glyph_bud_left)
                 v.setTextViewText(R.id.w_status, "Case " + (b.case?.let { "$it%" } ?: "—"))
                 spoken += "case " + (b.case?.let { "$it percent" } ?: "unknown")
             } else {

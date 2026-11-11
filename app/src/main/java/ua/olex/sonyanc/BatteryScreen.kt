@@ -98,7 +98,7 @@ private fun Legend(color: Color, label: String, dashed: Boolean) {
 }
 
 @Composable
-private fun DrainRow(shape: androidx.compose.ui.graphics.Shape, glyph: Glyph, title: String, log: List<BatterySample>, mode: Mode) {
+private fun DrainRow(shape: ListItemShapes, glyph: Glyph, title: String, log: List<BatterySample>, mode: Mode) {
     val drain = remember(log) { BatteryLog.drain(log, mode) }
     val rated = BatteryLife.fullChargeMinutes(mode, null)
     val value = if (drain == null) "Rated ${BatteryLife.format(rated)} · learning from your use"

@@ -125,7 +125,7 @@ fun EarbudSettingsContent(
 /** Sony's two-state settings encode On as 0 and Off as 1. */
 @Composable
 private fun KeySwitch(
-    shape: androidx.compose.ui.graphics.Shape, key: Key, title: String, summary: String,
+    shape: ListItemShapes, key: Key, title: String, summary: String,
     code: Int?, busy: Boolean, enabled: Boolean, onUpdate: (Key, Int, Int) -> Unit,
 ) {
     SwitchRow(shape, null, title, summary, code?.let { it == 0 }, busy, enabled) { on -> onUpdate(key, 0, if (on) 0 else 1) }
@@ -133,7 +133,7 @@ private fun KeySwitch(
 
 @Composable
 private fun FeatureSwitch(
-    shape: androidx.compose.ui.graphics.Shape, feature: Feature, summary: String,
+    shape: ListItemShapes, feature: Feature, summary: String,
     features: Map<Feature, Boolean>, loading: Set<Feature>, onBasic: (Feature, Boolean) -> Unit,
 ) {
     SwitchRow(shape, null, feature.title, summary, features[feature], feature in loading, loading.isEmpty()) { onBasic(feature, it) }

@@ -35,7 +35,7 @@
                 <ImageView android:id="@+id/w_left_art"
                     android:layout_width="34dp" android:layout_height="34dp" android:layout_gravity="center"
                     android:background="@drawable/w_disc" android:scaleType="fitCenter"
-                    android:importantForAccessibility="no" android:src="@drawable/wf1000xm5_bud" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_glyph_bud_left" android:tint="@color/w_glyph" />
                 <ImageView android:id="@+id/w_left_charge"
                     android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="top|center_horizontal"
                     android:background="@drawable/w_badge" android:padding="3dp" android:scaleType="fitCenter"
@@ -68,7 +68,7 @@
                 <ImageView android:id="@+id/w_case_art"
                     android:layout_width="34dp" android:layout_height="34dp" android:layout_gravity="center"
                     android:background="@drawable/w_disc" android:scaleType="fitCenter"
-                    android:importantForAccessibility="no" android:src="@drawable/wf1000xm5_case" />
+                    android:importantForAccessibility="no" android:src="@drawable/ic_case_mark" android:tint="@color/w_glyph" />
                 <ImageView android:id="@+id/w_case_charge"
                     android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="top|center_horizontal"
                     android:background="@drawable/w_badge" android:padding="3dp" android:scaleType="fitCenter"
@@ -101,7 +101,7 @@
                 <ImageView android:id="@+id/w_right_art"
                     android:layout_width="34dp" android:layout_height="34dp" android:layout_gravity="center"
                     android:background="@drawable/w_disc" android:scaleType="fitCenter"
-                    android:importantForAccessibility="no" android:src="@drawable/wf1000xm5_bud_mirrored" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_glyph_bud_right" android:tint="@color/w_glyph" />
                 <ImageView android:id="@+id/w_right_charge"
                     android:layout_width="18dp" android:layout_height="18dp" android:layout_gravity="top|center_horizontal"
                     android:background="@drawable/w_badge" android:padding="3dp" android:scaleType="fitCenter"
