@@ -151,7 +151,7 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Renaming is rare: it lives in App settings, not next to the name.
-        Text(name, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center, maxLines = 1,
+        Text(name, style = MaterialTheme.typography.headlineMediumEmphasized, textAlign = TextAlign.Center, maxLines = 1,
             overflow = TextOverflow.Ellipsis)
         Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val line = when (status) {
@@ -293,18 +293,16 @@ private fun BudArt(image: ImageBitmap, mirrored: Boolean) {
     )
 }
 
+/** A home action: Material's medium tonal icon button (wide); it squares off while pressed. */
 @Composable
 private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Surface(
-            onClick = onClick, enabled = enabled, shape = RoundedCornerShape(50), color = cs.secondaryContainer, contentColor = cs.onSecondaryContainer,
-            modifier = Modifier.size(width = 76.dp, height = 56.dp).semantics { contentDescription = label },
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                HushIcon(glyph, Modifier.size(24.dp), if (enabled) cs.onSecondaryContainer else cs.onSecondaryContainer.copy(alpha = .5f))
-            }
-        }
+        FilledTonalIconButton(
+            onClick = onClick, enabled = enabled,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.size(IconButtonDefaults.mediumContainerSize(IconButtonDefaults.IconButtonWidthOption.Wide))
+                .semantics { contentDescription = label },
+        ) { HushIcon(glyph, Modifier.size(IconButtonDefaults.mediumIconSize), LocalContentColor.current) }
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
@@ -432,23 +430,35 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
             Text("Ambient level", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text("${level.roundToInt()}", style = MaterialTheme.typography.titleMedium, color = cs.primary)
         }
+        val slider = remember { SliderState(value = level, steps = 19, trackRange = 0f..20f) }
+        LaunchedEffect(level) { if (slider.value != level) slider.value = level }
         Slider(
-            value = level, valueRange = 0f..20f,
+            state = slider,
             onValueChange = {
                 dragging = true
-                val step = it.roundToInt()
+                slider.value = it
+                val step = slider.value.roundToInt()
                 if (step != level.roundToInt()) feedback.performHapticFeedback(
                     if (presets.any { p -> p.second == step }) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick,
                 )
                 level = step.toFloat()
             },
             onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
+            track = { SliderDefaults.Track(sliderState = it, trackCornerSize = androidx.compose.ui.unit.Dp.Unspecified, drawTick = { _, _ -> }) },
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            presets.forEach { (label, value) ->
-                SoftChip(label, selected = state.level == value, modifier = Modifier.weight(1f)) { onChange(state.copy(level = value)) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // The three levels are one choice: a connected group. Voice focus is its own switch.
+            Row(Modifier.weight(3f).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                presets.forEachIndexed { i, (label, value) ->
+                    SoftChip(label, selected = state.level == value, modifier = Modifier.weight(1f), shapes = when (i) {
+                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        presets.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    }) { onChange(state.copy(level = value)) }
+                }
             }
+            Spacer(Modifier.width(8.dp))
             SoftChip("Voice", selected = state.voice, glyph = if (state.voice) Glyph.CHECK else null, modifier = Modifier.weight(1.15f), kind = ChipKind.SWITCH,
                 description = "Voice focus") { onChange(state.copy(voice = !state.voice)) }
         }
@@ -458,28 +468,36 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
 /** What a pill is to TalkBack: a plain action, one choice of several, or an on/off switch. */
 private enum class ChipKind { BUTTON, CHOICE, SWITCH }
 
-/** A fully rounded pill; selected fills with the secondary container. */
+/**
+ * A small dock control, built from Material's buttons by what it does: an action is a tonal
+ * button, an on/off is a toggle button, a choice is a toggle button (connected when [shapes]
+ * are given). Toggle buttons morph from round to a rounded square when checked.
+ */
 @Composable
 private fun SoftChip(
     label: String, selected: Boolean, modifier: Modifier = Modifier, glyph: Glyph? = null, description: String = label,
-    kind: ChipKind = ChipKind.CHOICE, onClick: () -> Unit,
+    kind: ChipKind = ChipKind.CHOICE, shapes: ToggleButtonShapes? = null, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) cs.secondaryContainer else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = "chip")
-    val action = when (kind) {
-        ChipKind.SWITCH -> Modifier.toggleable(value = selected, role = Role.Switch, onValueChange = { onClick() })
-        ChipKind.CHOICE -> Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-        ChipKind.BUTTON -> Modifier.clickable(role = Role.Button, onClick = onClick)
+    val padding = PaddingValues(horizontal = 12.dp)
+    val content: @Composable RowScope.() -> Unit = {
+        if (glyph != null) { HushIcon(glyph, Modifier.size(18.dp), LocalContentColor.current); Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing)) }
+        Text(label, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible)
     }
-    Surface(
-        shape = CircleShape, color = bg,
-        contentColor = if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant,
-        modifier = modifier.height(40.dp).clip(CircleShape).then(action).semantics { contentDescription = description },
-    ) {
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 6.dp)) {
-            if (glyph != null) { HushIcon(glyph, Modifier.size(16.dp), LocalContentColor.current); Spacer(Modifier.width(4.dp)) }
-            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-        }
+    val sized = modifier.heightIn(min = 40.dp)
+    when (kind) {
+        ChipKind.BUTTON -> FilledTonalButton(onClick = onClick, contentPadding = padding, content = content,
+            modifier = sized.semantics { contentDescription = description })
+        else -> ToggleButton(
+            checked = selected, onCheckedChange = { onClick() },
+            shapes = shapes ?: ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight),
+            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
+            contentPadding = padding, content = content,
+            modifier = sized.semantics {
+                contentDescription = description
+                if (kind == ChipKind.CHOICE) { role = Role.RadioButton; this.selected = selected } else role = Role.Switch
+            },
+        )
     }
 }
 
@@ -541,7 +559,7 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
             Surface(shape = CircleShape, color = accent, modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) { icon(onAccent) }
             }
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium, maxLines = 1,
+            Text(value, style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 1,
                 color = if (low) cs.error else cs.onSurface)
             Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
         }

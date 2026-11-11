@@ -128,9 +128,13 @@ private fun BandsCard(state: EqualizerProtocol.State, busy: Boolean, onBands: (L
                         Text("Clear Bass", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                         Text(signed(bands[0]), style = MaterialTheme.typography.titleMedium, color = cs.primary)
                     }
+                    val clearBass = remember { SliderState(value = bands[0].toFloat(), steps = 19, trackRange = -10f..10f) }
+                    LaunchedEffect(bands[0]) { if (clearBass.value.roundToInt() != bands[0]) clearBass.value = bands[0].toFloat() }
                     Slider(
-                        value = bands[0].toFloat(), valueRange = -10f..10f, enabled = !busy,
-                        onValueChange = { set(0, it.roundToInt()) }, onValueChangeFinished = { onBands(bands) },
+                        state = clearBass, enabled = !busy,
+                        onValueChange = { clearBass.value = it; set(0, clearBass.value.roundToInt()) },
+                        onValueChangeFinished = { onBands(bands) },
+                        track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = !busy, drawTick = { _, _ -> }) },
                         modifier = Modifier.semantics { contentDescription = "Clear Bass" },
                     )
                 }
@@ -141,12 +145,10 @@ private fun BandsCard(state: EqualizerProtocol.State, busy: Boolean, onBands: (L
 
 private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 
-private fun valueAt(y: Float, height: Float) = (10 - y / height * 20).roundToInt().coerceIn(-10, 10)
-
 /**
- * A tall soft track with a fixed-size pill thumb at the value and a thin fill from 0 dB to it,
- * so +1 and +6 look like the same control at different heights. Drag or tap anywhere; a tick
- * per dB step and a firmer one at 0 dB.
+ * One band: Material's vertical slider with the centered track, so the fill grows from 0 dB up or
+ * down. Whole-dB steps without tick marks (twenty dots would only be noise); a tick of haptics per
+ * dB and a firmer one at 0 dB.
  */
 @Composable
 private fun BandSlider(
@@ -155,68 +157,36 @@ private fun BandSlider(
 ) {
     val cs = MaterialTheme.colorScheme
     val feedback = LocalHapticFeedback.current
-    val active = if (enabled) cs.primary else cs.onSurface.copy(alpha = .38f)
-    val track = cs.surfaceContainerHighest
-    val current by rememberUpdatedState(value)
-    // Gesture coroutines outlive recompositions; always call the latest callbacks.
-    val change by rememberUpdatedState { v: Int ->
-        if (v != current) feedback.performHapticFeedback(if (v == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
-        onChange(v)
-    }
-    val done by rememberUpdatedState(onDone)
-    val shown by animateFloatAsState(value.toFloat(), MaterialTheme.motionScheme.fastSpatialSpec(), label = description)
+    val state = remember { SliderState(value = value.toFloat(), steps = 19, trackRange = -10f..10f) }
+    LaunchedEffect(value) { if (state.value.roundToInt() != value) state.value = value.toFloat() }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(signed(value), style = MaterialTheme.typography.labelLarge, color = if (value != 0) cs.primary else cs.onSurfaceVariant)
-        Canvas(
-            Modifier.width(44.dp).height(208.dp)
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
-                    detectVerticalDragGestures(
-                        onDragStart = { change(valueAt(it.y, size.height.toFloat())) },
-                        onDragEnd = { done() }, onDragCancel = { done() },
-                    ) { pointer, _ -> pointer.consume(); change(valueAt(pointer.position.y, size.height.toFloat())) }
+        VerticalSlider(
+            state = state,
+            enabled = enabled,
+            topToBottom = false,
+            onValueChange = { v ->
+                state.value = v
+                val step = state.value.roundToInt()
+                if (step != value) {
+                    feedback.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
+                    onChange(step)
                 }
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
-                    detectTapGestures { change(valueAt(it.y, size.height.toFloat())); done() }
-                }
-                .semantics {
-                    contentDescription = description
-                    stateDescription = "${signed(value)} dB"
-                    progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), -10f..10f, 19)
-                    if (enabled) setProgress { target -> change(target.roundToInt().coerceIn(-10, 10)); done(); true }
-                },
-        ) {
-            val w = size.width
-            val thumbH = 22.dp.toPx()
-            val thumbW = w - 8.dp.toPx()
-            drawRoundRect(track, cornerRadius = CornerRadius(w / 2, w / 2))
-            // Value range kept inside the rounded ends so the thumb never touches them.
-            val inset = w / 2
-            val zero = size.height / 2
-            val y = inset + (size.height - 2 * inset) * (10 - shown) / 20f
-            val bar = 8.dp.toPx()
-            val top = minOf(zero, y); val bottom = maxOf(zero, y)
-            if (bottom - top > 1f) drawRoundRect(active.copy(alpha = .45f), Offset((w - bar) / 2, top), Size(bar, bottom - top), CornerRadius(bar / 2, bar / 2))
-            drawLine(cs.outline.copy(alpha = .6f), Offset(w * .32f, zero), Offset(w * .68f, zero), 2.dp.toPx(), StrokeCap.Round)
-            drawRoundRect(active, Offset((w - thumbW) / 2, y - thumbH / 2), Size(thumbW, thumbH), CornerRadius(thumbH / 2, thumbH / 2))
-        }
+            },
+            onValueChangeFinished = onDone,
+            track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = enabled, drawTick = { _, _ -> }) },
+            modifier = Modifier.height(208.dp).semantics { contentDescription = description; stateDescription = "${signed(value)} dB" },
+        )
         Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 
-/** A soft, fully rounded preset pill: tonal when chosen, quiet otherwise. */
+/** A preset: Material's toggle button, round at rest; the chosen one morphs to a rounded square. */
 @Composable
 private fun PresetPill(name: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg by animateColorAsState(if (selected) cs.primary else cs.surfaceContainerHighest, MaterialTheme.motionScheme.fastEffectsSpec(), label = name)
-    Surface(
-        onClick = onClick, enabled = enabled, shape = CircleShape, color = bg,
-        contentColor = if (selected) cs.onPrimary else cs.onSurface,
-        modifier = Modifier.heightIn(min = 40.dp).semantics { this.selected = selected; role = Role.RadioButton },
-    ) {
-        Box(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-            Text(name, style = MaterialTheme.typography.labelLarge)
-        }
-    }
+    ToggleButton(
+        checked = selected, onCheckedChange = { onClick() }, enabled = enabled,
+        colors = ToggleButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        modifier = Modifier.semantics { this.selected = selected; role = Role.RadioButton },
+    ) { Text(name, maxLines = 1) }
 }

@@ -48,6 +48,22 @@ private fun appTypography(): Typography = remember {
         labelLarge = base.labelLarge.copy(fontFamily = display),
         labelMedium = base.labelMedium.copy(fontFamily = display),
         labelSmall = base.labelSmall.copy(fontFamily = display),
+        // M3 Expressive's emphasized styles (heavier weights) in the same Google Sans families.
+        displayLargeEmphasized = base.displayLargeEmphasized.copy(fontFamily = display),
+        displayMediumEmphasized = base.displayMediumEmphasized.copy(fontFamily = display),
+        displaySmallEmphasized = base.displaySmallEmphasized.copy(fontFamily = display),
+        headlineLargeEmphasized = base.headlineLargeEmphasized.copy(fontFamily = display),
+        headlineMediumEmphasized = base.headlineMediumEmphasized.copy(fontFamily = display),
+        headlineSmallEmphasized = base.headlineSmallEmphasized.copy(fontFamily = display),
+        titleLargeEmphasized = base.titleLargeEmphasized.copy(fontFamily = display),
+        titleMediumEmphasized = base.titleMediumEmphasized.copy(fontFamily = display),
+        titleSmallEmphasized = base.titleSmallEmphasized.copy(fontFamily = display),
+        labelLargeEmphasized = base.labelLargeEmphasized.copy(fontFamily = display),
+        labelMediumEmphasized = base.labelMediumEmphasized.copy(fontFamily = display),
+        labelSmallEmphasized = base.labelSmallEmphasized.copy(fontFamily = display),
+        bodyLargeEmphasized = base.bodyLargeEmphasized.copy(fontFamily = body),
+        bodyMediumEmphasized = base.bodyMediumEmphasized.copy(fontFamily = body),
+        bodySmallEmphasized = base.bodySmallEmphasized.copy(fontFamily = body),
     )
 }
 
