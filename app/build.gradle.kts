@@ -28,7 +28,7 @@ android {
     // Style-only suggestion (KTX helpers); behaviour is identical.
     lint { disable += "UseKtx" }
     // AGP 9 compiles Kotlin itself; the extra sources are declared as Kotlin.
-    if (screenshots) sourceSets["test"].kotlin.srcDir("src/screenshotTest/java")
+    if (screenshots) sourceSets["test"].kotlin.directories.add("src/screenshotTest/java")
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
