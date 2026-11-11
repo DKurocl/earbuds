@@ -59,6 +59,11 @@ object Prefs {
     fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).apply()
 
     fun caseReminder(ctx: Context) = p(ctx).getBoolean("case_reminder", false)
+    /** Low earbud battery heads-up; on by default (it still needs the notification permission). */
+    fun budsReminder(ctx: Context) = p(ctx).getBoolean("buds_reminder", true)
+    fun setBudsReminder(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("buds_reminder", value).apply()
+    fun budsRemindedSession(ctx: Context) = p(ctx).getInt("buds_reminded_session", -1)
+    fun setBudsRemindedSession(ctx: Context, value: Int) = p(ctx).edit().putInt("buds_reminded_session", value).apply()
     fun setCaseReminder(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("case_reminder", value).apply()
     fun caseRemindedAt(ctx: Context) = p(ctx).getLong("case_reminded_at", 0L)
     fun setCaseRemindedAt(ctx: Context, at: Long) = p(ctx).edit().putLong("case_reminded_at", at).apply()

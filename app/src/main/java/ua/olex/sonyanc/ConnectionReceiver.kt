@@ -31,6 +31,7 @@ class ConnectionReceiver : BroadcastReceiver() {
             Prefs.setLastSeen(ctx, System.currentTimeMillis())
             Widgets.refreshAll(ctx)
             CaseReminder.onEarbudsAway(ctx)
+            LowBattery.onAway(ctx)
             return
         }
 

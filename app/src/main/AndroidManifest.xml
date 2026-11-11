@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Only for the opt-in case battery reminder; requested when it is turned on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16+: the Ambient timer may show as a Live Update (status-bar chip). -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- "Ambient for a moment" returns on time: one exact alarm, only while that timer runs.
          Sideloaded personal app, so the install-time permission is fine. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
@@ -48,6 +50,7 @@
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
         </service>
         <receiver android:name=".AmbientTimerReceiver" android:exported="false" />
+        <receiver android:name=".LowBatteryReceiver" android:exported="false" />
         <!-- ACL broadcasts for the saved earbuds; exempt from implicit-broadcast limits. -->
         <receiver android:name=".ConnectionReceiver" android:exported="true">
             <intent-filter>

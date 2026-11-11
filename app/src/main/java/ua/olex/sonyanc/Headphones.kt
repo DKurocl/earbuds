@@ -561,6 +561,7 @@ object Headphones {
                         Prefs.addBatterySample(app, BatterySample(now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app), b.case))
                     }
                     Widgets.refreshAll(app)
+                    LowBattery.onReading(app, b, updated.nc?.mode)
                 }
             }
         }
