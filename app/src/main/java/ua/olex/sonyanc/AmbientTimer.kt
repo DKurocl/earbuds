@@ -132,8 +132,10 @@ object LiveTimer {
             .setContentIntent(open)
             .addAction(android.app.Notification.Action.Builder(null, "Stay in Ambient", action(ctx, ACTION_STAY, 9)).build())
             .addAction(android.app.Notification.Action.Builder(null, "${back.short} now", action(ctx, ACTION_NOW, 10)).build())
-        // Android 16+: promote it to a Live Update (status-bar chip, top of the lock screen).
-        if (android.os.Build.VERSION.SDK_INT >= 36) b.setRequestPromotedOngoing(true)
+        // Android 16 QPR2 (36.1) and later: promote it to a Live Update (status-bar chip, top of
+        // the lock screen). SDK_INT_FULL itself only exists from 36.
+        if (android.os.Build.VERSION.SDK_INT >= 36 &&
+            android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1) b.setRequestPromotedOngoing(true)
         nm.notify(ID, b.build())
     }
 

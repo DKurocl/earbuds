@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ua.olex.sonyanc.SonyProtocol.Mode
 import ua.olex.sonyanc.SonyProtocol.NcState
 import kotlin.math.roundToInt
@@ -176,11 +177,14 @@ private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, o
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
-        BatteryRing("Left", b.left, b.leftCharging, 0 in live) { BudArt(bud, mirrored = false) }
-        BatteryRing("Case", b.case, b.caseCharging, 2 in live) {
-            Image(painterResource(R.drawable.wf1000xm5_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live) { BudArt(bud, mirrored = false) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
+            BatteryRing("Case", b.case, b.caseCharging, 2 in live) {
+                Image(painterResource(R.drawable.wf1000xm5_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
         }
-        BatteryRing("Right", b.right, b.rightCharging, 1 in live) { BudArt(bud, mirrored = true) }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live) { BudArt(bud, mirrored = true) } }
     }
 }
 
@@ -268,6 +272,7 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
         }
         Text(
             "$label: " + (value?.let { "$it%" } ?: "—"), style = MaterialTheme.typography.titleMedium, maxLines = 1,
+            autoSize = fitText(MaterialTheme.typography.titleMedium),
             color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
         )
     }
@@ -396,7 +401,7 @@ private fun ModeButton(
         if (applying) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
         else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(24.dp), LocalContentColor.current)
         Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
-        Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible)
+        Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, autoSize = fitText(MaterialTheme.typography.titleMedium))
     }
 }
 
@@ -482,7 +487,7 @@ private fun SoftChip(
     val padding = PaddingValues(horizontal = 12.dp)
     val content: @Composable RowScope.() -> Unit = {
         if (glyph != null) { HushIcon(glyph, Modifier.size(18.dp), LocalContentColor.current); Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing)) }
-        Text(label, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible)
+        Text(label, maxLines = 1, autoSize = fitText(MaterialTheme.typography.labelLarge))
     }
     val sized = modifier.heightIn(min = 40.dp)
     when (kind) {
@@ -560,9 +565,16 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
                 Box(contentAlignment = Alignment.Center) { icon(onAccent) }
             }
             Text(value, style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 1,
+                autoSize = fitText(MaterialTheme.typography.headlineSmallEmphasized),
                 color = if (low) cs.error else cs.onSurface)
             Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
         }
     }
 }
 
+/**
+ * With the largest font sizes a one-line label shrinks just enough to fit instead of being cut;
+ * at normal sizes it keeps [style]'s size exactly.
+ */
+private fun fitText(style: androidx.compose.ui.text.TextStyle) =
+    androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp)

@@ -51,6 +51,8 @@ dependencies {
     }
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Google's Accessibility Test Framework checks on every page (AccessibilityUiTest).
+    androidTestImplementation("androidx.compose.ui:ui-test-accessibility")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     // Older Espresso injects input through a hidden API that newer Android removed.

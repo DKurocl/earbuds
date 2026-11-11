@@ -103,10 +103,12 @@ private fun leading(glyph: Glyph?): (@Composable () -> Unit)? = glyph?.let { { H
 @Composable
 fun NavRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, summary: String? = null,
-    enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, onClick: () -> Unit,
+    enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, danger: Boolean = false, onClick: () -> Unit,
 ) {
+    val error = MaterialTheme.colorScheme.error
     SegmentedListItem(
-        onClick = onClick, shapes = shape, enabled = enabled, colors = rowColors(),
+        onClick = onClick, shapes = shape, enabled = enabled,
+        colors = if (danger) ListItemDefaults.segmentedColors(containerColor = Surfaces.card, contentColor = error, leadingContentColor = error) else rowColors(),
         leadingContent = leading(glyph), trailingContent = trailing,
         supportingContent = summary?.let { { Text(it) } },
         modifier = Modifier.fillMaxWidth(),

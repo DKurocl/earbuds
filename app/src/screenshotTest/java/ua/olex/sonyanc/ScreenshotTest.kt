@@ -87,6 +87,27 @@ class ScreenshotTest {
     /** Opening a page, 40 % in. */
     @Test fun pageOpen() = backSwipe("page-open", PagePose(settle = { 0.4f }, opening = { true }))
 
+    /** Accessibility: the largest font sizes Android offers must not clip or overlap. */
+    @Config(fontScale = 2.0f)
+    @Test fun homeLargeFont() = shoot("home-font-200") {
+        HushScreen(
+            status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, level = 12), pending = null,
+            fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
+            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            speakToChat = true,
+        )
+    }
+
+    @Config(fontScale = 2.0f)
+    @Test fun settingsLargeFont() = shoot("page-settings-font-200") {
+        EarbudSettingsContent(mapOf(), mapOf(DeviceSettingsProtocol.Feature.DSEE to true, DeviceSettingsProtocol.Feature.AUTO_PAUSE to false))
+    }
+
+    @Config(fontScale = 1.5f)
+    @Test fun equalizerLargeFont() = shoot("page-equalizer-font-150") {
+        EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)
+    }
+
     @Test fun homeAmbient() = shoot("home-ambient") {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,

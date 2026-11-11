@@ -110,3 +110,16 @@ the right ("Updated 14:32", "Back to ANC at 14:40"); a middle row that takes eve
 and the buttons leave, with how long you can listen as the big number (largest size that fits its
 column, red under an hour) and the case's share under it, beside the three rings as large as the
 row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `WidgetLayout.dashboard`.
+
+## Pixel touches (1.3)
+
+- **Live Update**: "Ambient for a moment" shows as an Android 16 QPR2+ Live Update, a status-bar
+  chip counting down, with "Stay in Ambient" and "<mode> now" (`LiveTimer`).
+- **Low earbud battery**: one planned check per session from the owner's own drain model, a
+  heads-up at 15 % with the listening time left (`LowBattery`). No background connection.
+- **At home**: a mode of its own when the earbuds connect at home, from the phone's last known
+  location at that moment; the usual rule elsewhere or when the location is stale (`Places`).
+- **Splash**: the launcher case animates in on the app's page color (`docs/icon/splash.py`).
+- **Large text**: one-line labels shrink to fit (`TextAutoSize`) at the largest font sizes;
+  renders at 150 % and 200 % are part of `ScreenshotTest`, and `AccessibilityUiTest` runs
+  Google's Accessibility Test Framework on every page on the emulator.

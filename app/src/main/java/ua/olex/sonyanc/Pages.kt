@@ -9,6 +9,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -37,8 +40,8 @@ fun DeviceInfoContent(
         if (refreshing) LoadingIndicator(Modifier.padding(end = 12.dp).size(32.dp))
         else IconButton(onClick = onRefresh, enabled = status != Headphones.Status.CONNECTING, modifier = Modifier.semantics { contentDescription = "Refresh" }) { HushIcon(Glyph.REFRESH) }
     }) {
+        DeviceHero(deviceName, statusText(status))
         ListGroup {
-            item { InfoRow(it, Glyph.EARBUDS, deviceName, statusText(status)) }
             item { InfoRow(it, Glyph.EQ, "Audio codec", if (connected) codec?.label ?: if (refreshing) "Reading…" else "Not reported" else "—") }
             item { InfoRow(it, Glyph.INFO, "Firmware", if (connected) firmware ?: "Reading…" else "—") }
         }
@@ -57,8 +60,28 @@ fun DeviceInfoContent(
             item { NavRow(it, Glyph.BLUETOOTH, "Android Bluetooth settings", "Pairing and spatial audio", onClick = onBluetooth) }
         }
         if (connected) ListGroup {
-            item { NavRow(it, Glyph.OFF, "Turn off earbuds", onClick = { confirmOff = true }) }
+            // Can't be undone from the phone: shown as a destructive action, like Android's own.
+            item { NavRow(it, Glyph.OFF, "Turn off earbuds", danger = true, onClick = { confirmOff = true }) }
         }
+    }
+}
+
+/** Pixel's device details header: the product, its name and its state. */
+@Composable
+private fun DeviceHero(name: String, status: String) {
+    val bud = ImageBitmap.imageResource(R.drawable.wf1000xm5_bud)
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+            androidx.compose.foundation.Image(bud, null, Modifier.size(72.dp))
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.wf1000xm5_case), null, Modifier.size(width = 120.dp, height = 84.dp))
+            androidx.compose.foundation.Image(bud, null, Modifier.size(72.dp).scale(scaleX = -1f, scaleY = 1f))
+        }
+        Text(name, style = MaterialTheme.typography.headlineSmallEmphasized, modifier = Modifier.padding(top = 8.dp))
+        Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -83,6 +106,8 @@ fun AppSettingsContent(
     onPinBatteryWidget: () -> Unit = {}, onOnConnect: (OnConnect) -> Unit = {},
     caseReminder: Boolean = false, onCaseReminder: (Boolean) -> Unit = {},
     budsReminder: Boolean = false, onBudsReminder: (Boolean) -> Unit = {},
+    homeMode: OnConnect? = null, onHomeMode: (OnConnect?) -> Unit = {},
+    homeSummary: String = "Not set", onSetHome: () -> Unit = {},
     tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {},
 ) {
@@ -103,6 +128,11 @@ fun AppSettingsContent(
                     onOnConnect(OnConnect.entries[i])
                 }
             }
+            item {
+                ChoiceRow(it, Glyph.HOME, "At home", listOf(-1 to "Same as everywhere") + OnConnect.entries.map { c -> c.ordinal to c.label },
+                    homeMode?.ordinal ?: -1) { i -> onHomeMode(OnConnect.entries.getOrNull(i)) }
+            }
+            if (homeMode != null) item { NavRow(it, Glyph.LOCATION, "Home", homeSummary, onClick = onSetHome) }
             item {
                 ChoiceRow(it, Glyph.TIMER, "Ambient for a moment", AmbientTimer.CHOICES.map { m -> m to "$m minutes, then back" }, ambientMinutes) { m ->
                     onAmbientMinutes(m)

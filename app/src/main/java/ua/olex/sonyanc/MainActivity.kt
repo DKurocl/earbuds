@@ -116,6 +116,30 @@ fun App(
     }
     var onConnect by remember { mutableStateOf(Prefs.onConnect(ctx)) }
     var caseReminder by remember { mutableStateOf(Prefs.caseReminder(ctx)) }
+    // "At home" (Places): a mode for home, the saved point, and the location permissions it needs.
+    var homeMode by remember { mutableStateOf(Prefs.homeMode(ctx)) }
+    var home by remember { mutableStateOf(Prefs.home(ctx)) }
+    var placesTick by remember { mutableIntStateOf(0) }
+    fun saveHereAsHome() = Places.currentLocation(ctx) { here ->
+        if (here == null) show("Couldn't find where you are. Turn on location and try again.")
+        else { Prefs.setHome(ctx, here.latitude, here.longitude); home = here.latitude to here.longitude; show("Home saved") }
+        placesTick++
+    }
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { placesTick++ }
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) saveHereAsHome() else show("Location is off for Earbuds, so home can't be saved.")
+    }
+    fun setHome() {
+        when {
+            !Places.hasLocation(ctx) -> locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            !Places.hasBackground(ctx) && home != null -> {
+                // Android shows "Allow all the time" on its own settings page.
+                show("Choose \"Allow all the time\", so home works when the earbuds connect in the background.")
+                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+            else -> saveHereAsHome()
+        }
+    }
     val notificationsAllowed = { ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED }
     var budsReminder by remember { mutableStateOf(Prefs.budsReminder(ctx) && notificationsAllowed()) }
     val budsNotificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -277,6 +301,16 @@ fun App(
                                 caseReminder = true; Prefs.setCaseReminder(ctx, true)
                             } else notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         },
+                        homeMode = homeMode, onHomeMode = { m -> homeMode = m; Prefs.setHomeMode(ctx, m); if (m != null && home == null) setHome() },
+                        homeSummary = run {
+                            placesTick // recompose after permission or location changes
+                            when {
+                                home == null -> "Set to where you are now"
+                                !Places.hasLocation(ctx) || !Places.hasBackground(ctx) -> "Needs location \"Allow all the time\""
+                                else -> "Saved · tap to set to where you are now"
+                            }
+                        },
+                        onSetHome = ::setHome,
                         budsReminder = budsReminder, onBudsReminder = { on ->
                             if (!on) { budsReminder = false; Prefs.setBudsReminder(ctx, false); LowBattery.onAway(ctx) }
                             else if (notificationsAllowed()) { budsReminder = true; Prefs.setBudsReminder(ctx, true) }

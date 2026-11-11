@@ -215,8 +215,11 @@ private fun HealthCard(verdict: BatteryHealth.Verdict?) {
     val cs = MaterialTheme.colorScheme
     when (verdict) {
         is BatteryHealth.Verdict.Declined -> Surface(shape = RoundedCornerShape(28.dp), color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Battery health", style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HushIcon(Glyph.BATTERY, Modifier.size(22.dp), cs.onSecondaryContainer)
+                    Text("Battery health", style = MaterialTheme.typography.titleMediumEmphasized, color = cs.onSecondaryContainer)
+                }
                 Text(
                     "A full charge now lasts about ${keep(verdict.minutes)}, ${verdict.percent}\u00A0% less than " +
                         "${keep(verdict.baseline)} in the week of ${weekStart(verdict.since)}. Normal wear for earbud batteries.",
