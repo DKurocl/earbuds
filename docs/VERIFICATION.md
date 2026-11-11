@@ -1,4 +1,27 @@
-# Hush 0.9.0 verification
+# Verification
+
+## 1.4 on the Pixel (deferred by the owner)
+
+Everything below builds, passes the JVM, lint, golden and emulator checks in CI, but needs the
+real phone and earbuds. About 15 minutes.
+
+1. **Stay in sync**: App settings → Stay in sync → allow in Android's dialog. Take the earbuds out,
+   wait 5 s, change the mode with a touch on an earbud: the widget follows within a second.
+   Tap a mode in the widget: it confirms at once. Back in the case: Settings → Apps → Earbuds shows
+   nothing running.
+2. **Gemini**: "Hey Google, turn on ambient sound on my earbuds", "ambient for five minutes",
+   "how much battery do my earbuds have". (Gemini decides when to use an app's functions; if it
+   does not offer Earbuds yet, the functions are still listed for it in Android's App Functions.)
+3. **Tiles**: tap "Listening left": Battery grows out of the tile; Back (button and swipe) returns
+   it into the tile.
+4. **Live Update**: Ambient · 5 min in the dock: a countdown chip in the status bar.
+5. **At home**: set Home, allow location all the time, put the earbuds away and take them out.
+6. **Low earbud battery**: listen down to 15 %: one heads-up with the time left.
+7. **New phone** (whenever it happens): transfer during setup brings the settings.
+
+---
+
+## Hush 0.9.0 verification (historical)
 
 Date: 2026-10-22
 

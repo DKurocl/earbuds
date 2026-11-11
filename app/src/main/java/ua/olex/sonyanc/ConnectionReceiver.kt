@@ -32,6 +32,7 @@ class ConnectionReceiver : BroadcastReceiver() {
             Widgets.refreshAll(ctx)
             CaseReminder.onEarbudsAway(ctx)
             LowBattery.onAway(ctx)
+            Headphones.stay(false)
             return
         }
 
@@ -49,6 +50,8 @@ class ConnectionReceiver : BroadcastReceiver() {
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS)
                 withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(apply) }
+                // Normally LinkService's presence event does this; the broadcast backs it up.
+                if (LiveLink.enabled(ctx)) Headphones.stay(true)
                 CaseReminder.onEarbudsOut(ctx)
             } finally {
                 pending.finish()

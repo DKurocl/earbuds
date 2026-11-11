@@ -25,4 +25,9 @@ class ConnectionUseTest {
         use.acquire(true);use.acquire(true);use.release(true);assertTrue(use.foreground)
         use.release(true);assertFalse(use.active)
     }
+    @Test fun presenceKeepsTheLinkAfterScreensCloseWithoutPolling() {
+        val use=ConnectionUse();use.stay(true);use.acquire(true);use.release(true)
+        assertTrue(use.active);assertFalse(use.foreground);assertTrue(use.staying)
+        use.stay(false);assertFalse(use.active)
+    }
 }

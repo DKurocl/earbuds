@@ -14,6 +14,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.BatteryUnknown
@@ -554,9 +556,14 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
     val cs = MaterialTheme.colorScheme
     val accent = if (low) cs.errorContainer else cs.primaryContainer
     val onAccent = if (low) cs.onErrorContainer else cs.onPrimaryContainer
-    // Tapping either tile opens the Battery page (history and measured battery life).
-    Surface(onClick = onClick, shape = RoundedCornerShape(28.dp), color = Surfaces.card,
-        modifier = modifier.fillMaxHeight().semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {
+    // Tapping either tile opens the Battery page (history and measured battery life), which
+    // grows out of the tile itself (container transform, Navigation.kt) and returns into it.
+    val origins = LocalPageOrigins.current
+    var bounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    Surface(onClick = { origins.mark(bounds); onClick() }, shape = RoundedCornerShape(PageMotion.CARD_CORNER), color = Surfaces.card,
+        modifier = modifier.fillMaxHeight()
+            .onGloballyPositioned { bounds = it.boundsInRoot() }
+            .semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {
         Column(
             Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),

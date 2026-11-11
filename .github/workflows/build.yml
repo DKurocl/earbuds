@@ -104,6 +104,37 @@ jobs:
           files: apk/*.apk
           make_latest: true
           body: "Commit ${{ github.sha }}. Obtainium: add this repository as a GitHub source; it installs each new build over the previous one."
+  screenshots:
+    # Every page, pose and widget rendered on the JVM (Robolectric) and compared with its golden
+    # in app/src/screenshotTest/goldens, so a layout or color change never slips in unseen.
+    if: "!contains(github.event.head_commit.message, '[quick-apk]')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Use preinstalled Android SDK
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+      # Robolectric's Android runtime (~160 MB) comes from Maven Central; keep it between runs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.14.1-sdk35
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: 9.9.1
+      - name: Render and compare with goldens
+        run: gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' --tests '*WidgetAnimationTest*' -Pscreenshots=true --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Earbuds-screenshots
+          path: |
+            app/build/screenshots/
+            app/build/test-results/
   visual-check:
     if: "!contains(github.event.head_commit.message, '[quick-apk]')"
     needs: build
@@ -199,6 +230,10 @@ jobs:
             adb install release/app-release.apk
             adb shell am start -W -n ua.olex.sonyanc/.MainActivity > screens/release-startup.txt
             sleep 5
+            # Cold start of the release build, three times, in the run summary (emulator, so relative).
+            for i in 1 2 3; do adb shell am force-stop ua.olex.sonyanc; sleep 1; adb shell am start -W -n ua.olex.sonyanc/.MainActivity | grep -E 'TotalTime' | sed "s/^/run $i: /"; done | tee screens/cold-start.txt
+            { echo "### Cold start (release, emulator)"; echo '```'; cat screens/cold-start.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            sleep 3
             adb exec-out screencap -p > screens/release-first-launch.png
             adb shell pidof ua.olex.sonyanc
             adb logcat -d -s AndroidRuntime:E > screens/crash.log
