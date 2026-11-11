@@ -47,12 +47,12 @@ jobs:
           gradle-version: 9.9.1
       - name: Quick APK
         if: contains(github.event.head_commit.message, '[quick-apk]')
-        run: gradle :app:testReleaseUnitTest :app:assembleRelease -PquickApk=true --no-daemon
+        run: gradle :app:testDebugUnitTest :app:assembleRelease -PquickApk=true --no-daemon
       - name: Test, lint and build
         if: "!contains(github.event.head_commit.message, '[quick-apk]')"
         run: |
           set -o pipefail
-          gradle :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon 2>&1 | tee build.log || {
+          gradle :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon 2>&1 | tee build.log || {
             grep -E '^e: |error:|ERROR:|What went wrong' -A2 build.log | head -60 | while IFS= read -r l; do
               [ -n "$l" ] && echo "::error::$l"
             done
