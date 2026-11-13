@@ -196,10 +196,10 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
 
 @Composable
 private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit, confirmed: Mode? = null) {
-    // The owner's earbuds drawn faithfully (docs/icon/product_glyphs.py): the real case outline and
-    // earbud, in their colours.
-    val budL = painterResource(R.drawable.art_bud_left)
-    val budR = painterResource(R.drawable.art_bud_right)
+    // The owner's earbuds as Android shows a device in its details: the product render
+    // (docs/icon/device_pictures.py).
+    val budL = painterResource(R.drawable.device_bud_left)
+    val budR = painterResource(R.drawable.device_bud_right)
     // When the earbuds confirm a new mode, a small swell runs through the rings, left to right:
     // the answer comes from the earbuds, not from the button that was tapped.
     val swell = remember { List(3) { Animatable(1f) } }
@@ -225,7 +225,7 @@ private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, o
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, { swell[0].value }) { BudArt(budL) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
             BatteryRing("Case", b.case, b.caseCharging, 2 in live, { swell[2].value }) {
-                Image(painterResource(R.drawable.art_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                Image(painterResource(R.drawable.device_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, { swell[1].value }) { BudArt(budR) } }
