@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -83,7 +84,16 @@ fun EarbudSettingsContent(
     loading: Set<Key> = emptySet(), featureLoading: Set<Feature> = emptySet(),
     writing: Key? = null, message: String? = null, onBack: () -> Unit = {}, onAppSettings: () -> Unit = {},
     onRefresh: () -> Unit = {}, onUpdate: (Key, Int, Int) -> Unit = { _, _, _ -> }, onBasic: (Feature, Boolean) -> Unit = { _, _ -> },
+    firstTopic: Topic = Topic.CHAT,
 ) {
+    // The card on top shows what a setting does. It goes through them by itself until a setting is
+    // changed; then it shows that setting, playing it out.
+    var topic by rememberSaveable { mutableStateOf(firstTopic) }
+    var settled by rememberSaveable { mutableStateOf(false) }
+    val update: (Key, Int, Int) -> Unit = { key, index, code -> topic = key.topic(); settled = true; onUpdate(key, index, code) }
+    val basic: (Feature, Boolean) -> Unit = { feature, on -> topic = feature.topic(); settled = true; onBasic(feature, on) }
+    var laps by remember { mutableIntStateOf(0) }
+
     val show = LocalMessages.current
     LaunchedEffect(message) { message?.let(show) }
     val idle = loading.isEmpty() && featureLoading.isEmpty() && writing == null
@@ -98,27 +108,32 @@ fun EarbudSettingsContent(
         else IconButton(enabled = idle, onClick = onRefresh, modifier = Modifier.semantics { contentDescription = "Refresh settings" }) { HushIcon(Glyph.REFRESH) }
         IconButton(onClick = onAppSettings, modifier = Modifier.semantics { contentDescription = "App settings" }) { HushIcon(Glyph.SETTINGS) }
     }) {
+        IllustrationCard(
+            topic,
+            onLoop = { if (!settled && ++laps % 2 == 0) topic = Topic.entries[(topic.ordinal + 1) % Topic.entries.size] },
+            onTap = { settled = true; topic = Topic.entries[(topic.ordinal + 1) % Topic.entries.size] },
+        )
         ListGroup("Sound") {
-            item { FeatureSwitch(it, Feature.DSEE, "Restores detail in compressed music", features, featureLoading, onBasic) }
-            item { KeySwitch(it, Key.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, onUpdate) }
-            item { ChoiceRow(it, null, "Conversation sensitivity", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null) { c -> onUpdate(Key.CHAT_CONFIG, 0, c) } }
-            item { ChoiceRow(it, null, "Resume after conversation", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), writing == null) { c -> onUpdate(Key.CHAT_CONFIG, 1, c) } }
-            item { KeySwitch(it, Key.SIDETONE, "Hear my voice in calls", "Lets you hear yourself while talking", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, onUpdate) }
+            item { FeatureSwitch(it, Feature.DSEE, "Restores detail in compressed music", features, featureLoading, basic) }
+            item { KeySwitch(it, Key.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, update) }
+            item { ChoiceRow(it, null, "Conversation sensitivity", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null) { c -> update(Key.CHAT_CONFIG, 0, c) } }
+            item { ChoiceRow(it, null, "Resume after conversation", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), writing == null) { c -> update(Key.CHAT_CONFIG, 1, c) } }
+            item { KeySwitch(it, Key.SIDETONE, "Hear my voice in calls", "Lets you hear yourself while talking", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update) }
         }
         ListGroup("Controls") {
-            item { ChoiceRow(it, null, "Left touch control", choices(Key.TOUCH, 1), code(Key.TOUCH, 1), busy(Key.TOUCH), writing == null) { c -> onUpdate(Key.TOUCH, 1, c) } }
-            item { ChoiceRow(it, null, "Right touch control", choices(Key.TOUCH, 2), code(Key.TOUCH, 2), busy(Key.TOUCH), writing == null) { c -> onUpdate(Key.TOUCH, 2, c) } }
-            item { ChoiceRow(it, null, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null) { c -> onUpdate(Key.CYCLE, 4, c) } }
-            item { KeySwitch(it, Key.GESTURES, "Head gestures", "Nod or shake your head to answer calls", code(Key.GESTURES, 0), busy(Key.GESTURES), writing == null, onUpdate) }
+            item { ChoiceRow(it, null, "Left touch control", choices(Key.TOUCH, 1), code(Key.TOUCH, 1), busy(Key.TOUCH), writing == null) { c -> update(Key.TOUCH, 1, c) } }
+            item { ChoiceRow(it, null, "Right touch control", choices(Key.TOUCH, 2), code(Key.TOUCH, 2), busy(Key.TOUCH), writing == null) { c -> update(Key.TOUCH, 2, c) } }
+            item { ChoiceRow(it, null, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null) { c -> update(Key.CYCLE, 4, c) } }
+            item { KeySwitch(it, Key.GESTURES, "Head gestures", "Nod or shake your head to answer calls", code(Key.GESTURES, 0), busy(Key.GESTURES), writing == null, update) }
         }
         ListGroup("Playback & connection") {
-            item { FeatureSwitch(it, Feature.AUTO_PAUSE, "Pauses playback when you take an earbud out", features, featureLoading, onBasic) }
-            item { ChoiceRow(it, null, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null) { c -> onUpdate(Key.POWER, 0, c) } }
-            item { ChoiceRow(it, null, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null) { c -> onUpdate(Key.QUALITY, 0, c) } }
+            item { FeatureSwitch(it, Feature.AUTO_PAUSE, "Pauses playback when you take an earbud out", features, featureLoading, basic) }
+            item { ChoiceRow(it, null, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null) { c -> update(Key.POWER, 0, c) } }
+            item { ChoiceRow(it, null, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null) { c -> update(Key.QUALITY, 0, c) } }
         }
         ListGroup("Voice prompts") {
-            item { KeySwitch(it, Key.GUIDANCE, "Voice guidance", "Spoken prompts for battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), writing == null, onUpdate) }
-            item { ChoiceRow(it, null, "Voice guidance volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), writing == null) { c -> onUpdate(Key.GUIDANCE_VOLUME, 0, c) } }
+            item { KeySwitch(it, Key.GUIDANCE, "Voice guidance", "Spoken prompts for battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), writing == null, update) }
+            item { ChoiceRow(it, null, "Voice guidance volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), writing == null) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
         }
     }
 }

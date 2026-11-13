@@ -41,7 +41,7 @@ enum class Glyph(val codepoint: Int) {
     val text: String = String(Character.toChars(codepoint))
 }
 
-private object SymbolFont {
+internal object SymbolFont {
     @Volatile private var typeface: Typeface? = null
     fun get(ctx: android.content.Context): Typeface =
         typeface ?: ctx.resources.getFont(R.font.material_symbols).also { typeface = it }
