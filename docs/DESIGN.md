@@ -205,15 +205,16 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 - **Page and dock**: the page ends where the dock's fade begins, so no row hides half under the
   toolbar (the accessibility check on the emulator holds this).
 
-## Two kinds of pictures (1.8)
+## Pictures of the earbuds (1.9)
 
-The app's own marks are flat, in the launcher icon's language: the icon, the splash, the widgets
-and the notifications (`ic_case_mark`, `w_glyph_bud_*`). The owner's device is shown as itself,
-as Android's device details do: Home's battery rings and Device info show the real WF-1000XM5
-(`wf1000xm5_case`, `wf1000xm5_bud`). The splash icon lands on the case ring's disc and the
-device picture takes over there.
-(Tried and dropped for the rings: the icon's flat case, which isn't the real shape, and 3D
-illustrations.)
+The owner's earbuds are drawn faithfully as vectors (`docs/icon/product_glyphs.py`): the case's
+outline is the profile measured from the product photo (matching Sony's 64.6 x 40.0 x 26.5 mm case
+seen from the front and a little above), the lid meeting the body at 43 % of its height with the
+status light just below; the earbud is traced from the product render (shell, ear tip, copper
+grille). In platinum silver on Home's rings and in Device info (`art_case`, `art_bud_*`); as one
+tint in the widgets and notifications (`ic_case_mark`, `w_glyph_bud_*`). The launcher icon, and
+so the splash, keep the app's own blue mark; the splash icon lands on the case ring's disc and
+the drawing takes over there. The reference photos live in `docs/icon/ref` and are not shipped.
 
 Home's listening tiles follow the mode the earbuds are in, not one just tapped, and the case tile
 stays whenever the case's level is known, so nothing moves while a change is on its way.

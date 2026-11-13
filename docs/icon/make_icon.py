@@ -63,6 +63,6 @@ mark = vector('    <group android:translateX="-22" android:translateY="-22">\n'
 
 out = res / "drawable"
 for name, text in {"ic_launcher_background": background, "ic_launcher_foreground": foreground,
-                   "ic_launcher_monochrome": monochrome, "ic_case_mark": mark}.items():
+                   "ic_launcher_monochrome": monochrome}.items():
     (out / f"{name}.xml").write_text(text, encoding="utf-8")
     print("wrote", name, len(text))
