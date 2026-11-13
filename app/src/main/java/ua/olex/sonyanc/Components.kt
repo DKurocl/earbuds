@@ -208,21 +208,6 @@ fun ChoiceDialog(title: String, choices: List<Pair<Int, String>>, selected: Int?
     )
 }
 
-/** Problem with the link, shown where the user is looking (under the device header). */
-@Composable
-fun ErrorBanner(message: String, onRetry: () -> Unit, onBluetooth: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(24.dp), color = cs.errorContainer, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(message, style = MaterialTheme.typography.bodyMedium, color = cs.onErrorContainer)
-            Row(Modifier.align(Alignment.End)) {
-                TextButton(onClick = onBluetooth) { Text("Bluetooth settings", color = cs.onErrorContainer) }
-                TextButton(onClick = onRetry) { Text("Retry", color = cs.onErrorContainer, fontWeight = FontWeight.SemiBold) }
-            }
-        }
-    }
-}
-
 /**
  * Text whose digits roll when they change, each on its own: up when the digit grows, down when
  * it falls, with Material's fast spatial spring. Digits are tabular, so nothing beside them moves.

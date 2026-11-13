@@ -145,6 +145,12 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
     }
 
     LaunchedEffect(startTick) { model.onStart() }
+    // A problem while connected (a mode not confirmed, the earbuds keeping another mode) is a short
+    // message, not a banner; away from the earbuds the status line under the name says why.
+    LaunchedEffect(device.error, device.connected) {
+        val e = device.error ?: return@LaunchedEffect
+        if (device.connected) { model.show(e); Headphones.clearError() }
+    }
     LaunchedEffect(shortcutMode, model.granted, model.saved) {
         if (shortcutMode != null && model.granted && model.saved != null) {
             model.requestMode(shortcutMode)
