@@ -122,7 +122,7 @@ object LiveTimer {
         val open = PendingIntent.getActivity(ctx, 8, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val at = android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(until))
         val b = android.app.Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(R.drawable.w_icon_hearing)
+            .setSmallIcon(R.drawable.w_icon_ambient)
             .setContentTitle("Ambient for a moment")
             .setContentText("Back to ${back.label.lowercase()} at $at")
             .setOngoing(true).setOnlyAlertOnce(true)

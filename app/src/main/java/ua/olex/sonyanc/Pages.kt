@@ -61,7 +61,7 @@ fun DeviceInfoContent(
         }
         if (connected) ListGroup {
             // Can't be undone from the phone: shown as a destructive action, like Android's own.
-            item { NavRow(it, Glyph.OFF, "Turn off earbuds", danger = true, onClick = { confirmOff = true }) }
+            item { NavRow(it, Glyph.POWER, "Turn off earbuds", danger = true, onClick = { confirmOff = true }) }
         }
     }
 }

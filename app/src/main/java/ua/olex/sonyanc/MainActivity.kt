@@ -307,7 +307,7 @@ fun App(
                         onAddTile = {
                             ctx.getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
                                 ComponentName(ctx, NoiseTileService::class.java), "Noise control",
-                                android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.w_icon_noise_control_off), ctx.mainExecutor,
+                                android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.w_icon_anc), ctx.mainExecutor,
                             ) {}
                         },
                         onPinWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, ModeWidget::class.java), null, null) },

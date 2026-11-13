@@ -19,6 +19,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.toggleableState
@@ -216,5 +220,50 @@ fun ErrorBanner(message: String, onRetry: () -> Unit, onBluetooth: () -> Unit) {
                 TextButton(onClick = onRetry) { Text("Retry", color = cs.onErrorContainer, fontWeight = FontWeight.SemiBold) }
             }
         }
+    }
+}
+
+/**
+ * Text whose digits roll when they change, each on its own: up when the digit grows, down when
+ * it falls, with Material's fast spatial spring. Digits are tabular, so nothing beside them moves.
+ * At the largest font sizes the whole line scales down to fit its width instead of being cut.
+ */
+@Composable
+fun RollingText(
+    text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier,
+    color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
+) {
+    val spatial = MaterialTheme.motionScheme.fastSpatialSpec<androidx.compose.ui.unit.IntOffset>()
+    val effects = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val base = style.copy(fontFeatureSettings = "tnum", color = if (color.isSpecified) color else style.color)
+    // No BoxWithConstraints: this sits in rows sized by intrinsics. A layout modifier scales the
+    // finished line down when it is wider than its space.
+    Row(
+        modifier.clearAndSetSemantics { contentDescription = text }.layout { measurable, constraints ->
+            val p = measurable.measure(constraints.copy(minWidth = 0, maxWidth = androidx.compose.ui.unit.Constraints.Infinity))
+            val scale = if (constraints.hasBoundedWidth && p.width > constraints.maxWidth) constraints.maxWidth.toFloat() / p.width else 1f
+            val w = (p.width * scale).toInt().coerceIn(constraints.minWidth, constraints.maxWidth)
+            layout(w, (p.height * scale).toInt()) {
+                p.placeWithLayer(0, 0) { scaleX = scale; scaleY = scale; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) }
+            }
+        },
+    ) {
+            text.forEachIndexed { i, ch ->
+                // Keyed from the right, so units stay units when the number gains a digit.
+                key(text.length - i) {
+                    androidx.compose.animation.AnimatedContent(
+                        ch,
+                        transitionSpec = {
+                            val digits = initialState.isDigit() && targetState.isDigit()
+                            val up = targetState > initialState
+                            if (!digits) androidx.compose.animation.fadeIn(effects) togetherWith androidx.compose.animation.fadeOut(effects)
+                            else (androidx.compose.animation.slideInVertically(spatial) { h -> if (up) h else -h } + androidx.compose.animation.fadeIn(effects)) togetherWith
+                                (androidx.compose.animation.slideOutVertically(spatial) { h -> if (up) -h else h } + androidx.compose.animation.fadeOut(effects)) using
+                                androidx.compose.animation.SizeTransform(clip = true)
+                        },
+                        label = "digit",
+                    ) { c -> Text(c.toString(), style = base, maxLines = 1, softWrap = false) }
+                }
+            }
     }
 }

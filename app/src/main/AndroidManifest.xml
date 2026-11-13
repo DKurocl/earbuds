@@ -52,7 +52,7 @@
         </activity>
 
         <service android:name=".NoiseTileService" android:label="Noise control"
-            android:icon="@drawable/w_icon_noise_control_off" android:exported="true"
+            android:icon="@drawable/w_icon_anc" android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
         </service>

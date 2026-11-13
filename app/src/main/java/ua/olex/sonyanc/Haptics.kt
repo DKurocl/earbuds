@@ -11,7 +11,17 @@ import android.os.VibratorManager
  * Predefined effects stand in when an actuator lacks a primitive.
  */
 object Haptics {
-    private fun vibrator(ctx: Context) = ctx.getSystemService(VibratorManager::class.java)?.defaultVibrator?.takeIf { it.hasVibrator() }
+    /**
+     * Android's "Touch feedback" switch (Settings > Sound & vibration > Vibration & haptics). The
+     * mode pulses are custom compositions, which the system does not silence on its own, so they
+     * follow the switch here, as the platform's own feedback does.
+     */
+    private fun touchFeedbackOn(ctx: Context) = runCatching {
+        android.provider.Settings.System.getInt(ctx.contentResolver, android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
+    }.getOrDefault(true)
+
+    private fun vibrator(ctx: Context) = ctx.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        ?.takeIf { it.hasVibrator() && touchFeedbackOn(ctx) }
 
     private fun play(ctx: Context, primitive: Int, scale: Float, fallback: Int) {
         val v = vibrator(ctx) ?: return

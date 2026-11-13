@@ -1,15 +1,15 @@
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
-    <shortcut android:shortcutId="anc" android:icon="@drawable/w_icon_noise_control_off" android:shortcutShortLabel="@string/shortcut_anc">
+    <shortcut android:shortcutId="anc" android:icon="@drawable/w_icon_anc" android:shortcutShortLabel="@string/shortcut_anc">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="ua.olex.sonyanc" android:targetClass="ua.olex.sonyanc.MainActivity">
             <extra android:name="hush.mode" android:value="ANC" />
         </intent>
     </shortcut>
-    <shortcut android:shortcutId="ambient" android:icon="@drawable/w_icon_hearing" android:shortcutShortLabel="@string/shortcut_ambient">
+    <shortcut android:shortcutId="ambient" android:icon="@drawable/w_icon_ambient" android:shortcutShortLabel="@string/shortcut_ambient">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="ua.olex.sonyanc" android:targetClass="ua.olex.sonyanc.MainActivity">
             <extra android:name="hush.mode" android:value="AMBIENT" />
         </intent>
     </shortcut>
-    <shortcut android:shortcutId="off" android:icon="@drawable/w_icon_power_settings_new" android:shortcutShortLabel="@string/shortcut_off">
+    <shortcut android:shortcutId="off" android:icon="@drawable/w_icon_off" android:shortcutShortLabel="@string/shortcut_off">
         <intent android:action="android.intent.action.VIEW" android:targetPackage="ua.olex.sonyanc" android:targetClass="ua.olex.sonyanc.MainActivity">
             <extra android:name="hush.mode" android:value="OFF" />
         </intent>
