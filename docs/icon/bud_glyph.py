@@ -4,7 +4,7 @@
     python3 docs/icon/bud_glyph.py
 
 A flat, one-colour WF-1000XM5 earbud for the tonal discs of the widgets, after Pixel's own
-battery widget: the silhouette of the product render (drawable-nodpi/wf1000xm5_bud.webp), the
+battery widget: the silhouette of the product render (docs/icon/ref/wf1000xm5_bud.webp), the
 ear tip set apart by a gap along the seam, and the round grille cut out. The seam is an arc of a
 circle through two points on it; the grille's centre and size are measured from its gold colour.
 """
@@ -16,7 +16,7 @@ import potrace
 from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[2]
-RENDER = ROOT / "app/src/main/res/drawable-nodpi/wf1000xm5_bud.webp"
+RENDER = ROOT / "docs/icon/ref/wf1000xm5_bud.webp"
 OUT = ROOT / "app/src/main/res/drawable"
 S = 4  # work at 4x the render for smooth edges
 

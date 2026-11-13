@@ -72,7 +72,7 @@ mark = ('<vector xmlns:android="http://schemas.android.com/apk/res/android" andr
 
 if __name__ == "__main__":
     for name, text in [("ic_launcher_foreground", foreground), ("ic_launcher_background", background),
-                       ("ic_launcher_monochrome", monochrome), ("ic_case_mark", mark)]:
+                       ("ic_launcher_monochrome", monochrome)]:
         open(f"{RES}/drawable/{name}.xml", "w").write(text)
     if len(sys.argv) > 1:
         svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="432" height="432">
