@@ -32,7 +32,10 @@ data class DeviceState(
     /** Parts (0 left, 1 right, 2 case) whose level was read on this connection. */
     val liveBatteryParts: Set<Int> = emptySet(),
     val batteryRefreshing: Boolean = false,
+    /** The codec in use, or the last one used (see [codecLive]); kept across links. */
     val codec: CodecProtocol.State? = null,
+    /** True once the earbuds reported [codec] on this connection. */
+    val codecLive: Boolean = false,
     val codecRefreshing: Boolean = false,
     val firmware: String? = null,
 ) {
@@ -47,45 +50,31 @@ data class DeviceState(
 object Headphones {
     enum class Status { DISCONNECTED, CONNECTING, CONNECTED, FAILED }
 
-    private const val CMD = SonyProtocol.TYPE_COMMAND.toInt()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    internal const val CMD = SonyProtocol.TYPE_COMMAND.toInt()
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** Serializes connection setup and command sequences on the wire. */
-    private val lock = Mutex()
-    private lateinit var app: Context
+    internal val lock = Mutex()
+    internal lateinit var app: Context
 
-    private val _state = MutableStateFlow(DeviceState())
+    internal val _state = MutableStateFlow(DeviceState())
     val state = _state.asStateFlow()
 
     private val _log = MutableStateFlow<List<String>>(emptyList())
     val log = _log.asStateFlow()
-    private val _features = MutableStateFlow<Map<DeviceSettingsProtocol.Feature, Boolean>>(emptyMap())
-    val features = _features.asStateFlow()
-    private val _advanced = MutableStateFlow<Map<AdvancedSettings.Key, List<Int>>>(emptyMap())
-    val advanced = _advanced.asStateFlow()
-    private val _equalizer = MutableStateFlow<EqualizerProtocol.State?>(null)
-    val equalizer = _equalizer.asStateFlow()
-
-    /** Subtype that each advanced setting last answered with (quality has two variants). */
-    private val advancedInquiries = ConcurrentHashMap<AdvancedSettings.Key, Int>()
-    private val advancedLocks = ConcurrentHashMap<AdvancedSettings.Key, Mutex>()
-    private val featureLocks = ConcurrentHashMap<DeviceSettingsProtocol.Feature, Mutex>()
-    private val equalizerLock = Mutex()
-    private val batteryLock = Mutex()
-    private val codecLock = Mutex()
 
     // ---- reply matching ---------------------------------------------------------------
     /** A caller waiting for the first incoming frame that [accepts]. */
-    private class Waiter(val accepts: (type: Int, payload: ByteArray) -> Boolean) {
+    internal class Waiter(val accepts: (type: Int, payload: ByteArray) -> Boolean) {
         val reply = CompletableDeferred<ByteArray?>()
     }
-    private val waiters = CopyOnWriteArrayList<Waiter>()
+    internal val waiters = CopyOnWriteArrayList<Waiter>()
 
     /**
      * Registers a waiter, runs [send] under the wire lock and waits for the matching frame.
      * The waiter exists before anything is sent, so a fast reply cannot be missed.
      * Returns null when sending failed, the link closed or nothing matched in time.
      */
-    private suspend fun exchange(
+    internal suspend fun exchange(
         timeoutMs: Long,
         connect: Boolean = true,
         accepts: (type: Int, payload: ByteArray) -> Boolean,
@@ -104,59 +93,29 @@ object Headphones {
         }
     }
 
-    // ---- mode requests ----------------------------------------------------------------
-    private data class ModeRequest(val id: Long, val state: SonyProtocol.NcState, val delivered: CompletableDeferred<Boolean>)
-    private val modeVersion = AtomicLong()
-    private val requests = Channel<ModeRequest>(Channel.CONFLATED, onUndeliveredElement = { it.delivered.complete(false) })
-    private var activeRequest: ModeRequest? = null
 
-    // ---- background reads while a screen is open ------------------------------------
-    private var infoJob: Job? = null
-    /** Set when the earbuds push changes on their own; polling then becomes a slow fallback. */
-    @Volatile private var codecPushed = false
-    @Volatile private var batteryPushed = false
 
-    private val usage = ConnectionUse()
-    val idle get() = !usage.active && !conn.connected && infoJob?.isActive != true && _state.value.pending == null
+    internal val usage = ConnectionUse()
+    val idle get() = !usage.active && !conn.connected && DeviceReads.infoJob?.isActive != true && _state.value.pending == null
 
-    private val conn = SonyConnection(scope, ::addLog, ::onPayload) {
+    internal val conn = SonyConnection(scope, ::addLog, ::onPayload) {
         _state.update {
-            it.copy(status = Status.DISCONNECTED, ncConfirmed = false, codec = null, liveBatteryParts = emptySet())
+            it.copy(status = Status.DISCONNECTED, ncConfirmed = false, codecLive = false, liveBatteryParts = emptySet())
         }
-        clearDeviceSettings()
+        EarbudSettingsLink.clearDeviceSettings()
         waiters.forEach { it.reply.complete(null) }
     }
 
-    init {
-        scope.launch {
-            for (requested in requests) {
-                try {
-                    delay(45) // lets a burst of taps settle on the last one
-                    if (modeVersion.get() == requested.id) apply(requested.state, requested.id) { requested.delivered.complete(it) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    addLog("✗ mode: ${e.message}")
-                    _state.update { it.copy(error = "Could not change mode. Try again.") }
-                } finally {
-                    requested.delivered.complete(false)
-                    synchronized(this@Headphones) {
-                        if (modeVersion.get() == requested.id) {
-                            _state.update { it.copy(pending = null) }
-                            activeRequest = null
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     @Synchronized fun init(ctx: Context) {
         if (!::app.isInitialized) {
             app = ctx.applicationContext
             // Show the last known levels at once; they stay dimmed until the earbuds answer.
             val battery = Prefs.lastBattery(app)
-            _state.update { it.copy(nc = Prefs.lastNc(app), battery = battery?.first, batterySeenAt = battery?.second) }
+            _state.update {
+                it.copy(nc = Prefs.lastNc(app), battery = battery?.first, batterySeenAt = battery?.second,
+                    codec = Prefs.lastCodec(app)?.let(CodecProtocol::State))
+            }
         }
     }
 
@@ -179,13 +138,28 @@ object Headphones {
 
     private fun savedDevice(): BluetoothDevice? = bondedDevices(app).firstOrNull { it.address == Prefs.deviceAddress(app) }
 
+
+    // ---- public API: the parts live in ModeControl, DeviceReads and EarbudSettingsLink ------
+    val features get() = EarbudSettingsLink.features
+    val advanced get() = EarbudSettingsLink.advanced
+    val equalizer get() = EarbudSettingsLink.equalizer
+    fun request(state: SonyProtocol.NcState): Deferred<Boolean> = ModeControl.request(state)
+    suspend fun queryCodec() = DeviceReads.queryCodec()
+    suspend fun queryBattery() = DeviceReads.queryBattery()
+    suspend fun readAdvanced(key: AdvancedSettings.Key) = EarbudSettingsLink.readAdvanced(key)
+    suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int) = EarbudSettingsLink.writeAdvancedField(key, index, code)
+    suspend fun readFeature(feature: DeviceSettingsProtocol.Feature) = EarbudSettingsLink.readFeature(feature)
+    suspend fun writeFeature(feature: DeviceSettingsProtocol.Feature, value: Boolean) = EarbudSettingsLink.writeFeature(feature, value)
+    suspend fun readEqualizer() = EarbudSettingsLink.readEqualizer()
+    suspend fun writeEqualizer(preset: Int? = null, bands: List<Int>? = null) = EarbudSettingsLink.writeEqualizer(preset, bands)
+
     // ---- connection ownership -----------------------------------------------------------
     @Synchronized fun hold(foreground: Boolean = true) { usage.acquire(foreground) }
 
     @Synchronized fun release(foreground: Boolean = true) {
         usage.release(foreground)
-        if (!usage.foreground) { infoJob?.cancel(); infoJob = null }
-        if (!usage.active) { cancelModes(); conn.close() }
+        if (!usage.foreground) { DeviceReads.infoJob?.cancel(); DeviceReads.infoJob = null }
+        if (!usage.active) { ModeControl.cancelModes(); conn.close() }
     }
 
     // ---- staying connected while the earbuds are present (LiveLink) ---------------------
@@ -200,7 +174,7 @@ object Headphones {
         stayJob?.cancel()
         stayJob = null
         if (on) stayJob = scope.launch { keepLinked() }
-        else if (!usage.active) { cancelModes(); conn.close() }
+        else if (!usage.active) { ModeControl.cancelModes(); conn.close() }
     }
 
     val staying get() = usage.staying
@@ -227,27 +201,21 @@ object Headphones {
                     continue
                 }
                 backoff = 2_000L
-                withTimeoutOrNull(3000) { queryBattery() }
-                batteryDue = now() + STAY_BATTERY_MS
+                withTimeoutOrNull(3000) { DeviceReads.queryBattery() }
+                batteryDue = DeviceReads.now() + STAY_BATTERY_MS
             }
-            val wait = if (batteryPushed) Long.MAX_VALUE else (batteryDue - now()).coerceAtLeast(1_000L)
+            val wait = if (DeviceReads.batteryPushed) Long.MAX_VALUE else (batteryDue - DeviceReads.now()).coerceAtLeast(1_000L)
             val dropped = withTimeoutOrNull(wait) { _state.first { !it.connected } } != null
             // A screen polls on its own (startInfoLoop); in the background read once per period.
-            if (!dropped && usage.staying && !batteryPushed && !usage.foreground) {
-                queryBattery()
-                batteryDue = now() + STAY_BATTERY_MS
+            if (!dropped && usage.staying && !DeviceReads.batteryPushed && !usage.foreground) {
+                DeviceReads.queryBattery()
+                batteryDue = DeviceReads.now() + STAY_BATTERY_MS
             }
         }
     }
 
-    private fun clearDeviceSettings() {
-        _features.value = emptyMap()
-        _advanced.value = emptyMap()
-        advancedInquiries.clear()
-        _equalizer.value = null
-    }
 
-    private suspend fun ensureConnectedLocked(): Boolean {
+    internal suspend fun ensureConnectedLocked(): Boolean {
         if (!usage.active) return false
         if (conn.connected) return true
         if (!hasPermission(app)) return fail("Allow Bluetooth access")
@@ -258,11 +226,11 @@ object Headphones {
         // Only when Android reports no audio link and no connect broadcast says otherwise.
         if (Prefs.linked(app) != true && !audioLinked(adapter)) return fail("Earbuds aren't connected. Take them out of the case.")
         _state.update {
-            it.copy(status = Status.CONNECTING, ncConfirmed = false, liveBatteryParts = emptySet(), codec = null, firmware = null)
+            it.copy(status = Status.CONNECTING, ncConfirmed = false, liveBatteryParts = emptySet(), codecLive = false, firmware = null)
         }
-        clearDeviceSettings()
-        codecPushed = false
-        batteryPushed = false
+        EarbudSettingsLink.clearDeviceSettings()
+        DeviceReads.codecPushed = false
+        DeviceReads.batteryPushed = false
         try {
             if (!conn.connect(dev) { usage.active } || !conn.send(SonyProtocol.parseHex(SonyProtocol.INIT_HEX))) {
                 conn.close()
@@ -279,7 +247,7 @@ object Headphones {
         _state.update { it.copy(status = Status.CONNECTED, error = null) }
         // A working control link proves Android's Bluetooth link is up.
         if (Prefs.linked(app) != true) { Prefs.setLinked(app, true); Widgets.refreshAll(app) }
-        startInfoLoop()
+        DeviceReads.startInfoLoop()
         return true
     }
 
@@ -294,22 +262,12 @@ object Headphones {
     }
 
     /** Drops queued and running mode requests; the next action reconnects on demand. */
-    @Synchronized private fun cancelModes() {
-        modeVersion.incrementAndGet()
-        activeRequest?.delivered?.complete(false)
-        activeRequest = null
-        _state.update { it.copy(pending = null) }
-        while (true) {
-            val old = requests.tryReceive().getOrNull() ?: break
-            old.delivered.complete(false)
-        }
-    }
 
     suspend fun connectAndSync(): Boolean = lock.withLock {
         if (!ensureConnectedLocked()) return@withLock false
         // Mode controls never wait behind a state read.
         if (_state.value.pending == null && !conn.send(SonyProtocol.NC_GET)) return@withLock false
-        startInfoLoop()
+        DeviceReads.startInfoLoop()
         conn.connected
     }
 
@@ -337,9 +295,9 @@ object Headphones {
             }
             if (apply != null) {
                 val base = _state.value.shownNc ?: SonyProtocol.NcState(apply)
-                withTimeoutOrNull(4000) { request(base.copy(mode = apply)).await() }
+                withTimeoutOrNull(4000) { ModeControl.request(base.copy(mode = apply)).await() }
             }
-            withTimeoutOrNull(3000) { queryBattery() }
+            withTimeoutOrNull(3000) { DeviceReads.queryBattery() }
             return true
         } finally {
             release(foreground = false)
@@ -349,229 +307,36 @@ object Headphones {
     /** Reads codec and battery now, connecting first if needed. */
     suspend fun refreshInfo() {
         if (_state.value.connected || connectAndSync()) {
-            queryCodec()
-            queryBattery()
+            DeviceReads.queryCodec()
+            DeviceReads.queryBattery()
         }
     }
 
-    // ---- noise control ------------------------------------------------------------------
-    @Synchronized fun request(state: SonyProtocol.NcState): Deferred<Boolean> {
-        val current = _state.value
-        activeRequest?.takeIf { current.pending == state && it.state == state }?.let { return it.delivered }
-        if (current.pending == null && current.ncConfirmed && current.nc == state && conn.connected) return CompletableDeferred(true)
-        val request = ModeRequest(modeVersion.incrementAndGet(), state, CompletableDeferred())
-        _state.update { it.copy(pending = state, error = null) }
-        activeRequest = request
-        requests.trySend(request)
-        return request.delivered
-    }
-
-    private suspend fun apply(state: SonyProtocol.NcState, id: Long, onDelivered: (Boolean) -> Unit): Boolean = lock.withLock {
-        if (!ensureConnectedLocked() || modeVersion.get() != id) { onDelivered(false); return@withLock false }
-        _state.value.let { if (it.ncConfirmed && it.nc == state) { onDelivered(true); return@withLock true } }
-        var ok = conn.send(SonyProtocol.ncSet(state))
-        // A cached socket can look connected after the earbuds have dropped it.
-        // Reconnect once for the latest choice; never replay a superseded choice.
-        if (!ok && modeVersion.get() == id && ensureConnectedLocked() && modeVersion.get() == id) ok = conn.send(SonyProtocol.ncSet(state))
-        if (!ok) {
-            onDelivered(false)
-            _state.update { it.copy(error = "The earbuds did not confirm the command. Try again.") }
-            return@withLock false
-        }
-        setNc(state, confirmed = false)
-        onDelivered(true) // Widget lifetime depends on delivery, not on the optional read-back.
-        if (modeVersion.get() != id) return@withLock true
-        // Read back while still holding the wire, so the next command waits for the device.
-        val waiter = Waiter { type, p -> type == CMD && SonyProtocol.parseNc(p) == state }
-        waiters += waiter
-        try {
-            if (conn.send(SonyProtocol.NC_GET)) withTimeoutOrNull(900) { waiter.reply.await() }
-        } finally {
-            waiters -= waiter
-        }
-        true
-    }
 
     suspend fun selectDevice(address: String, name: String?) = lock.withLock {
-        cancelModes()
+        ModeControl.cancelModes()
         conn.close()
         Prefs.saveDevice(app, address, name)
         Prefs.clearBattery(app)
         _state.value = DeviceState()
-        clearDeviceSettings()
+        EarbudSettingsLink.clearDeviceSettings()
         ModeWidget.refreshAll(app)
     }
 
-    private fun setNc(state: SonyProtocol.NcState, confirmed: Boolean) {
-        _state.update { it.copy(nc = state, ncConfirmed = confirmed) }
-        Prefs.saveNc(app, state)
-        ModeWidget.refreshAll(app)
-    }
 
     /** Waits until no mode change is in flight, so reads never delay a tap. */
-    private suspend fun awaitModeIdle(timeoutMs: Long = 2200) =
-        withTimeoutOrNull(timeoutMs) { _state.first { it.pending == null } } != null
 
-    // ---- codec and battery ----------------------------------------------------------------
-    /**
-     * While a screen is open: read codec and battery once, then rely on the earbuds' own
-     * change notifications. Polling stays only as a slow fallback for firmware that does not
-     * push, and backs off when a part (for example a case without a reading) stays unknown.
-     */
-    @Synchronized private fun startInfoLoop() {
-        if (!usage.foreground || infoJob?.isActive == true) return
-        infoJob = scope.launch {
-            delay(400)
-            var codecDue = 0L
-            var batteryDue = 0L
-            var batteryRetry = 8_000L
-            var equalizerAsked = false
-            var chatAsked = false
-            while (usage.foreground && conn.connected) {
-                _state.first { it.pending == null || !it.connected }
-                if (!usage.foreground || !conn.connected) break
-                if (now() >= codecDue) {
-                    queryCodec()
-                    codecDue = now() + if (codecPushed) 120_000L else 30_000L
-                }
-                if (!usage.foreground || !conn.connected) break
-                // One equalizer read per connection, so Home can name the current preset.
-                if (_equalizer.value == null && !equalizerAsked) { equalizerAsked = true; readEqualizer() }
-                // Speak-to-Chat once per connection, for its toggle in the dock.
-                if (AdvancedSettings.Key.CHAT !in _advanced.value && !chatAsked) { chatAsked = true; readAdvanced(AdvancedSettings.Key.CHAT) }
-                if (!usage.foreground || !conn.connected) break
-                if (now() >= batteryDue) {
-                    queryBattery()
-                    val complete = _state.value.liveBatteryParts.containsAll(setOf(0, 1, 2))
-                    batteryRetry = if (complete) 8_000L else (batteryRetry * 2).coerceAtMost(60_000L)
-                    batteryDue = now() + when {
-                        batteryPushed -> 180_000L
-                        complete -> 60_000L
-                        else -> batteryRetry
-                    }
-                }
-                val wait = (minOf(codecDue, batteryDue) - now()).coerceAtLeast(1_000L)
-                withTimeoutOrNull(wait) { _state.first { !it.connected } }
-            }
-        }
-    }
-
-    private fun now() = SystemClock.elapsedRealtime()
-
-    suspend fun queryCodec(): CodecProtocol.State? = codecLock.withLock {
-        _state.update { it.copy(codecRefreshing = true) }
-        try {
-            if (!awaitModeIdle()) return@withLock null
-            exchange(900, connect = false, accepts = { type, p -> type == CMD && CodecProtocol.parse(p) != null }) {
-                conn.send(CodecProtocol.get)
-            }?.let(CodecProtocol::parse)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            addLog("✗ codec: ${e.message}"); null
-        } finally {
-            _state.update { it.copy(codecRefreshing = false) }
-        }
-    }
-
-    private fun batteryFamily(p: ByteArray) =
-        if (SonyProtocol.parseBattery(p, SonyProtocol.Battery()) == null) null else if (p[1].toInt() == 0x0A) 2 else 1
-
-    suspend fun queryBattery() = batteryLock.withLock {
-        _state.update { it.copy(batteryRefreshing = true) }
-        var received = false
-        try {
-            // 01 and 09 are both documented Sony V2 dual-battery inquiry formats; 0A is the case.
-            for (q in SonyProtocol.BATTERY_GETS) {
-                val family = if (q[1].toInt() == 0x0A) 2 else 1
-                if (family == 1 && received && _state.value.liveBatteryParts.containsAll(setOf(0, 1))) continue
-                if (!awaitModeIdle()) continue
-                val reply = exchange(900, connect = false, accepts = { type, p -> type == CMD && batteryFamily(p) == family }) {
-                    conn.send(q)
-                }
-                if (reply != null && SonyProtocol.liveBatteryParts(reply).isNotEmpty()) received = true
-                yield()
-            }
-            if (!received) addLog("Battery: no decoded reply; requested 22 01 / 22 09 / 22 0A")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            addLog("✗ battery: ${e.message}")
-        } finally {
-            _state.update { it.copy(batteryRefreshing = false) }
-        }
-    }
-
-    // ---- device settings -----------------------------------------------------------------
-    private fun isAdvancedReply(key: AdvancedSettings.Key, type: Int, p: ByteArray) =
-        AdvancedSettings.parse(type, p)?.first == key && (p[0].toInt() and 255) == key.getCode + 1
-
-    suspend fun readAdvanced(key: AdvancedSettings.Key): List<Int>? = advancedLocks.getOrPut(key) { Mutex() }.withLock {
-        val subtypes = if (key == AdvancedSettings.Key.QUALITY) listOf(0, 2) else listOf(key.subtype)
-        for (subtype in subtypes) {
-            val reply = exchange(1000, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
-                conn.send(byteArrayOf(key.getCode.toByte(), subtype.toByte()), key.type)
-            }
-            if (reply != null) return@withLock AdvancedSettings.parse(key.type.toInt(), reply)?.second
-            if (!_state.value.connected) break
-        }
-        null
-    }
-
-    suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
-        var wanted: List<Int>? = null
-        val reply = exchange(1200, connect = false, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
-            // Patch the newest device values so other fields are preserved.
-            val current = _advanced.value[key] ?: return@exchange false
-            val next = AdvancedSettings.patch(key, current, index, code) ?: return@exchange false
-            val subtype = advancedInquiries[key] ?: key.subtype
-            wanted = next
-            conn.send(key.set(next, subtype), key.type) &&
-                conn.send(byteArrayOf(key.getCode.toByte(), subtype.toByte()), key.type)
-        }
-        val target = wanted ?: return@withLock false
-        AdvancedSettings.equivalent(key, reply?.let { AdvancedSettings.parse(key.type.toInt(), it)?.second }, target)
-    }
 
     suspend fun readFirmware() = lock.withLock { if (ensureConnectedLocked()) conn.send(byteArrayOf(0x04, 0x02)) else false }
 
     suspend fun powerOff(): Boolean = lock.withLock {
-        cancelModes()
+        ModeControl.cancelModes()
         if (!ensureConnectedLocked()) return@withLock false
         val delivered = conn.send(byteArrayOf(0x24, 0x03, 0x01))
         conn.close()
         delivered
     }
 
-    private fun isFeatureReply(feature: DeviceSettingsProtocol.Feature, type: Int, p: ByteArray) =
-        type == CMD && DeviceSettingsProtocol.parse(p)?.first == feature && (p[0].toInt() and 255) in listOf(0xE7, 0xF7)
-
-    suspend fun readFeature(feature: DeviceSettingsProtocol.Feature): Boolean? = featureLocks.getOrPut(feature) { Mutex() }.withLock {
-        exchange(1400, accepts = { type, p -> isFeatureReply(feature, type, p) }) { conn.send(feature.get) }
-            ?.let { DeviceSettingsProtocol.parse(it)?.second }
-    }
-
-    suspend fun writeFeature(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean = featureLocks.getOrPut(feature) { Mutex() }.withLock {
-        val reply = exchange(1400, connect = false, accepts = { type, p -> isFeatureReply(feature, type, p) }) {
-            feature in _features.value && conn.send(feature.set(value)) && conn.send(feature.get)
-        }
-        reply != null && DeviceSettingsProtocol.parse(reply)?.second == value
-    }
-
-    private fun isEqualizerReply(type: Int, p: ByteArray) =
-        type == CMD && (p[0].toInt() and 255) == 0x57 && EqualizerProtocol.parse(p) != null
-
-    suspend fun readEqualizer(): EqualizerProtocol.State? = equalizerLock.withLock {
-        exchange(1400, accepts = ::isEqualizerReply) { conn.send(EqualizerProtocol.get) }?.let(EqualizerProtocol::parse)
-    }
-
-    suspend fun writeEqualizer(preset: Int? = null, bands: List<Int>? = null): Boolean = equalizerLock.withLock {
-        val payload = if (bands != null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
-        val actual = exchange(1400, connect = false, accepts = ::isEqualizerReply) {
-            _equalizer.value != null && conn.send(payload) && conn.send(EqualizerProtocol.get)
-        }?.let(EqualizerProtocol::parse) ?: return@withLock false
-        if (bands != null) actual.preset == 0xA0 && actual.bands == bands else actual.preset == preset
-    }
 
     // ---- incoming frames ---------------------------------------------------------------------
     private fun onPayload(type: Int, p: ByteArray) {
@@ -584,22 +349,23 @@ object Headphones {
         val op = p.firstOrNull()?.toInt()?.and(255) ?: return
         if (type == CMD) AdvancedSettings.firmware(p)?.let { fw -> _state.update { it.copy(firmware = fw) }; return }
         AdvancedSettings.parse(type, p)?.let { (key, value) ->
-            advancedInquiries[key] = p[1].toInt() and 255
-            Prefs.cacheAdvanced(app, _advanced.updateAndGet { it + (key to value) })
+            EarbudSettingsLink.advancedInquiries[key] = p[1].toInt() and 255
+            Prefs.cacheAdvanced(app, EarbudSettingsLink._advanced.updateAndGet { it + (key to value) })
             return
         }
         if (type != CMD) return
         CodecProtocol.parse(p)?.let { codec ->
-            if (op == 0x15) codecPushed = true
-            _state.update { it.copy(codec = codec) }
+            if (op == 0x15) DeviceReads.codecPushed = true
+            _state.update { it.copy(codec = codec, codecLive = true) }
+            Prefs.saveCodec(app, codec.code)
             return
         }
-        DeviceSettingsProtocol.parse(p)?.let { (feature, value) -> Prefs.cacheFeatures(app, _features.updateAndGet { it + (feature to value) }); return }
-        EqualizerProtocol.parse(p)?.let { _equalizer.value = it; Prefs.cacheEqualizer(app, it); return }
-        SonyProtocol.parseNc(p)?.let { setNc(it, confirmed = true); return }
+        DeviceSettingsProtocol.parse(p)?.let { (feature, value) -> Prefs.cacheFeatures(app, EarbudSettingsLink._features.updateAndGet { it + (feature to value) }); return }
+        EqualizerProtocol.parse(p)?.let { EarbudSettingsLink._equalizer.value = it; Prefs.cacheEqualizer(app, it); return }
+        SonyProtocol.parseNc(p)?.let { ModeControl.setNc(it, confirmed = true); return }
         val live = SonyProtocol.liveBatteryParts(p)
-        if (batteryFamily(p) != null) {
-            if (op == 0x25) batteryPushed = true
+        if (DeviceReads.batteryFamily(p) != null) {
+            if (op == 0x25) DeviceReads.batteryPushed = true
             if (live.isNotEmpty()) {
                 val now = System.currentTimeMillis()
                 val updated = _state.updateAndGet {

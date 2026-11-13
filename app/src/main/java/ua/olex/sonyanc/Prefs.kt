@@ -24,6 +24,18 @@ object Prefs {
         return SonyProtocol.NcState(mode, prefs.getBoolean("voice", false), prefs.getInt("level", 20))
     }
 
+    /** The last codec the earbuds reported (CodecProtocol code), shown until they report again. */
+    fun lastCodec(ctx: Context): Int? = p(ctx).getInt("codec", -1).takeIf { it >= 0 }
+    fun saveCodec(ctx: Context, code: Int) { if (lastCodec(ctx) != code) p(ctx).edit().putInt("codec", code).apply() }
+
+    /** The owner chose "Prefer sound quality": Earbuds keeps the earbuds on it. */
+    fun preferQuality(ctx: Context) = p(ctx).getBoolean("prefer_quality", false)
+    fun setPreferQuality(ctx: Context, on: Boolean) = p(ctx).edit().putBoolean("prefer_quality", on).apply()
+
+    /** Which take of a haptic cue the owner chose (Haptics.Cue name), 0 by default. */
+    fun hapticTake(ctx: Context, cue: String) = p(ctx).getInt("haptic_$cue", 0)
+    fun setHapticTake(ctx: Context, cue: String, take: Int) = p(ctx).edit().putInt("haptic_$cue", take).apply()
+
     fun saveNc(ctx: Context, s: SonyProtocol.NcState) =
         p(ctx).edit().putString("mode", s.mode.name).putBoolean("voice", s.voice).putInt("level", s.level).apply()
 

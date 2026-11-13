@@ -201,6 +201,10 @@ class ScreenshotTest {
         DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"))
     }
 
+    @Test fun vibrations() = shoot("page-vibrations") {
+        VibrationsContent(Haptics.Cue.entries.associateWith { if (it == Haptics.Cue.AMBIENT) 1 else 0 }, shaped = true)
+    }
+
     @Test fun permission() = shoot("home-permission") {
         HushScreen(
             status = Headphones.Status.DISCONNECTED, nc = null, pending = null, fresh = false, error = null, battery = null,

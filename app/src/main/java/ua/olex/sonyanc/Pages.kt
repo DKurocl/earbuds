@@ -14,6 +14,10 @@ import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,7 +29,7 @@ fun DeviceInfoContent(
     deviceName: String, status: Headphones.Status, codec: CodecProtocol.State?, firmware: String?,
     refreshing: Boolean, onBack: () -> Unit = {}, onRefresh: () -> Unit = {}, onBluetooth: () -> Unit = {},
     onTurnOff: () -> Unit = {}, ldacBlocked: Boolean = false, onPreferQuality: () -> Unit = {},
-    onFind: () -> Unit = {},
+    onFind: () -> Unit = {}, hdAudioOff: Boolean = false,
 ) {
     var confirmOff by remember { mutableStateOf(false) }
     val connected = status == Headphones.Status.CONNECTED
@@ -45,16 +49,17 @@ fun DeviceInfoContent(
             item { InfoRow(it, Glyph.EQ, "Audio codec", if (connected) codec?.label ?: if (refreshing) "Reading…" else "Not reported" else "—") }
             item { InfoRow(it, Glyph.INFO, "Firmware", if (connected) firmware ?: "Reading…" else "—") }
         }
-        if (ldacBlocked) Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("LDAC is turned off by a setting", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                Text(
-                    "Bluetooth quality is set to Stable connection, so the earbuds won't use LDAC. Prefer sound quality if your phone stays close.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-                TextButton(onClick = onPreferQuality, modifier = Modifier.align(androidx.compose.ui.Alignment.End)) { Text("Prefer sound quality") }
-            }
-        }
+        if (ldacBlocked) HintCard(
+            "LDAC is turned off by a setting",
+            "Bluetooth quality is set to Stable connection, so the earbuds won't use LDAC. Prefer sound quality if your phone stays close.",
+            "Prefer sound quality", onPreferQuality,
+        )
+        // The earbuds allow LDAC but Android picked another codec: Android's own HD audio switch.
+        else if (hdAudioOff) HintCard(
+            "Android is using ${codec?.label ?: "another codec"}",
+            "The earbuds are set for sound quality. Turn on HD audio for $deviceName in Android's Bluetooth settings to use LDAC.",
+            "Bluetooth settings", onBluetooth,
+        )
         ListGroup {
             item { NavRow(it, Glyph.FIND, "Find earbuds", "Location and ring, in Find Hub", onClick = onFind) }
             item { NavRow(it, Glyph.BLUETOOTH, "Android Bluetooth settings", "Pairing and spatial audio", onClick = onBluetooth) }
@@ -109,7 +114,7 @@ fun AppSettingsContent(
     homeMode: OnConnect? = null, onHomeMode: (OnConnect?) -> Unit = {},
     homeSummary: String = "Not set", onSetHome: () -> Unit = {},
     tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
-    ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {},
+    ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {}, onVibrations: () -> Unit = {},
     liveLink: Boolean? = null, onLiveLink: (Boolean) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
@@ -157,6 +162,7 @@ fun AppSettingsContent(
         ListGroup("Appearance") {
             item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Match the colors of your wallpaper", dynamicColor, onChange = onDynamicColor) }
             item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "A tap when you choose, a pulse when the earbuds confirm", haptics, onChange = onHaptics) }
+            if (haptics) item { NavRow(it, Glyph.TUNE, "Vibrations", "How each answer feels: try and choose", onClick = onVibrations) }
         }
         if (canAddTile || canPinWidget) ListGroup("Shortcuts") {
             if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Cycle noise control from the notification shade", onClick = onAddTile) }
@@ -193,6 +199,64 @@ fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () ->
                 fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 16.sp,
                 modifier = Modifier.horizontalScroll(rememberScrollState()).padding(16.dp),
             )
+        }
+    }
+}
+
+/** A quiet suggestion with one action, in the secondary container (Pixel's settings tips). */
+@Composable
+private fun HintCard(title: String, body: String, action: String, onAction: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(24.dp), color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+            TextButton(onClick = onAction, modifier = Modifier.align(androidx.compose.ui.Alignment.End)) { Text(action) }
+        }
+    }
+}
+
+// ---- Vibrations -----------------------------------------------------------------------------
+
+/**
+ * The haptics lab: every cue with its three takes. Tapping a take plays it and makes it the one
+ * used everywhere. [shaped] says whether this phone plays the shaped (envelope) versions.
+ */
+@Composable
+fun VibrationsContent(chosen: Map<Haptics.Cue, Int>, shaped: Boolean, onBack: () -> Unit = {}, onTry: (Haptics.Cue, Int) -> Unit = { _, _ -> }) {
+    val cs = MaterialTheme.colorScheme
+    PageScaffold("Vibrations", onBack) {
+        Text(
+            if (shaped) "Shaped for this phone's vibration motor. Tap a take to feel it; the last one you tap is used."
+            else "Tap a take to feel it; the last one you tap is used.",
+            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        Haptics.Cue.entries.forEach { cue ->
+            ListGroup(cue.title) {
+                item { shape ->
+                    Surface(shape = shape.shape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(cue.meaning, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            val takes = Haptics.takes.getValue(cue)
+                            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                                takes.forEachIndexed { i, take ->
+                                    ToggleButton(
+                                        checked = chosen[cue] == i, onCheckedChange = { onTry(cue, i) },
+                                        shapes = when (i) {
+                                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                            takes.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                        },
+                                        colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest),
+                                        contentPadding = PaddingValues(horizontal = 8.dp),
+                                        modifier = Modifier.weight(1f).semantics { role = Role.RadioButton; selected = chosen[cue] == i },
+                                    ) { Text(take.name, maxLines = 1, style = MaterialTheme.typography.labelLarge) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

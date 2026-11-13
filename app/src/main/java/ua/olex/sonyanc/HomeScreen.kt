@@ -23,6 +23,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -86,15 +92,26 @@ fun HushScreen(
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
         }
-    }, bottomBar = {
-        // Noise control lives in a dock at the bottom: on a 6.8" phone that is where the thumb is.
-        if (granted && hasDevice) ModeDock(state, pending, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
     }) { insets ->
+        // The dock floats over the page; the page scrolls under it and ends above it.
+        val density = LocalDensity.current
+        var dockHeight by remember { mutableStateOf(0.dp) }
+        // Scrolling down tucks the dock's card away (the modes stay); scrolling up brings it back.
+        var cardShown by remember { mutableStateOf(true) }
+        val tuck = remember {
+            object : NestedScrollConnection {
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (consumed.y < -6f) cardShown = false else if (consumed.y > 6f) cardShown = true
+                    return Offset.Zero
+                }
+            }
+        }
+        Box(Modifier.padding(top = insets.calculateTopPadding()).fillMaxSize().nestedScroll(tuck)) {
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = onBattery, state = pull,
-            modifier = Modifier.padding(insets).fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = batteryRefreshing || codecRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter))
@@ -140,8 +157,14 @@ fun HushScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp + dockHeight))
         }
+        }
+        // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
+        if (granted && hasDevice) ModeDock(
+            state, pending, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient),
+            cardShown, Modifier.align(Alignment.BottomCenter).onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
+        )
         }
     }
 }
@@ -347,51 +370,65 @@ class DockExtras(
 )
 
 @Composable
-private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
-    // No slab behind the controls: the buttons carry their own fills and sit on the page, and the
-    // page fades out under them as it scrolls, so nothing reads as a box inside a box.
+private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras, cardShown: Boolean, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    // What the chosen mode offers grows out of the toolbar as a floating card: Ambient's level and
+    // voice focus, or Speak-to-Chat and "Ambient for a moment" with noise cancelling.
+    val card = state?.mode?.takeIf { it != Mode.OFF }
+    var lastCard by remember { mutableStateOf(card) }
+    if (card != null) lastCard = card
+    // A soft fade of the page behind the floating parts, so the list never shows between them.
     val page = Surfaces.page
-    Box(
-        Modifier.fillMaxWidth()
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.18f to page, 1f to page)),
+    Column(
+        modifier.fillMaxWidth()
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.22f to page.copy(alpha = .94f), 1f to page))
+            .navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp)) {
-            AnimatedVisibility(
-                state?.mode == Mode.AMBIENT,
-                enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Bottom) + fadeIn(),
-                exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.Bottom) + fadeOut(),
-            ) {
-                AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
-            }
-            // With noise cancelling on: talk without taking the earbuds out.
-            AnimatedVisibility(
-                state?.mode == Mode.ANC,
-                enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Bottom) + fadeIn(),
-                exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.Bottom) + fadeOut(),
-            ) {
-                Row(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    extras.speakToChat?.let { on ->
-                        SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
-                            extras.onSpeakToChat(!on)
+        AnimatedVisibility(
+            visible = card != null && cardShown,
+            enter = fadeIn(motion.fastEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.8f, transformOrigin = TransformOrigin(0.5f, 1f)) +
+                expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Bottom),
+            exit = fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.8f, transformOrigin = TransformOrigin(0.5f, 1f)) +
+                shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Bottom),
+        ) {
+            Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, shadowElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
+                AnimatedContent(
+                    lastCard, label = "dock card",
+                    transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
+                ) { shown ->
+                    Box(Modifier.padding(8.dp)) {
+                        when (shown) {
+                            Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
+                            else -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                extras.speakToChat?.let { on ->
+                                    SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
+                                        extras.onSpeakToChat(!on)
+                                    }
+                                }
+                                SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
+                                    description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
+                            }
                         }
                     }
-                    SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
-                        description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                 }
             }
-            // Material's connected button group: the pressed button widens and its neighbours give
-            // way (animateWidth), the chosen one morphs into a pill.
+        }
+        // Material 3 Expressive's floating toolbar: a pill above the page with the three modes. The
+        // pressed mode widens and its neighbours give way (animateWidth); the chosen one fills in.
+        Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
             val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
             ButtonGroup(
                 overflowIndicator = {}, // three buttons always fit
-                modifier = Modifier.fillMaxWidth().selectableGroup(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+                modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Mode.entries.forEachIndexed { index, mode ->
                     customItem(
                         buttonGroupContent = {
                             ModeButton(
-                                mode, index, Mode.entries.size, state?.mode == mode, pending?.mode == mode, interactions[index],
+                                mode, state?.mode == mode, pending?.mode == mode, interactions[index],
                                 Modifier.weight(1f).animateWidth(interactions[index]),
                             ) { onChoose((state ?: NcState(mode)).copy(mode = mode)) }
                         },
@@ -403,10 +440,10 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
     }
 }
 
-/** One mode in the connected group: Material's toggle button with the connected shapes. */
+/** One mode in the floating toolbar: Material's toggle button, filled when chosen. */
 @Composable
 private fun ModeButton(
-    mode: Mode, index: Int, count: Int, selected: Boolean, applying: Boolean,
+    mode: Mode, selected: Boolean, applying: Boolean,
     interaction: MutableInteractionSource, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -414,12 +451,9 @@ private fun ModeButton(
     ToggleButton(
         checked = selected,
         onCheckedChange = { onClick() },
-        shapes = when (index) {
-            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-            count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-        },
-        colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
+        // Toolbar items: no container at rest, a full pill when chosen, squarer under the finger.
+        shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = RoundedCornerShape(16.dp), checkedShape = CircleShape),
+        colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
         modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)
