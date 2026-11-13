@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon's case without its white background, cropped to the case (48 x 34 units):
+     Home's case ring shows exactly what the splash icon lands as. From ic_launcher_foreground. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp" android:height="34dp" android:viewportWidth="48" android:viewportHeight="34">
+    <group android:translateX="-30" android:translateY="-37">
+        <path android:pathData="M30.0,50.5 V48.0 C30.0,41.95 34.95,37.0 41.0,37.0 C49.0,37.0 59.0,37.0 67.0,37.0 C73.05,37.0 78.0,41.95 78.0,48.0 V50.5 Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="78.0" android:startY="37.0" android:endX="30.0" android:endY="50.5"><item android:offset="0.0" android:color="#FF8AB4F8"/><item android:offset="1.0" android:color="#FFC3D3FB"/></gradient></aapt:attr></path>
+        <path android:pathData="M30.0,52.1 H78.0 V58.5 C78.0,65.375 72.375,71.0 65.5,71.0 H42.5 C35.625,71.0 30.0,65.375 30.0,58.5 Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="78.0" android:startY="52.1" android:endX="30.0" android:endY="71.0"><item android:offset="0.0" android:color="#FF2F7BF5"/><item android:offset="0.55" android:color="#FF4A86F4"/><item android:offset="1.0" android:color="#FFA497F2"/></gradient></aapt:attr></path>
+        <path android:fillColor="#34A853" android:pathData="M51.4,60.5 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 Z"/>
+    </group>
+</vector>

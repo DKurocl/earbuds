@@ -71,7 +71,7 @@ fun DeviceInfoContent(
     }
 }
 
-/** Pixel's device details header: the product (the open case with its earbuds), its name and state. */
+/** Pixel's device details header: the product in the app's own pictures (the launcher icon's case, the earbuds beside it), its name and state. */
 @Composable
 private fun DeviceHero(name: String, status: String) {
     Column(
@@ -79,10 +79,11 @@ private fun DeviceHero(name: String, status: String) {
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        androidx.compose.foundation.Image(
-            androidx.compose.ui.res.painterResource(R.drawable.art_case_open), null,
-            Modifier.size(width = 168.dp, height = 146.dp),
-        )
+        Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.art_bud_flat_left), null, Modifier.size(56.dp))
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.art_case_flat), null, Modifier.size(width = 120.dp, height = 85.dp))
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.art_bud_flat_right), null, Modifier.size(56.dp))
+        }
         Text(name, style = MaterialTheme.typography.headlineSmallEmphasized, modifier = Modifier.padding(top = 8.dp))
         Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
