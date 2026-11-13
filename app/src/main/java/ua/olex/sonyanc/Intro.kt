@@ -48,15 +48,13 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * The opening, once per cold start (1.55 s, a tap skips it), on one illustrated parts sheet
- * (drawable-nodpi/art_*: closed case, empty body, the lid's inside, both earbuds), every layer
- * aligned to the sheet's own assembled open case. The splash shows the closed case; as it lifts,
- * the same case in the same place breathes and springs up off its shadow with a glow behind. The
- * lid flips back over its hinge: its outside turns away, then its inside comes up behind; under
- * it the earbuds lie in their wells as they really do, only their domes showing. They lift out,
- * tilting, and hover; the status light blooms. Then the earbuds fly on arcs into their battery
- * rings, the lid shuts and the case follows; the rings show the same artwork and each fills as
- * its piece lands, and the rest of the page comes in. Off (the default) everywhere else.
+ * The opening, once per cold start, the way Google's own apps do it: one short gesture of the icon,
+ * then its hero takes its place in the page (0.76 s; a tap skips it). The splash shows the closed
+ * case (drawable-nodpi/art_*, one illustrated parts sheet with every layer aligned to its own
+ * assembled open case). As the splash lifts, the same case in the same place pops its lid open on a
+ * spring, the earbuds showing in their wells and the status light blinking; then the lid shuts as
+ * the case shrinks into Home's case ring (which shows the same artwork), the earbuds' rings come in
+ * and the page fades up. Off (the default) everywhere else.
  */
 object Intro {
     enum class Phase { OFF, WAITING, PLAYING }
@@ -98,7 +96,7 @@ object Intro {
 
 // ---- motion helpers ------------------------------------------------------------------------------
 
-private const val TOTAL = 1550f
+private const val TOTAL = 760f
 
 private fun span(t: Float, start: Float, end: Float) = ((t - start) / (end - start)).coerceIn(0f, 1f)
 private fun decel(x: Float): Float { val u = 1 - x; return 1 - u * u * u * u }
@@ -147,10 +145,11 @@ fun IntroOverlay() {
         // Without the rings on screen (setup, a page) there is nothing to land in.
         if (Intro.targets.size < 3) { Intro.finish(); return@LaunchedEffect }
         clock.animateTo(TOTAL, tween(TOTAL.toInt(), easing = LinearEasing)) {
-            if (value >= 1290f) Intro.land("Left")
-            if (value >= 1350f) Intro.land("Right")
-            if (value >= 1470f) Intro.land("Case")
-            Intro.reveal(decel(span(value, 1200f, TOTAL)))
+            // The earbuds' rings simply come in; the case lands in its own.
+            if (value >= 430f) Intro.land("Left")
+            if (value >= 480f) Intro.land("Right")
+            if (value >= 730f) Intro.land("Case")
+            Intro.reveal(decel(span(value, 380f, TOTAL)))
         }
         Intro.finish()
     }
@@ -165,52 +164,40 @@ fun IntroOverlay() {
         }
         val w0 = start.width
 
-        // ---- the timeline ----
-        val breath = sin(span(t, 0f, 260f) * PI.toFloat()) * 0.025f
-        val rise = spring(span(t, 120f, 680f), 0.3f)
-        // The lid shuts once the earbuds are on their way, then the case follows them.
-        val open = spring(span(t, 300f, 820f), 0.15f) * (1 - decel(span(t, 1080f, 1250f)))
-        val ledGlow = decel(span(t, 640f, 840f)) * (1 - span(t, 1100f, 1300f))
-        val fly = span(t, 1190f, 1500f)
+        // ---- the timeline: one gesture, then the case takes its place in the page ----
+        val breath = sin(span(t, 0f, 300f) * PI.toFloat()) * 0.03f
+        // The lid pops open on a spring and shuts again as the case moves off.
+        val open = spring(span(t, 0f, 420f), 0.25f) * (1 - decel(span(t, 400f, 560f)))
+        val ledGlow = sin(span(t, 150f, 520f) * PI.toFloat())
+        val fly = span(t, 400f, 740f)
 
-        val stage = Offset(start.center.x, start.center.y - rise * 26 * dp)
-        val casePiece = fly(Piece(stage, w0 * (1 + breath + 0.05f * rise), 0f, 1f), Intro.targets.getValue("Case"), aspect, fly)
-        // Sheet px -> screen, for the case as staged (the earbuds start from their wells in it).
-        val k0 = w0 * (1 + breath + 0.05f * rise) / Sheet.CLOSED[2]
-        fun stagePoint(x: Float, y: Float) = Offset(
-            stage.x + (x - (Sheet.CLOSED[0] + Sheet.CLOSED[2] / 2)) * k0, stage.y + (y - (Sheet.CLOSED[1] + Sheet.CLOSED[3] / 2)) * k0,
+        val stage = start.center
+        val casePiece = fly(Piece(stage, w0 * (1 + breath), 0f, 1f), Intro.targets.getValue("Case"), aspect, fly)
+        // The earbuds stay in their wells: they show while the lid is open.
+        val k0 = casePiece.width / Sheet.CLOSED[2]
+        fun seat(box: FloatArray) = Piece(
+            Offset(casePiece.center.x + (box[0] + box[2] / 2 - (Sheet.CLOSED[0] + Sheet.CLOSED[2] / 2)) * k0,
+                casePiece.center.y + (box[1] + box[3] / 2 - (Sheet.CLOSED[1] + Sheet.CLOSED[3] / 2)) * k0),
+            box[2] * k0, 0f, casePiece.alpha,
         )
-
-        // Earbuds: lifted out of their wells, tilting outward, a gentle float, then into their rings.
-        fun bud(side: Int, label: String, delay: Float, box: FloatArray, art: ImageBitmap): Piece {
-            val up = spring(span(t, 640f + delay, 1080f + delay), 0.4f)
-            val float = sin(span(t, 900f, 1400f) * PI.toFloat() * 2) * 3 * dp
-            val seat = stagePoint(box[0] + box[2] / 2, box[1] + box[3] / 2)
-            val perch = seat + Offset(side * 46 * k0, -170 * k0 + float)
-            val staged = Piece(lerp(seat, perch, up), box[2] * k0 * (1 + 0.06f * up), lerp(0f, side * 9f, up), 1f)
-            val p = span(t, 1000f + delay * 0.6f, 1300f + delay * 0.6f)
-            return fly(staged, Intro.targets.getValue(label), art.width.toFloat() / art.height, p)
-        }
-        val left = bud(-1, "Left", 0f, Sheet.BUD_L, budL)
-        val right = bud(1, "Right", 60f, Sheet.BUD_R, budR)
+        val left = seat(Sheet.BUD_L)
+        val right = seat(Sheet.BUD_R)
 
         // A glow of the theme colour behind, breathing out as the case comes to life.
-        val g = span(t, 0f, 900f)
-        val glowR = w0 * lerp(0.5f, 1.3f, decel(g))
-        drawCircle(Brush.radialGradient(listOf(glowColor.copy(alpha = 0.30f * (1 - g)), Color.Transparent), stage, glowR), glowR, stage)
+        val g = span(t, 0f, 520f)
+        val glowR = w0 * lerp(0.5f, 1.2f, decel(g))
+        drawCircle(Brush.radialGradient(listOf(glowColor.copy(alpha = 0.22f * (1 - g)), Color.Transparent), stage, glowR), glowR, stage)
         // Contact shadow on the "floor" the case rose from.
         val floor = Offset(start.center.x, start.bottom + 4 * dp)
         drawOval(
-            Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.42f * (1 - fly) * (1 - 0.45f * rise)), Color.Transparent), floor, w0 * 0.55f),
-            topLeft = floor - Offset(w0 * (0.48f + 0.08f * rise), w0 * 0.06f), size = Size(w0 * (0.96f + 0.16f * rise), w0 * 0.12f),
+            Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.32f * (1 - fly)), Color.Transparent), floor, w0 * 0.55f),
+            topLeft = floor - Offset(w0 * 0.48f, w0 * 0.06f), size = Size(w0 * 0.96f, w0 * 0.12f),
         )
 
-        val budsAway = t >= 1000f
-        drawCase(casePiece, open * (1 - fly), ledGlow, closed, bodyArt, lidArt) { rimY ->
+        drawCase(casePiece, open, ledGlow, closed, bodyArt, lidArt) { rimY ->
             // In their wells: only what is above the opening's front rim shows.
-            if (!budsAway) clipRect(bottom = rimY) { drawBud(left, budL); drawBud(right, budR) }
+            clipRect(bottom = rimY) { drawBud(left, budL); drawBud(right, budR) }
         }
-        if (budsAway) { drawBud(left, budL); drawBud(right, budR) }
     }
 }
 

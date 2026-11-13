@@ -106,7 +106,7 @@ class ScreenshotTest {
         Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 0.22f, top + icon * 0.3195f, left + icon * 0.78f, top + icon * 0.6805f))
         var at = 0L
         val video = System.getProperty("introVideo") == "true"
-        val times = if (video) (0L..1700L step 20L).toList() else listOf(16L, 140L, 300L, 480L, 640L, 820L, 960L, 1100L, 1220L, 1360L, 1600L)
+        val times = if (video) (0L..900L step 16L).toList() else listOf(16L, 100L, 200L, 300L, 400L, 480L, 560L, 640L, 720L, 900L)
         for (t in times) {
             compose.mainClock.advanceTimeBy(t - at); at = t
             if (video) frame("introvid/%04d".format(t)) else save("intro-%04d".format(t))
