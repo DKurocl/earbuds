@@ -190,14 +190,15 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 ## Opening and widgets (1.7)
 
-- **Opening** (`Intro.kt`, `SplashHandoff.kt`), once per cold start, 1.55 s, a tap skips it, built
-  on one illustrated parts sheet (drawable-nodpi/art_*: closed case, open body, the lid's inside,
-  both earbuds; generated once, all at one scale and light). The splash shows the closed case;
-  as it lifts, the same case in the same place breathes and springs up off its shadow with a glow
-  behind; the lid swings back (its inside rises from the hinge behind the opening, its outside
-  narrows to a band on top); the earbuds rise out of the opening, tilting; the status light
-  blooms. The earbuds fly into their rings, the lid shuts, the case follows; the rings show the
-  same artwork and fill as their pieces land; the page comes in last.
+- **Opening** (`Intro.kt`, `SplashHandoff.kt`), once per cold start, 0.76 s, a tap skips it, the
+  way Google's own apps do it: one short gesture of the icon, then its hero takes its place in the
+  page. The splash shows the closed case; as it lifts, the same case in the same place pops its lid
+  open on a spring (the earbuds lying in their wells, only their domes showing, as on the real
+  product), the status light blinks; the lid shuts as the case shrinks into Home's case ring, the
+  earbuds' rings come in and fill, and the page fades up. The artwork is one illustrated parts
+  sheet (drawable-nodpi/art_*) with every layer aligned to its own assembled open case.
+  Longer versions (earbuds flying out, a 1.5 s show) were built and dropped: too much for an app
+  you open many times a day.
 - **Widgets**: the mode buttons follow the floating toolbar. No container at rest; the chosen
   mode is a pill that grows in from 80 % and fades in (`docs/widget/segments.py`), the old one
   shrinks out. Same in the dashboard.
