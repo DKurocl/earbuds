@@ -250,7 +250,6 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                 }
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp))
-            IntroOverlay()
         }
     }
 }
