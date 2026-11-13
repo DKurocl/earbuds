@@ -3,7 +3,6 @@ package ua.olex.sonyanc
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import androidx.activity.ComponentActivity
@@ -107,7 +106,7 @@ class ConnectedSheetActivity : ComponentActivity() {
 
     private fun close() {
         finish()
-        if (Build.VERSION.SDK_INT >= 34) overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
     }
 }
 
