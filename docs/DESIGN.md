@@ -165,3 +165,25 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
   segments), so it runs in Robolectric renders too.
 - **Haptics** follow the system's touch feedback setting as well as the app's own switch.
 - CI fails if `material-icons-extended` or `Icons.` comes back.
+
+## Floating toolbar, haptics, structure (1.6)
+
+- **Dock**: Material 3 Expressive's floating toolbar. A pill above the page holds the three modes
+  (no container at rest, a filled pill when chosen, the pressed one widens). What the chosen mode
+  offers (Ambient's level and voice; Speak-to-Chat and "Ambient for a moment" with ANC) grows out
+  of it as a floating card; scrolling down tucks the card away and the modes stay. The page
+  scrolls under both, with a soft fade so the list never shows between them.
+- **Haptics** (`Haptics.kt`): one vocabulary. ANC closes the world in (deep press), Ambient opens it
+  (deep to crisp), Off lets go (a fade), a setting accepted is a click, a refusal two knocks.
+  Shaped with Android 16 envelope effects on the Pixel, primitives elsewhere; low strength,
+  USAGE_TOUCH in the app (follows the touch intensity setting) and the touch-feedback switch.
+  Three takes per cue; App settings › Vibrations plays them and keeps the one chosen.
+- **Structure**: `AppModel` (ViewModel) owns settings and actions; `App()` only wires pages and
+  what needs an Activity. `Headphones` is the link (socket, reply matching, leases); noise
+  control is `ModeControl`, codec and battery reads `DeviceReads`, earbud settings
+  `EarbudSettingsLink`. The codec is remembered across links like the battery.
+- **Mode read-back**: when the earbuds answer with another mode, Earbuds asks once more and then
+  says which mode they stayed in; the log names each step.
+- **Sound quality**: "Prefer sound quality" is remembered; if the earbuds report Stable connection
+  again, Earbuds sets it back once per connection. When the earbuds allow LDAC but Android uses
+  another codec, Device info points to Android's HD audio switch.
