@@ -39,8 +39,6 @@ android {
             // Renders are compared with the committed goldens; -PrecordGoldens=true rewrites them.
             it.systemProperty("goldenDir", file("src/screenshotTest/goldens").absolutePath)
             it.systemProperty("recordGoldens", providers.gradleProperty("recordGoldens").orNull ?: "")
-            // -PintroVideo=true also writes every 20 ms of the opening, for a video of it.
-            it.systemProperty("introVideo", providers.gradleProperty("introVideo").orNull ?: "")
             // Where Robolectric downloads android-all (for sandboxes where Maven Central throttles).
             providers.gradleProperty("robolectricRepo").orNull?.let { repo -> it.systemProperty("robolectric.dependency.repo.url", repo) }
         }

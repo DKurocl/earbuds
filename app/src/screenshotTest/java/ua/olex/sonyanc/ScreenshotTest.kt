@@ -57,15 +57,6 @@ class ScreenshotTest {
         Goldens.check(name, bitmap)
     }
 
-    /** A frame for a video only: written, never compared. */
-    private fun frame(name: String) {
-        val file = File(System.getProperty("screenshotDir")!!, "$name.png").apply { parentFile!!.mkdirs() }
-        val root = compose.activity.findViewById<View>(android.R.id.content)
-        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-        root.draw(Canvas(bitmap))
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-    }
-
     private fun shoot(name: String, content: @Composable () -> Unit) {
         compose.setContent { AppTheme(dynamic = false) { content() } }
         compose.waitForIdle()
@@ -79,40 +70,6 @@ class ScreenshotTest {
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             speakToChat = true,
         )
-    }
-
-    /** The opening: frames of the intro over Home, from the splash's case to the rings (Intro). */
-    @Test fun intro() {
-        compose.mainClock.autoAdvance = false
-        Intro.prepare()
-        compose.setContent {
-            AppTheme(dynamic = false) {
-                Box(Modifier.fillMaxSize()) {
-                    HushScreen(
-                        status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
-                        fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78), granted = true, hasDevice = true,
-                        codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
-                    )
-                    IntroOverlay()
-                }
-            }
-        }
-        compose.mainClock.advanceTimeBy(100)
-        // Where the splash draws the case on this screen: a 288 dp icon, centred (splash_case.xml).
-        val root = compose.activity.findViewById<View>(android.R.id.content)
-        val d = compose.activity.resources.displayMetrics.density
-        val icon = 288 * d
-        val left = (root.width - icon) / 2; val top = (root.height - icon) / 2
-        Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 0.22f, top + icon * 0.3195f, left + icon * 0.78f, top + icon * 0.6805f))
-        var at = 0L
-        val video = System.getProperty("introVideo") == "true"
-        val times = if (video) (0L..900L step 16L).toList() else listOf(16L, 100L, 200L, 300L, 400L, 480L, 560L, 640L, 720L, 900L)
-        for (t in times) {
-            compose.mainClock.advanceTimeBy(t - at); at = t
-            if (video) frame("introvid/%04d".format(t)) else save("intro-%04d".format(t))
-        }
-        compose.mainClock.advanceTimeBy(600)
-        Intro.finish()
     }
 
     /** Predictive back posed mid-gesture: the battery page shrinks away, Home waits underneath. */

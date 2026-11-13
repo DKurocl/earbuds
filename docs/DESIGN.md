@@ -122,7 +122,7 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
   heads-up at 15 % with the listening time left (`LowBattery`). No background connection.
 - **At home**: a mode of its own when the earbuds connect at home, from the phone's last known
   location at that moment; the usual rule elsewhere or when the location is stale (`Places`).
-- **Splash**: the closed case artwork on the app's page color; see the opening below.
+- **Splash**: the launcher icon in its white circle, animated; see the opening below.
 - **Large text**: one-line labels shrink to fit (`TextAutoSize`) at the largest font sizes;
   renders at 150 % and 200 % are part of `ScreenshotTest`, and `AccessibilityUiTest` runs
   Google's Accessibility Test Framework on every page on the emulator.
@@ -190,15 +190,15 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 ## Opening and widgets (1.7)
 
-- **Opening** (`Intro.kt`, `SplashHandoff.kt`), once per cold start, 0.76 s, a tap skips it, the
-  way Google's own apps do it: one short gesture of the icon, then its hero takes its place in the
-  page. The splash shows the closed case; as it lifts, the same case in the same place pops its lid
-  open on a spring (the earbuds lying in their wells, only their domes showing, as on the real
-  product), the status light blinks; the lid shuts as the case shrinks into Home's case ring, the
-  earbuds' rings come in and fill, and the page fades up. The artwork is one illustrated parts
-  sheet (drawable-nodpi/art_*) with every layer aligned to its own assembled open case.
-  Longer versions (earbuds flying out, a 1.5 s show) were built and dropped: too much for an app
-  you open many times a day.
+- **Opening** (`SplashHandoff.kt`, `Intro.kt`, `docs/icon/splash.py`), as Google's apps do it,
+  played off the launcher icon itself: Android shows the icon in its white circle and plays its
+  gesture (650 ms: the lid pops up on its hinge and clicks shut, the body answers with a tiny
+  squash, the status light blinks and sends out one ring). Then that same circle comes down onto
+  Home's case ring, shrinking to the ring's disc on the emphasized curve while the splash
+  dissolves (520 ms); the earbuds' rings come in, the case ring takes over as the circle lands, and
+  the page fades up. Fresh starts only; nothing is drawn over the app.
+  (Built and dropped on the way: vector shapes, product-photo cut-outs, an illustrated 1.5 s show
+  with flying earbuds, generated video. None started from the icon Android shows, so none fitted.)
 - **Widgets**: the mode buttons follow the floating toolbar. No container at rest; the chosen
   mode is a pill that grows in from 80 % and fades in (`docs/widget/segments.py`), the old one
   shrinks out. Same in the dashboard.
