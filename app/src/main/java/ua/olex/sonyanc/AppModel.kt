@@ -47,6 +47,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     var budsReminder by mutableStateOf(Prefs.budsReminder(ctx) && notificationsAllowed()); private set
     var tileTwoWay by mutableStateOf(Prefs.tileTwoWay(ctx)); private set
     var liveLink by mutableStateOf(LiveLink.enabled(ctx)); private set
+    var connectSheet by mutableStateOf(Prefs.connectSheet(ctx)); private set
     var homeMode by mutableStateOf(Prefs.homeMode(ctx)); private set
     var home by mutableStateOf(Prefs.home(ctx)); private set
     /** Bumped when a location permission may have changed, so its summary is read again. */
@@ -188,6 +189,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         budsReminder = allowed; Prefs.setBudsReminder(ctx, allowed)
         if (!allowed) show("Notifications are off for Earbuds, so the heads-up can't be shown.")
     }
+
+    fun updateConnectSheet(on: Boolean) { connectSheet = on; Prefs.setConnectSheet(ctx, on) }
 
     // ---- "Stay in sync" ----
     fun liveLinkResult(ok: Boolean) {

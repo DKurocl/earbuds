@@ -80,6 +80,9 @@ object Prefs {
     fun setOnConnect(ctx: Context, value: OnConnect) = p(ctx).edit().putString("on_connect", value.name).apply()
 
     fun caseReminder(ctx: Context) = p(ctx).getBoolean("case_reminder", false)
+    /** The sheet that comes up when the earbuds connect (needs "Stay in sync"); on by default. */
+    fun connectSheet(ctx: Context) = p(ctx).getBoolean("connect_sheet", true)
+    fun setConnectSheet(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("connect_sheet", value).apply()
     /** Low earbud battery heads-up; on by default (it still needs the notification permission). */
     fun budsReminder(ctx: Context) = p(ctx).getBoolean("buds_reminder", true)
     fun setBudsReminder(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("buds_reminder", value).apply()

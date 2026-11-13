@@ -51,6 +51,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Comes up over other apps when the earbuds connect (ConnectedSheet.kt). -->
+        <activity
+            android:name=".ConnectedSheetActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Hush.Sheet"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance" />
         <service android:name=".NoiseTileService" android:label="Noise control"
             android:icon="@drawable/w_icon_anc" android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">

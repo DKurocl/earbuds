@@ -115,6 +115,7 @@ fun AppSettingsContent(
     tileTwoWay: Boolean = false, onTileTwoWay: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {}, onVibrations: () -> Unit = {},
     liveLink: Boolean? = null, onLiveLink: (Boolean) -> Unit = {},
+    connectSheet: Boolean = true, onConnectSheet: (Boolean) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
@@ -133,6 +134,11 @@ fun AppSettingsContent(
                 SwitchRow(it, Glyph.LINK, "Stay in sync",
                     "Stays connected while the earbuds are out, so changes made on the earbuds show at once and taps are instant",
                     liveLink, onChange = onLiveLink)
+            }
+            // The sheet can only come up over other apps for a companion app.
+            if (liveLink == true) item {
+                SwitchRow(it, Glyph.EARBUDS, "Show when connected",
+                    "A sheet with the earbuds and their battery comes up when you take them out", connectSheet, onChange = onConnectSheet)
             }
             item {
                 ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->

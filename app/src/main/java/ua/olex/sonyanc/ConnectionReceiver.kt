@@ -42,6 +42,7 @@ class ConnectionReceiver : BroadcastReceiver() {
         CaseReminder.clear(ctx)
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
+        ConnectedSheet.show(ctx)
         // "When earbuds connect", or the home mode when the phone is at home (Places).
         val apply = Places.modeOnConnect(ctx)
         val pending = goAsync()

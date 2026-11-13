@@ -195,7 +195,7 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
 }
 
 @Composable
-private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit, confirmed: Mode? = null) {
+internal fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit, confirmed: Mode? = null) {
     // The owner's earbuds as Android shows a device in its details: the product render
     // (docs/icon/device_pictures.py).
     val budL = painterResource(R.drawable.device_bud_left)
