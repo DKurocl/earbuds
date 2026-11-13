@@ -10,13 +10,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.core.graphics.ColorUtils
 
 /**
- * From the splash into the app: the splash shows the real case (drawable/splash_case.xml); as it
- * lifts, [Intro] picks the case up exactly where the splash drew it and brings it to life.
+ * From the splash into the app: the splash shows the launcher's case (ic_launcher_foreground); as
+ * it lifts, [Intro] picks the case up exactly where the splash drew it and brings it to life.
  */
 object SplashHandoff {
-    // drawable/splash_case.xml insets the photo by these fractions of the icon's square.
-    private const val SIDE = 0.22f
-    private const val TOP = 0.32f
+    // Where the case sits in the icon's 108-unit square (ic_launcher_foreground): 30..78 x 37..71.
+    private const val X0 = 30f / 108; private const val X1 = 78f / 108
+    private const val Y0 = 37f / 108; private const val Y1 = 71f / 108
 
     fun install(activity: Activity) {
         activity.splashScreen.setOnExitAnimationListener { splash -> lift(splash) }
@@ -26,8 +26,8 @@ object SplashHandoff {
         val icon = splash.iconView
         val caseRect = icon?.let {
             val loc = IntArray(2).also { a -> it.getLocationInWindow(a) }
-            val s = it.width.toFloat()
-            Rect(loc[0] + s * SIDE, loc[1] + it.height * TOP, loc[0] + s * (1 - SIDE), loc[1] + it.height * (1 - TOP))
+            val w = it.width.toFloat(); val h = it.height.toFloat()
+            Rect(loc[0] + w * X0, loc[1] + h * Y0, loc[0] + w * X1, loc[1] + h * Y1)
         }
         // The intro draws the same case in the same place underneath; the splash dissolves over it.
         Intro.start(caseRect)
