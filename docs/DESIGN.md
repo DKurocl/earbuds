@@ -205,10 +205,15 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 - **Page and dock**: the page ends where the dock's fade begins, so no row hides half under the
   toolbar (the accessibility check on the emulator holds this).
 
-## One picture language (1.8)
+## Two kinds of pictures (1.8)
 
-The launcher icon, the splash, Home's battery rings, Device info, the widgets and the notifications
-all draw the product the same way: the launcher's flat case (lid, body, status light; Home uses it
-without the white background, `art_case_flat`) and the earbud glyphs traced from the product
-(`w_glyph_bud_*`, in the lid's light blue on Home and Device info: `art_bud_flat_*`). So the
-splash icon lands in the case ring as exactly the picture it becomes.
+The app's own marks are flat, in the launcher icon's language: the icon, the splash, the widgets
+and the notifications (`ic_case_mark`, `w_glyph_bud_*`). The owner's device is shown as itself,
+as Android's device details do: Home's battery rings and Device info show the real WF-1000XM5
+(`wf1000xm5_case`, `wf1000xm5_bud`). The splash icon lands on the case ring's disc and the
+device picture takes over there.
+(Tried and dropped for the rings: the icon's flat case, which isn't the real shape, and 3D
+illustrations.)
+
+Home's listening tiles follow the mode the earbuds are in, not one just tapped, and the case tile
+stays whenever the case's level is known, so nothing moves while a change is on its way.
