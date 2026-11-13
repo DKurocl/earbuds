@@ -210,8 +210,9 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 The owner's earbuds are drawn faithfully as vectors (`docs/icon/product_glyphs.py`): the case's
 outline is the profile measured from the product photo (matching Sony's 64.6 x 40.0 x 26.5 mm case
 seen from the front and a little above), the lid meeting the body at 43 % of its height with the
-status light just below; the earbud is traced from the product render (shell, ear tip, copper
-grille). In platinum silver on Home's rings and in Device info (`art_case`, `art_bud_*`); as one
+status light just below; the earbud is traced from the product render: its convex shell, the copper
+grille, and the short sound nozzle under the ear tip (the tip itself is left out; its bulk made
+the earbud look heavy). In platinum silver on Home's rings and in Device info (`art_case`, `art_bud_*`); as one
 tint in the widgets and notifications (`ic_case_mark`, `w_glyph_bud_*`). The launcher icon, and
 so the splash, keep the app's own blue mark; the splash icon lands on the case ring's disc and
 the drawing takes over there. The reference photos live in `docs/icon/ref` and are not shipped.

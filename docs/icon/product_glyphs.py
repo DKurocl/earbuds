@@ -6,13 +6,14 @@
 The case: its outline is the profile measured row by row from the product photo (casepath.py,
 which matches Sony's 64.6 x 40.0 x 26.5 mm case seen from the front and a little above, h/w
 0.643). The lid meets the body at 43 % of the height, where the photo's seam runs; the status
-light sits just below it in the middle. The earbud: traced from the product render as
-bud_glyph.py does (silhouette, the seam arc between shell and ear tip, the round grille).
+light sits just below it in the middle. The earbud: the shell traced from the product render (the
+seam arc of bud_glyph.py separates it from the ear tip) with its round copper grille, and, where the
+ear tip sat, the short sound nozzle the earbud really has under it, with its mesh: the drawing
+shows the earbud itself, not the silicone tip (whose bulk and inner shadow made it look heavy).
 
 Writes, in the product's platinum silver:
   art_case.xml, art_bud_left.xml, art_bud_right.xml   colour, for Home's rings and Device info
-  ic_case_mark.xml                                      one tint, for widgets and notifications
-(the earbud's one-tint glyph stays w_glyph_bud_*, from bud_glyph.py).
+  ic_case_mark.xml, w_glyph_bud_left/right.xml         one tint, for widgets and notifications
 """
 import math
 import sys
@@ -119,10 +120,21 @@ def bud_masks():
     shell = shape & (dist <= bud_glyph.SEAM_RADIUS)
     tip = shape & (dist >= bud_glyph.SEAM_RADIUS + 1.2)
 
-    def smooth(m):
-        img = Image.fromarray((m * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(2))
+    def smooth(m, blur=2):
+        img = Image.fromarray((m * 255).astype("uint8")).filter(ImageFilter.GaussianBlur(blur))
         return np.asarray(img.point(lambda v: 255 if v > 127 else 0)) > 127
-    return smooth(shape), smooth(shell), smooth(tip), grille, S
+
+    def convex(m):
+        # Where the ear tip covered it the traced shell has a concave bite (the seam arc); the
+        # real shell is convex all round, so close it with its hull.
+        from scipy.spatial import ConvexHull
+        ys, xs = np.nonzero(m)
+        pts = np.column_stack([xs, ys])
+        hull = pts[ConvexHull(pts).vertices]
+        img = Image.new("L", m.shape[::-1], 0)
+        ImageDraw.Draw(img).polygon([tuple(p) for p in hull], fill=255)
+        return np.asarray(img) > 127
+    return smooth(shape), smooth(convex(shell), 6), smooth(tip), grille, S
 
 
 def traced(m, scale, ox, oy):
@@ -140,27 +152,71 @@ def traced(m, scale, ox, oy):
     return " ".join(parts)
 
 
+def nozzle_mask(shell, tip, size):
+    """The short sound nozzle under the ear tip: a capsule from inside the shell, out towards where
+    the tip sat, a third as wide as the tip and about as long as the gap it leaves."""
+    from scipy import ndimage
+    ys, xs = np.nonzero(shell); sc = np.array([xs.mean(), ys.mean()])
+    ys, xs = np.nonzero(tip); tc = np.array([xs.mean(), ys.mean()])
+    edge = shell & ~ndimage.binary_erosion(shell, iterations=2)
+    ey, ex = np.nonzero(edge)
+    i = np.hypot(ex - tc[0], ey - tc[1]).argmin()
+    j = np.array([ex[i], ey[i]], dtype=float)
+    out = (tc - j) / np.linalg.norm(tc - j)
+    tip_r = math.sqrt(tip.sum() / math.pi)
+    r = tip_r * 0.30
+    a = j - out * r * 1.2                  # starts inside the shell
+    b = j + out * tip_r * 0.62             # sticks out by about two thirds of the tip's radius
+    img = Image.new("L", (size, size), 0)
+    d = ImageDraw.Draw(img)
+    n = np.array([-out[1], out[0]]) * r
+    d.polygon([tuple(a + n), tuple(b + n), tuple(b - n), tuple(a - n)], fill=255)
+    for c in (a, b):
+        d.ellipse([c[0] - r, c[1] - r, c[0] + r, c[1] + r], fill=255)
+    return np.asarray(img) > 127, b, out, r
+
+
 def bud_files():
     shape, shell, tip, (gx, gy, gr), S = bud_masks()
-    ys, xs = np.nonzero(shape)
+    size = shape.shape[0]
+    nozzle, end, out, r = nozzle_mask(shell, tip, size)
+    body = shell | nozzle
+    ys, xs = np.nonzero(body)
     x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
     scale = 22.0 / max(x1 - x0, y1 - y0)
     ox = 1 + (22 - (x1 - x0) * scale) / 2 - x0 * scale
     oy = 1 + (22 - (y1 - y0) * scale) / 2 - y0 * scale
     shell_d = traced(shell, scale, ox, oy)
-    tip_d = traced(tip, scale, ox, oy)
+    nozzle_d = traced(nozzle & ~shell, scale, ox, oy)
     cx, cy, cr = gx * S * scale + ox, gy * S * scale + oy, gr * S * scale
-    body = (
-        f'    <path android:pathData="{tip_d}">{radial(cx - 6, cy + 1, 9, [(0, TIP[0]), (1, TIP[1])])}</path>\n'
+    ex, ey = end[0] * scale + ox, end[1] * scale + oy
+    er = r * scale * 0.82
+    angle = math.degrees(math.atan2(out[1], out[0]))
+    colour = (
+        f'    <path android:pathData="{nozzle_d}">{grad(ex, ey - 3, ex + 3, ey + 3, [(0, SHELL[1]), (1, SHELL[2])])}</path>\n'
+        # the nozzle's mesh, a dark oval across its end
+        f'    <group android:pivotX="{f(ex)}" android:pivotY="{f(ey)}" android:rotation="{f(angle)}">\n'
+        f'        <path android:fillColor="#FF4C5158" android:pathData="M{f(ex - er * 0.45)},{f(ey)} a{f(er * 0.45)},{f(er)} 0 1,0 {f(er * 0.9)},0 a{f(er * 0.45)},{f(er)} 0 1,0 {f(-er * 0.9)},0 Z"/></group>\n'
         f'    <path android:pathData="{shell_d}">{radial(9, 6, 17, [(0, SHELL[0]), (0.55, SHELL[1]), (1, SHELL[2])])}</path>\n'
         f'    <path android:pathData="M{f(cx - cr)},{f(cy)} a{f(cr)},{f(cr)} 0 1,0 {f(2 * cr)},0 a{f(cr)},{f(cr)} 0 1,0 {f(-2 * cr)},0 Z">'
         f'{grad(cx - cr, cy - cr, cx + cr, cy + cr, [(0, GRILLE[0]), (1, GRILLE[1])])}</path>\n'
         f'    <path android:fillColor="#40000000" android:pathData="M{f(cx - cr * 0.55)},{f(cy)} a{f(cr * 0.55)},{f(cr * 0.55)} 0 1,0 {f(cr * 1.1)},0 a{f(cr * 0.55)},{f(cr * 0.55)} 0 1,0 {f(-cr * 1.1)},0 Z"/>\n'
     )
+    # One tint: shell and nozzle as one shape, a hairline between them, the grille cut out.
+    m = Image.fromarray(((shell | nozzle) * 255).astype("uint8"))
+    dr = ImageDraw.Draw(m)
+    gxs, gys, grs = gx * S, gy * S, gr * S * 1.1
+    dr.ellipse([gxs - grs, gys - grs, gxs + grs, gys + grs], fill=0)
+    mono_d = traced(np.asarray(m) > 127, scale, ox, oy)
     for name, mirror in (("art_bud_left", False), ("art_bud_right", True)):
-        content = f'    <group android:pivotX="12" android:scaleX="-1">\n{body}    </group>\n' if mirror else body
+        content = f'    <group android:pivotX="12" android:scaleX="-1">\n{colour}    </group>\n' if mirror else colour
         (OUT / f"{name}.xml").write_text(vector(24, 24, content,
-            "A WF-1000XM5 earbud in its colours (shell, ear tip, copper grille): Home's rings and Device info."))
+            "A WF-1000XM5 earbud in its colours (shell, copper grille, sound nozzle): Home's rings and Device info."))
+    for name, mirror in (("w_glyph_bud_left", False), ("w_glyph_bud_right", True)):
+        path = f'<path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="{mono_d}"/>'
+        content = (f'    <group android:pivotX="12" android:scaleX="-1">{path}</group>\n' if mirror else f'    <group>{path}</group>\n')
+        (OUT / f"{name}.xml").write_text(vector(24, 24, content,
+            "A WF-1000XM5 earbud as a one-tint glyph (widgets, notifications): shell, nozzle, the grille cut out. Tinted by its user."))
 
 
 if __name__ == "__main__":
