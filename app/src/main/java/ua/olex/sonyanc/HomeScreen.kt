@@ -124,12 +124,9 @@ fun HushScreen(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Box(Modifier.introFade()) { Header(deviceName, status, codec, batteryRefreshing, lastSeen) }
-
-            // Setup cards already explain a missing permission or device; the banner is for link problems.
-            AnimatedVisibility(error != null && granted && hasDevice, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                ErrorBanner(error.orEmpty(), onRetry = onConnect, onBluetooth = onBluetooth)
-            }
+            // No banner for a link problem: the status line under the name says it quietly, and
+            // Connect is right below. (Setup cards still explain a missing permission or device.)
+            Box(Modifier.introFade()) { Header(deviceName, status, codec, batteryRefreshing, lastSeen, problem = error.takeIf { granted && hasDevice }) }
 
             when {
                 !granted -> SetupCard("Allow Bluetooth access", "Earbuds talks to your WF-1000XM5 directly. Nothing leaves your phone.", "Allow", Glyph.BLUETOOTH, onPermission)
@@ -175,7 +172,7 @@ fun HushScreen(
 }
 
 @Composable
-private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, lastSeen: Long? = null) {
+private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, lastSeen: Long? = null, problem: String? = null) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Renaming is rare: it lives in App settings, not next to the name.
@@ -185,9 +182,9 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
             val line = when (status) {
                 Headphones.Status.CONNECTED -> "Connected" + (codec?.takeIf { it.isKnown }?.let { " · ${it.label}" } ?: "")
                 Headphones.Status.CONNECTING -> statusText(status)
-                // Android reported the earbuds gone (case, range or Bluetooth off).
+                // Android reported the earbuds gone (case, range or Bluetooth off), or why the link failed.
                 else -> lastSeen?.let { "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS) }
-                    ?: statusText(status)
+                    ?: problem ?: statusText(status)
             }
             Text(line, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             if (status == Headphones.Status.CONNECTING || busy) LoadingIndicator(Modifier.size(20.dp))
