@@ -122,7 +122,7 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
   heads-up at 15 % with the listening time left (`LowBattery`). No background connection.
 - **At home**: a mode of its own when the earbuds connect at home, from the phone's last known
   location at that moment; the usual rule elsewhere or when the location is stale (`Places`).
-- **Splash**: the real case on the app's page color (`drawable/splash_case.xml`); see the opening below.
+- **Splash**: the launcher's case on the app's page color; see the opening below.
 - **Large text**: one-line labels shrink to fit (`TextAutoSize`) at the largest font sizes;
   renders at 150 % and 200 % are part of `ScreenshotTest`, and `AccessibilityUiTest` runs
   Google's Accessibility Test Framework on every page on the emulator.
@@ -190,14 +190,18 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 ## Opening and widgets (1.7)
 
-- **Opening** (`Intro.kt`, `SplashHandoff.kt`), once per cold start, 1.2 s, a tap skips it: the
-  splash shows the product photo of the case; as the splash dissolves, the same case is picked
-  up exactly where it stood and comes alive: a small dip and a spring up with its soft contact
-  shadow, a glow of the theme colour breathing out behind it, light running across its surface.
-  Both earbuds pop out from behind it, tilting, and the three fly on an arc into their battery
-  rings, each ring filling (and its chip lighting) as its piece lands. Header, tiles, list and dock
-  fade in last. Drawn from the same photos the rings show, so they land as exactly those pictures.
-  (A vector animation of the flat launcher shapes was tried first and dropped: it looked drawn.)
+- **Opening** (`Intro.kt`, `SplashHandoff.kt`), once per cold start, 1.55 s, a tap skips it: the
+  splash shows the launcher's case; as it dissolves, the same case is picked up exactly where it
+  stood and comes to life as an illustration drawn in code in the style of Pixel's product art:
+  the light comes on (volume, crown highlight, rim light, the seam's shadow), a breath, a spring
+  up off its contact shadow, a glow of the theme colour behind. The lid swings back on its hinge:
+  its inside rises as a panel behind the opening and its outside narrows to a band on top; the
+  opening shows its two wells. The earbuds (pearl shells, ear tips, gold-ringed mics) rise out on
+  springs, tilting, and hover over the opening; the status light blooms. Then the lid shuts and
+  the three fly on arcs into their battery rings, handing over to the rings' pictures as they
+  land, each ring filling as its piece arrives; header, tiles, list and dock come in last.
+  (Tried first and dropped: a vector animation of the flat icon shapes, and the product photos as
+  cut-outs. One looked drawn in Paint, the other pasted.)
 - **Widgets**: the mode buttons follow the floating toolbar. No container at rest; the chosen
   mode is a pill that grows in from 80 % and fades in (`docs/widget/segments.py`), the old one
   shrinks out. Same in the dashboard.

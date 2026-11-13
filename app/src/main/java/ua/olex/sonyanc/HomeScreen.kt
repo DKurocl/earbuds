@@ -312,7 +312,7 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
                 Modifier.padding(top = CHIP / 2 + RING_RADIUS - ART / 2).size(ART)
                     .onGloballyPositioned { Intro.targets[label] = it.boundsInRoot() }
                     // The intro draws this picture in flight; it appears here as it lands.
-                    .graphicsLayer { alpha = if (landed) 1f else 0f },
+                    .graphicsLayer { alpha = shown },
                 contentAlignment = Alignment.Center,
             ) { art() }
             HushIcon(

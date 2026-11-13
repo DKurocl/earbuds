@@ -89,14 +89,14 @@ class ScreenshotTest {
             }
         }
         compose.mainClock.advanceTimeBy(100)
-        // Where the splash draws the case on this screen: a 288 dp icon, centred (splash_case.xml).
+        // Where the splash draws the case on this screen: a 288 dp icon, centred (ic_launcher_foreground).
         val root = compose.activity.findViewById<View>(android.R.id.content)
         val d = compose.activity.resources.displayMetrics.density
         val icon = 288 * d
         val left = (root.width - icon) / 2; val top = (root.height - icon) / 2
-        Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 0.22f, top + icon * 0.32f, left + icon * 0.78f, top + icon * 0.68f))
+        Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 30 / 108, top + icon * 37 / 108, left + icon * 78 / 108, top + icon * 71 / 108))
         var at = 0L
-        for (t in listOf(0L, 120L, 260L, 420L, 600L, 760L, 880L, 1000L, 1200L)) {
+        for (t in listOf(16L, 140L, 300L, 480L, 640L, 800L, 960L, 1120L, 1300L, 1420L, 1600L)) {
             compose.mainClock.advanceTimeBy(t - at); at = t
             save("intro-%04d".format(t))
         }
