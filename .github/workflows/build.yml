@@ -45,6 +45,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: 9.9.1
+      - name: Design guards
+        run: |
+          ! grep -rn 'material-icons-extended' app/build.gradle.kts gradle/ || { echo '::error::use Material Symbols (HushIcon)'; exit 1; }
+          ! grep -rnE 'Icons\.(Rounded|Filled|Outlined|Default|AutoMirrored)' app/src/main || { echo '::error::use HushIcon'; exit 1; }
       - name: Quick APK
         if: contains(github.event.head_commit.message, '[quick-apk]')
         run: gradle :app:testDebugUnitTest :app:assembleRelease -PquickApk=true --no-daemon

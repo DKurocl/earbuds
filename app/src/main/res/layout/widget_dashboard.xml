@@ -162,10 +162,10 @@
                     android:layout_width="24dp" android:layout_height="24dp" android:duplicateParentState="true">
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_noise_control_off" android:tint="@color/w_on" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_anc" android:tint="@color/w_on" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_noise_control_off" android:tint="@color/w_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_anc_bold" android:tint="@color/w_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_anc_label"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -208,10 +208,10 @@
                     android:layout_width="24dp" android:layout_height="24dp" android:duplicateParentState="true">
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_hearing" android:tint="@color/w_on" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_ambient" android:tint="@color/w_on" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_hearing" android:tint="@color/w_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_ambient_bold" android:tint="@color/w_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_amb_label"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -254,10 +254,10 @@
                     android:layout_width="24dp" android:layout_height="24dp" android:duplicateParentState="true">
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_power_settings_new" android:tint="@color/w_on" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_off" android:tint="@color/w_on" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_power_settings_new" android:tint="@color/w_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_off_bold" android:tint="@color/w_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_off_label"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"

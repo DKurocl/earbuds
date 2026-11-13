@@ -2,6 +2,16 @@
 
 package ua.olex.sonyanc
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -116,10 +126,24 @@ private fun BandsCard(state: EqualizerProtocol.State, busy: Boolean, onBands: (L
         }
         Surface(shape = RoundedCornerShape(24.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Row(Modifier.fillMaxWidth()) {
+                // Where the sliders' tracks sit inside the row, for the curve drawn behind them.
+                var row by remember { mutableStateOf<LayoutCoordinates?>(null) }
+                var track by remember { mutableStateOf(0f to 0f) }
+                val curve = bands.drop(1).mapIndexed { i, v ->
+                    animateFloatAsState(v.toFloat(), MaterialTheme.motionScheme.fastSpatialSpec(), label = "curve $i").value
+                }
+                val curveColor = cs.primary
+                Row(
+                    Modifier.fillMaxWidth().onPlaced { row = it }
+                        .drawBehind { if (track.second > 0f) drawResponse(curve, track.first, track.second, curveColor) },
+                ) {
                     bands.drop(1).forEachIndexed { i, value ->
                         BandSlider(BAND_LABELS[i] + " Hz", BAND_LABELS[i], value, !busy, Modifier.weight(1f),
-                            onChange = { set(i + 1, it) }, onDone = { onBands(bands) })
+                            onChange = { set(i + 1, it) }, onDone = { onBands(bands) },
+                            onTrack = { c -> row?.let { r -> if (c.isAttached && r.isAttached) {
+                                val top = r.localPositionOf(c, Offset.Zero).y
+                                track = top to c.size.height.toFloat()
+                            } } })
                     }
                 }
                 HorizontalDivider(color = cs.outlineVariant.copy(alpha = .5f), modifier = Modifier.padding(horizontal = 8.dp))
@@ -143,6 +167,32 @@ private fun BandsCard(state: EqualizerProtocol.State, busy: Boolean, onBands: (L
     }
 }
 
+/**
+ * The sound the bands make, as one smooth line through the five thumbs with a soft fill to 0 dB,
+ * drawn behind the sliders. It follows a drag with a quick spring, so it trails the finger a
+ * little and settles; a preset change flows into the new shape.
+ */
+private fun DrawScope.drawResponse(values: List<Float>, top: Float, height: Float, color: Color) {
+    // Material's vertical slider: the 4 dp thumb travels the track inset by half its height.
+    val inset = 2.dp.toPx()
+    fun y(v: Float) = top + inset + (1f - (v + 10f) / 20f) * (height - 2 * inset)
+    val step = size.width / values.size
+    val points = values.mapIndexed { i, v -> Offset(step * (i + .5f), y(v)) }
+    val ends = listOf(Offset(0f, points.first().y)) + points + Offset(size.width, points.last().y)
+    val line = Path().apply {
+        moveTo(ends[0].x, ends[0].y)
+        // Catmull-Rom through every point, as cubic Béziers.
+        for (i in 0 until ends.lastIndex) {
+            val p0 = ends[(i - 1).coerceAtLeast(0)]; val p1 = ends[i]; val p2 = ends[i + 1]; val p3 = ends[(i + 2).coerceAtMost(ends.lastIndex)]
+            cubicTo(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6, p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6, p2.x, p2.y)
+        }
+    }
+    val zero = y(0f)
+    val area = Path().apply { addPath(line); lineTo(size.width, zero); lineTo(0f, zero); close() }
+    drawPath(area, color.copy(alpha = .10f))
+    drawPath(line, color.copy(alpha = .45f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+}
+
 private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 
 /**
@@ -153,7 +203,7 @@ private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 @Composable
 private fun BandSlider(
     description: String, label: String, value: Int, enabled: Boolean, modifier: Modifier,
-    onChange: (Int) -> Unit, onDone: () -> Unit,
+    onChange: (Int) -> Unit, onDone: () -> Unit, onTrack: (LayoutCoordinates) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val feedback = LocalHapticFeedback.current
@@ -175,7 +225,7 @@ private fun BandSlider(
             },
             onValueChangeFinished = onDone,
             track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = enabled, drawTick = { _, _ -> }) },
-            modifier = Modifier.height(208.dp).semantics { contentDescription = description; stateDescription = "${signed(value)} dB" },
+            modifier = Modifier.height(208.dp).onPlaced(onTrack).semantics { contentDescription = description; stateDescription = "${signed(value)} dB" },
         )
         Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
     }

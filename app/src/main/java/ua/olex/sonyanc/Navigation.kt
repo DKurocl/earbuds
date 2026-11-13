@@ -3,6 +3,7 @@ package ua.olex.sonyanc
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
@@ -76,7 +77,7 @@ internal object PageMotion {
     /** Android's BackGestureInterpolator: the page answers the finger quickly, then settles. */
     val GESTURE = CubicBezierEasing(0.1f, 0.1f, 0f, 1f)
     /** Emphasized (fast-out-extra-slow-in), as the system's post-commit phase. */
-    val EMPHASIZED = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    val EMPHASIZED: Easing = EmphasizedEasing
 }
 
 /**
@@ -326,4 +327,34 @@ private fun GraphicsLayerScope.container(rect: Rect, corner: Float) {
             Outline.Rounded(RoundRect(0f, 0f, size.width, height, CornerRadius(radius)))
     }
     clip = true
+}
+
+/**
+ * The system's Interpolators.EMPHASIZED (WM Shell's back animation after letting go): a path of
+ * two cubic segments, (0,0) to (0.1667,0.4) to (1,1). Evaluated here in plain Kotlin rather than
+ * with PathEasing, whose native path iterator is missing from JVM tests. Pure, unit-tested.
+ */
+internal object EmphasizedEasing : Easing {
+    private val segments = listOf(
+        floatArrayOf(0f, 0f, 0.05f, 0f, 0.133333f, 0.06f, 0.166666f, 0.4f),
+        floatArrayOf(0.166666f, 0.4f, 0.208333f, 0.82f, 0.25f, 1f, 1f, 1f),
+    )
+
+    private fun cubic(a: Float, b: Float, c: Float, d: Float, t: Float): Float {
+        val u = 1 - t
+        return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d
+    }
+
+    override fun transform(fraction: Float): Float {
+        if (fraction <= 0f) return 0f
+        if (fraction >= 1f) return 1f
+        val s = if (fraction < segments[1][0]) segments[0] else segments[1]
+        // x(t) grows monotonically on each segment: find t for this x by bisection.
+        var lo = 0f; var hi = 1f
+        repeat(24) {
+            val mid = (lo + hi) / 2
+            if (cubic(s[0], s[2], s[4], s[6], mid) < fraction) lo = mid else hi = mid
+        }
+        return cubic(s[1], s[3], s[5], s[7], (lo + hi) / 2)
+    }
 }

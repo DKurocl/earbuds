@@ -9,61 +9,51 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.Typeface
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
 
 /**
- * Pixel phones ship Google Sans as a system font family. Use it when present so the app
- * reads like Google's own; anywhere else this returns null and the default sans is kept.
+ * Google Sans Flex, bundled (SIL Open Font License, assets/licenses), so the app reads the same
+ * on any Pixel firmware and in the screenshot renders. One variable font, subset to Latin: weight
+ * and optical size follow each Material style; display and headline text get the rounded cut
+ * (ROND 100) that Material 3 Expressive uses for large type, smaller text stays crisp (ROND 0).
  */
-private fun systemFamily(vararg names: String): FontFamily? {
-    for (name in names) {
-        val typeface = android.graphics.Typeface.create(name, android.graphics.Typeface.NORMAL)
-        // An unknown family name resolves to the default typeface object itself.
-        if (typeface != android.graphics.Typeface.DEFAULT) return FontFamily(Typeface(typeface))
-    }
-    return null
+private fun flex(style: TextStyle, round: Boolean): TextStyle {
+    val weight = style.fontWeight ?: FontWeight.Normal
+    val size = if (style.fontSize.isSp) style.fontSize.value else 14f
+    val family = FontFamily(
+        Font(
+            R.font.google_sans_flex, weight = weight,
+            variationSettings = FontVariation.Settings(
+                FontVariation.weight(weight.weight),
+                FontVariation.Setting("opsz", size.coerceIn(6f, 144f)),
+                FontVariation.Setting("ROND", if (round) 100f else 0f),
+            ),
+        ),
+    )
+    return style.copy(fontFamily = family)
 }
 
 @Composable
 private fun appTypography(): Typography = remember {
-    val base = Typography()
-    val display = systemFamily("google-sans-flex", "google-sans")
-    val text = systemFamily("google-sans-text", "google-sans-flex", "google-sans") ?: display
-    if (display == null) return@remember base
-    val body = text ?: display
-    base.copy(
-        displayLarge = base.displayLarge.copy(fontFamily = display),
-        displayMedium = base.displayMedium.copy(fontFamily = display),
-        displaySmall = base.displaySmall.copy(fontFamily = display),
-        headlineLarge = base.headlineLarge.copy(fontFamily = display),
-        headlineMedium = base.headlineMedium.copy(fontFamily = display),
-        headlineSmall = base.headlineSmall.copy(fontFamily = display),
-        titleLarge = base.titleLarge.copy(fontFamily = display),
-        titleMedium = base.titleMedium.copy(fontFamily = display),
-        titleSmall = base.titleSmall.copy(fontFamily = display),
-        bodyLarge = base.bodyLarge.copy(fontFamily = body),
-        bodyMedium = base.bodyMedium.copy(fontFamily = body),
-        bodySmall = base.bodySmall.copy(fontFamily = body),
-        labelLarge = base.labelLarge.copy(fontFamily = display),
-        labelMedium = base.labelMedium.copy(fontFamily = display),
-        labelSmall = base.labelSmall.copy(fontFamily = display),
-        // M3 Expressive's emphasized styles (heavier weights) in the same Google Sans families.
-        displayLargeEmphasized = base.displayLargeEmphasized.copy(fontFamily = display),
-        displayMediumEmphasized = base.displayMediumEmphasized.copy(fontFamily = display),
-        displaySmallEmphasized = base.displaySmallEmphasized.copy(fontFamily = display),
-        headlineLargeEmphasized = base.headlineLargeEmphasized.copy(fontFamily = display),
-        headlineMediumEmphasized = base.headlineMediumEmphasized.copy(fontFamily = display),
-        headlineSmallEmphasized = base.headlineSmallEmphasized.copy(fontFamily = display),
-        titleLargeEmphasized = base.titleLargeEmphasized.copy(fontFamily = display),
-        titleMediumEmphasized = base.titleMediumEmphasized.copy(fontFamily = display),
-        titleSmallEmphasized = base.titleSmallEmphasized.copy(fontFamily = display),
-        labelLargeEmphasized = base.labelLargeEmphasized.copy(fontFamily = display),
-        labelMediumEmphasized = base.labelMediumEmphasized.copy(fontFamily = display),
-        labelSmallEmphasized = base.labelSmallEmphasized.copy(fontFamily = display),
-        bodyLargeEmphasized = base.bodyLargeEmphasized.copy(fontFamily = body),
-        bodyMediumEmphasized = base.bodyMediumEmphasized.copy(fontFamily = body),
-        bodySmallEmphasized = base.bodySmallEmphasized.copy(fontFamily = body),
+    val t = Typography()
+    Typography(
+        displayLarge = flex(t.displayLarge, true), displayMedium = flex(t.displayMedium, true), displaySmall = flex(t.displaySmall, true),
+        headlineLarge = flex(t.headlineLarge, true), headlineMedium = flex(t.headlineMedium, true), headlineSmall = flex(t.headlineSmall, true),
+        titleLarge = flex(t.titleLarge, false), titleMedium = flex(t.titleMedium, false), titleSmall = flex(t.titleSmall, false),
+        bodyLarge = flex(t.bodyLarge, false), bodyMedium = flex(t.bodyMedium, false), bodySmall = flex(t.bodySmall, false),
+        labelLarge = flex(t.labelLarge, false), labelMedium = flex(t.labelMedium, false), labelSmall = flex(t.labelSmall, false),
+        displayLargeEmphasized = flex(t.displayLargeEmphasized, true), displayMediumEmphasized = flex(t.displayMediumEmphasized, true),
+        displaySmallEmphasized = flex(t.displaySmallEmphasized, true), headlineLargeEmphasized = flex(t.headlineLargeEmphasized, true),
+        headlineMediumEmphasized = flex(t.headlineMediumEmphasized, true), headlineSmallEmphasized = flex(t.headlineSmallEmphasized, true),
+        titleLargeEmphasized = flex(t.titleLargeEmphasized, false), titleMediumEmphasized = flex(t.titleMediumEmphasized, false),
+        titleSmallEmphasized = flex(t.titleSmallEmphasized, false), bodyLargeEmphasized = flex(t.bodyLargeEmphasized, false),
+        bodyMediumEmphasized = flex(t.bodyMediumEmphasized, false), bodySmallEmphasized = flex(t.bodySmallEmphasized, false),
+        labelLargeEmphasized = flex(t.labelLargeEmphasized, false), labelMediumEmphasized = flex(t.labelMediumEmphasized, false),
+        labelSmallEmphasized = flex(t.labelSmallEmphasized, false),
     )
 }
 

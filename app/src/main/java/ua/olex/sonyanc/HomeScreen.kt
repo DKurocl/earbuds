@@ -17,11 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.BatteryUnknown
-import androidx.compose.material.icons.rounded.BatteryAlert
-import androidx.compose.material.icons.rounded.BatteryChargingFull
-import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -54,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import ua.olex.sonyanc.SonyProtocol.Mode
 import ua.olex.sonyanc.SonyProtocol.NcState
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Pixel-Buds-style device page: header, battery rings, quick actions, noise control, more controls. */
 @Composable
@@ -119,7 +116,7 @@ fun HushScreen(
                 !hasDevice -> SetupCard("Choose your earbuds", "Pair your WF-1000XM5 in Android Bluetooth settings, then pick it here.", "Choose earbuds", Glyph.EARBUDS, onPick)
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery)
+                        Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery, confirmed = nc?.mode.takeIf { pending == null })
                         ListeningTime(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt, onClick = onBatteryDetails)
                     }
 
@@ -171,22 +168,38 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
 }
 
 @Composable
-private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit) {
+private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit, confirmed: Mode? = null) {
     // One decode of the bud cutout shared by both earbud rings; the right one is mirrored.
     val bud = ImageBitmap.imageResource(R.drawable.wf1000xm5_bud)
+    // When the earbuds confirm a new mode, a small swell runs through the rings, left to right:
+    // the answer comes from the earbuds, not from the button that was tapped.
+    val swell = remember { List(3) { Animatable(1f) } }
+    val seen = remember { arrayOfNulls<Mode>(1) }
+    val grow = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    LaunchedEffect(confirmed) {
+        val was = seen[0]; seen[0] = confirmed ?: was
+        if (confirmed == null || was == null || was == confirmed) return@LaunchedEffect
+        listOf(0, 2, 1).forEachIndexed { order, ring ->
+            launch {
+                delay(order * 70L)
+                swell[ring].animateTo(1.06f, grow)
+                swell[ring].animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 380f))
+            }
+        }
+    }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).clickable(enabled = ready, onClickLabel = "Refresh battery", onClick = onRefresh)
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live) { BudArt(bud, mirrored = false) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, { swell[0].value }) { BudArt(bud, mirrored = false) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-            BatteryRing("Case", b.case, b.caseCharging, 2 in live) {
+            BatteryRing("Case", b.case, b.caseCharging, 2 in live, { swell[2].value }) {
                 Image(painterResource(R.drawable.wf1000xm5_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live) { BudArt(bud, mirrored = true) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, { swell[1].value }) { BudArt(bud, mirrored = true) } }
     }
 }
 
@@ -196,7 +209,7 @@ private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, o
  * outline, so the chip reads as cut out of the ring rather than stacked on it.
  */
 @Composable
-private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boolean, art: @Composable () -> Unit) {
+private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boolean, swell: () -> Float = { 1f }, art: @Composable () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val dark = isSystemInDarkTheme()
     val good = if (dark) Color(0xFF6DD58C) else Color(0xFF1E8E3E)
@@ -210,7 +223,12 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
     val track = cs.surfaceContainerHighest
     val disc = cs.surfaceContainerHigh
     val page = Surfaces.page
-    val progress by animateFloatAsState((value ?: 0) / 100f, MaterialTheme.motionScheme.slowEffectsSpec(), label = "battery $label")
+    // The ring fills in from empty when Home opens (as Pixel's battery widget does), then follows
+    // each new reading.
+    val fill = remember { Animatable(0f) }
+    val fillSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+    LaunchedEffect(value) { fill.animateTo((value ?: 0) / 100f, fillSpec) }
+    val progress = fill.value.coerceIn(0f, 1f)
     // Runs only while this ring is charging; otherwise no animation frame is ever requested.
     val phase = if (charging && value != null) {
         val waves = rememberInfiniteTransition(label = "charging $label")
@@ -224,7 +242,7 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
                 if (charging) ", charging" else if (!live && value != null) ", last known" else ""
         },
     ) {
-        Box(Modifier.size(RING_BOX), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.size(RING_BOX).graphicsLayer { val k = swell(); scaleX = k; scaleY = k }, contentAlignment = Alignment.TopCenter) {
             Canvas(Modifier.fillMaxSize()) {
                 val stroke = RING_STROKE.toPx()
                 val radius = RING_RADIUS.toPx()
@@ -262,19 +280,18 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
                 Modifier.padding(top = CHIP / 2 + RING_RADIUS - ART / 2).size(ART),
                 contentAlignment = Alignment.Center,
             ) { art() }
-            Icon(
+            HushIcon(
                 when {
-                    value == null -> Icons.AutoMirrored.Rounded.BatteryUnknown
-                    charging -> Icons.Rounded.BatteryChargingFull
-                    value <= 20 -> Icons.Rounded.BatteryAlert
-                    else -> Icons.Rounded.BatteryFull
-                }, contentDescription = null, tint = chipContent,
-                modifier = Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp),
+                    value == null -> Glyph.BATTERY_UNKNOWN
+                    charging -> Glyph.BATTERY_CHARGING
+                    value <= 20 -> Glyph.BATTERY_LOW
+                    else -> Glyph.BATTERY
+                }, Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp), chipContent, filled = true,
             )
         }
-        Text(
-            "$label: " + (value?.let { "$it%" } ?: "—"), style = MaterialTheme.typography.titleMedium, maxLines = 1,
-            autoSize = fitText(MaterialTheme.typography.titleMedium),
+        // The number rolls digit by digit when a new reading arrives.
+        RollingText(
+            "$label: " + (value?.let { "$it%" } ?: "—"), MaterialTheme.typography.titleMedium, Modifier.padding(horizontal = 4.dp),
             color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
         )
     }
@@ -303,13 +320,18 @@ private fun BudArt(image: ImageBitmap, mirrored: Boolean) {
 /** A home action: Material's medium tonal icon button (wide); it squares off while pressed. */
 @Composable
 private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FilledTonalIconButton(
             onClick = onClick, enabled = enabled,
-            shapes = IconButtonDefaults.shapes(),
+            shapes = IconButtonDefaults.shapes(), interactionSource = press,
             modifier = Modifier.size(IconButtonDefaults.mediumContainerSize(IconButtonDefaults.IconButtonWidthOption.Wide))
                 .semantics { contentDescription = label },
-        ) { HushIcon(glyph, Modifier.size(IconButtonDefaults.mediumIconSize), LocalContentColor.current) }
+        ) {
+            // The icon fills in under the finger, as the button squares off.
+            HushIcon(glyph, Modifier.size(IconButtonDefaults.mediumIconSize), LocalContentColor.current, filled = pressed, bold = pressed)
+        }
         Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
@@ -385,6 +407,7 @@ private fun ModeButton(
     interaction: MutableInteractionSource, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val pressed by interaction.collectIsPressedAsState()
     ToggleButton(
         checked = selected,
         onCheckedChange = { onClick() },
@@ -401,7 +424,8 @@ private fun ModeButton(
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label },
     ) {
         if (applying) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
-        else HushIcon(when (mode) { Mode.ANC -> Glyph.QUIET; Mode.AMBIENT -> Glyph.AMBIENT; Mode.OFF -> Glyph.OFF }, Modifier.size(24.dp), LocalContentColor.current)
+        // The chosen mode's icon thickens with a small spring pop; a press does the same at once.
+        else HushIcon(mode.glyph, Modifier.size(24.dp), LocalContentColor.current, bold = selected || pressed)
         Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
         Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, autoSize = fitText(MaterialTheme.typography.titleMedium))
     }
@@ -435,7 +459,7 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Ambient level", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            Text("${level.roundToInt()}", style = MaterialTheme.typography.titleMedium, color = cs.primary)
+            RollingText("${level.roundToInt()}", MaterialTheme.typography.titleMedium, color = cs.primary)
         }
         val slider = remember { SliderState(value = level, steps = 19, trackRange = 0f..20f) }
         LaunchedEffect(level) { if (slider.value != level) slider.value = level }
@@ -518,7 +542,7 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
             }
             Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
             Text(body, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
-            Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(action) }
+            Button(onClick = onClick, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(action) }
         }
     }
 }
@@ -536,9 +560,11 @@ private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boo
     val buds = battery?.let { BatteryLife.budsMinutes(it, mode, rate) } ?: return
     val case = BatteryLife.caseMinutes(battery, mode, rate)?.takeIf { it >= 10 }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Both tiles have the same parts, so they come out the same height without intrinsics
+        // (which the rolling digits, built on AnimatedContent, cannot answer).
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60, onClick = onClick) {
-                HushIcon(Glyph.EARBUDS, Modifier.size(22.dp), it)
+                HushIcon(Glyph.EARBUDS, Modifier.size(22.dp), it, filled = true)
             }
             if (case != null) StatTile("+" + BatteryLife.short(case), "From the case", Modifier.weight(1f), onClick = onClick) {
                 Icon(painterResource(R.drawable.ic_case_mark), null, tint = it, modifier = Modifier.size(22.dp))
@@ -560,9 +586,15 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
     // grows out of the tile itself (container transform, Navigation.kt) and returns into it.
     val origins = LocalPageOrigins.current
     var bounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    Surface(onClick = { origins.mark(bounds); onClick() }, shape = RoundedCornerShape(PageMotion.CARD_CORNER), color = Surfaces.card,
-        modifier = modifier.fillMaxHeight()
+    // Pressed, the tile settles in a little and its corners tighten, with Material's springs.
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    val corner by animateDpAsState(if (pressed) 20.dp else PageMotion.CARD_CORNER, MaterialTheme.motionScheme.fastSpatialSpec(), label = "corner")
+    val squeeze by animateFloatAsState(if (pressed) 0.96f else 1f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "squeeze")
+    Surface(onClick = { origins.mark(bounds); onClick() }, shape = RoundedCornerShape(corner), color = Surfaces.card, interactionSource = press,
+        modifier = modifier
             .onGloballyPositioned { bounds = it.boundsInRoot() }
+            .graphicsLayer { scaleX = squeeze; scaleY = squeeze }
             .semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {
         Column(
             Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
@@ -571,10 +603,9 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
             Surface(shape = CircleShape, color = accent, modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) { icon(onAccent) }
             }
-            Text(value, style = MaterialTheme.typography.headlineSmallEmphasized, maxLines = 1,
-                autoSize = fitText(MaterialTheme.typography.headlineSmallEmphasized),
-                color = if (low) cs.error else cs.onSurface)
-            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+            RollingText(value, MaterialTheme.typography.headlineSmallEmphasized, color = if (low) cs.error else cs.onSurface)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1,
+                autoSize = fitText(MaterialTheme.typography.labelMedium))
         }
     }
 }

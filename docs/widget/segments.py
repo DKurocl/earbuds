@@ -93,9 +93,11 @@ def drawables():
 
 # ---- layouts ---------------------------------------------------------------------------------
 
-MODES = [("anc", "w_icon_noise_control_off", "shortcut_anc"),
-         ("amb", "w_icon_hearing", "shortcut_ambient"),
-         ("off", "w_icon_power_settings_new", "shortcut_off")]
+# Icons come from the app's Material Symbols font (docs/icon/symbols.py); the chosen mode shows
+# the bolder cut, as the app's own buttons do.
+MODES = [("anc", "w_icon_anc", "shortcut_anc"),
+         ("amb", "w_icon_ambient", "shortcut_ambient"),
+         ("off", "w_icon_off", "shortcut_off")]
 ROW_CAPS = [("oo", "ii"), ("ii", "ii"), ("ii", "oo")]  # (left cap, right cap) per button
 COLUMN_CAPS = [("oi", "oi"), ("ii", "ii"), ("io", "io")]
 
@@ -137,7 +139,7 @@ def tile(i, column, stacked, caps, indent):
 {s}                android:importantForAccessibility="no" android:src="@drawable/{icon}" android:tint="@color/w_on" />
 {s}            <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
 {s}                android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-{s}                android:importantForAccessibility="no" android:src="@drawable/{icon}" android:tint="@color/w_on_text" />
+{s}                android:importantForAccessibility="no" android:src="@drawable/{icon}_bold" android:tint="@color/w_on_text" />
 {s}        </FrameLayout>
 {s}        <FrameLayout android:id="@+id/w_{key}_label"
 {s}            android:layout_width="wrap_content" android:layout_height="wrap_content"
