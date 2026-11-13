@@ -204,3 +204,11 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
   shrinks out. Same in the dashboard.
 - **Page and dock**: the page ends where the dock's fade begins, so no row hides half under the
   toolbar (the accessibility check on the emulator holds this).
+
+## One picture language (1.8)
+
+The launcher icon, the splash, Home's battery rings, Device info, the widgets and the notifications
+all draw the product the same way: the launcher's flat case (lid, body, status light; Home uses it
+without the white background, `art_case_flat`) and the earbud glyphs traced from the product
+(`w_glyph_bud_*`, in the lid's light blue on Home and Device info: `art_bud_flat_*`). So the
+splash icon lands in the case ring as exactly the picture it becomes.
