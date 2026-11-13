@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
     // A started screen owns the control link; leaving the app releases it at once.
     override fun onStart() {
         super.onStart()
+        ConnectedSheet.appVisible = true
         Headphones.hold()
         startTick.intValue++
         // Open the control link before the first frame is drawn: the first tap on a mode then
@@ -79,7 +80,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    override fun onStop() { Headphones.release(); super.onStop() }
+    override fun onStop() { ConnectedSheet.appVisible = false; Headphones.release(); super.onStop() }
 }
 
 private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS, BATTERY, VIBRATIONS }
@@ -235,6 +236,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         tileTwoWay = model.tileTwoWay, onTileTwoWay = model::updateTileTwoWay,
                         ambientMinutes = model.ambientMinutes, onAmbientMinutes = model::updateAmbientMinutes,
                         liveLink = if (LiveLink.supported && model.saved != null) model.liveLink else null, onLiveLink = ::setLiveLink,
+                        connectSheet = model.connectSheet, onConnectSheet = model::updateConnectSheet,
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                         onVibrations = { open(Page.VIBRATIONS) },
                     )

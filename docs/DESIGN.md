@@ -207,16 +207,32 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 ## Pictures of the earbuds (1.9)
 
-As on a Pixel: device details show the device itself, small marks are flat. One accurate render
-of the WF-1000XM5 (`docs/icon/ref/wf1000xm5_render.webp`: the left earbud and the closed case,
-front views) is the source of both (`docs/icon/device_pictures.py`):
-- Home's battery rings and Device info show the render (`device_bud_left/right`, `device_case`),
-  as Android shows a Fast Pair device;
-- widgets, notifications and the case tile use one-tint silhouettes traced from it
-  (`w_glyph_bud_*`: shell, the foam tip apart by a gap, the grille a hole; `ic_case_mark`: the case,
-  its seam cut through, the status light a hole).
-The launcher icon, and so the splash, keep the app's own blue mark; the splash icon lands on the
-case ring's disc and the device picture takes over there.
+As on a Pixel: device details show the device itself, small marks are flat. Sony's own product
+shots, on transparency, are the source of both (`docs/icon/ref/wf1000xm5_buds.webp`,
+`wf1000xm5_case.webp`; `docs/icon/device_pictures.py`), the same pictures Android's device details
+show for this model:
+- Home's battery rings, Device info and the connected sheet show the shots, posed as Pixel poses
+  them (`device_bud_left`: three-quarter, tip to the left; `device_bud_right`; `device_case`);
+- widgets, notifications and the case tile use one-tint silhouettes traced from them
+  (`w_glyph_bud_*`: shell, the foam tip apart past its dark ring, the grille a hole;
+  `ic_case_mark`: the case, its seam cut through, the status light a hole).
+The launcher icon keeps the app's blue gradient but takes the case's real outline
+(`docs/icon/google_style.py`: two superellipse quarters fitted to the shot, a domed lid, straight
+sides, a rounder base, the seam at 44 %); the splash reads its hinge and light from it.
+
+## Explained by doing (1.9)
+
+- Earbud settings open with an illustration card (`Illustrations.kt`), as Pixel's settings pages
+  do: ten scenes, one per setting, each a 4.8 s loop of Material's expressive shapes, the app's
+  symbols and the earbud. It steps through them while nothing is changed and follows the setting
+  you change; tapping it shows the next. With animations off it rests on one telling frame
+  (`Topic.rest`). Drawn parts for richer scenes: `docs/illustrations/CHATGPT_BRIEF.md`.
+- The connected sheet (`ConnectedSheet.kt`), as a Pixel shows its own earbuds: when the earbuds
+  connect, a floating card springs up from the bottom over whatever is open, with the name and the
+  three battery rings; it goes after 8 s untouched, on a swipe down, Done or a tap outside, and
+  "Open Earbuds" opens the app. Android only lets a companion app do this from the background, so
+  it needs "Stay in sync"; it stays away while the app is open, the screen is off or locked, and
+  for 90 s after it last came up. App settings > "Show when connected" turns it off.
 
 Home's listening tiles follow the mode the earbuds are in, not one just tapped, and the case tile
 stays whenever the case's level is known, so nothing moves while a change is on its way.
