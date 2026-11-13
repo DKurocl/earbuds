@@ -71,20 +71,18 @@ fun DeviceInfoContent(
     }
 }
 
-/** Pixel's device details header: the product, its name and its state. */
+/** Pixel's device details header: the product (the open case with its earbuds), its name and state. */
 @Composable
 private fun DeviceHero(name: String, status: String) {
-    val bud = ImageBitmap.imageResource(R.drawable.wf1000xm5_bud)
     Column(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-            androidx.compose.foundation.Image(bud, null, Modifier.size(72.dp))
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.wf1000xm5_case), null, Modifier.size(width = 120.dp, height = 84.dp))
-            androidx.compose.foundation.Image(bud, null, Modifier.size(72.dp).scale(scaleX = -1f, scaleY = 1f))
-        }
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(R.drawable.art_case_open), null,
+            Modifier.size(width = 168.dp, height = 146.dp),
+        )
         Text(name, style = MaterialTheme.typography.headlineSmallEmphasized, modifier = Modifier.padding(top = 8.dp))
         Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

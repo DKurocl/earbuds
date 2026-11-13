@@ -57,6 +57,15 @@ class ScreenshotTest {
         Goldens.check(name, bitmap)
     }
 
+    /** A frame for a video only: written, never compared. */
+    private fun frame(name: String) {
+        val file = File(System.getProperty("screenshotDir")!!, "$name.png").apply { parentFile!!.mkdirs() }
+        val root = compose.activity.findViewById<View>(android.R.id.content)
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        root.draw(Canvas(bitmap))
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     private fun shoot(name: String, content: @Composable () -> Unit) {
         compose.setContent { AppTheme(dynamic = false) { content() } }
         compose.waitForIdle()
@@ -94,11 +103,13 @@ class ScreenshotTest {
         val d = compose.activity.resources.displayMetrics.density
         val icon = 288 * d
         val left = (root.width - icon) / 2; val top = (root.height - icon) / 2
-        Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 0.22f, top + icon * 0.307f, left + icon * 0.78f, top + icon * 0.693f))
+        Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 0.22f, top + icon * 0.3195f, left + icon * 0.78f, top + icon * 0.6805f))
         var at = 0L
-        for (t in listOf(16L, 140L, 300L, 480L, 640L, 820L, 960L, 1100L, 1220L, 1360L, 1600L)) {
+        val video = System.getProperty("introVideo") == "true"
+        val times = if (video) (0L..1700L step 20L).toList() else listOf(16L, 140L, 300L, 480L, 640L, 820L, 960L, 1100L, 1220L, 1360L, 1600L)
+        for (t in times) {
             compose.mainClock.advanceTimeBy(t - at); at = t
-            save("intro-%04d".format(t))
+            if (video) frame("introvid/%04d".format(t)) else save("intro-%04d".format(t))
         }
         compose.mainClock.advanceTimeBy(600)
         Intro.finish()
