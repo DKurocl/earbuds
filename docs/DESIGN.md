@@ -103,7 +103,7 @@ slots (3×1) show icons and percentages only; names appear in taller slots.
 Like Pixel's own battery widget: each part is a flat glyph in a tonal disc (`w_disc_fill`, the
 wallpaper's primary container) inside a ring in the wallpaper's accent (`w_ring`); only a level
 of 20 % or less (not charging) turns the ring and number red. The earbud glyph is the
-WF-1000XM5's own shape, traced from the product render (`docs/icon/bud_glyph.py`); the case is
+WF-1000XM5's own shape, traced from the product render (`docs/icon/device_pictures.py`); the case is
 `ic_case_mark`. When the earbuds are away nothing is dimmed or greyed: the last reading is still
 the truth, and the status line says when the earbuds left ("Disconnected 10:18"). Mode buttons
 keep their colors too; a tap connects.
@@ -207,15 +207,16 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 ## Pictures of the earbuds (1.9)
 
-The owner's earbuds are drawn faithfully as vectors (`docs/icon/product_glyphs.py`): the case's
-outline is the profile measured from the product photo (matching Sony's 64.6 x 40.0 x 26.5 mm case
-seen from the front and a little above), the lid meeting the body at 43 % of its height with the
-status light just below; the earbud is traced from the product render: its convex shell, the copper
-grille, and the short sound nozzle under the ear tip (the tip itself is left out; its bulk made
-the earbud look heavy). In platinum silver on Home's rings and in Device info (`art_case`, `art_bud_*`); as one
-tint in the widgets and notifications (`ic_case_mark`, `w_glyph_bud_*`). The launcher icon, and
-so the splash, keep the app's own blue mark; the splash icon lands on the case ring's disc and
-the drawing takes over there. The reference photos live in `docs/icon/ref` and are not shipped.
+As on a Pixel: device details show the device itself, small marks are flat. One accurate render
+of the WF-1000XM5 (`docs/icon/ref/wf1000xm5_render.webp`: the left earbud and the closed case,
+front views) is the source of both (`docs/icon/device_pictures.py`):
+- Home's battery rings and Device info show the render (`device_bud_left/right`, `device_case`),
+  as Android shows a Fast Pair device;
+- widgets, notifications and the case tile use one-tint silhouettes traced from it
+  (`w_glyph_bud_*`: shell, the foam tip apart by a gap, the grille a hole; `ic_case_mark`: the case,
+  its seam cut through, the status light a hole).
+The launcher icon, and so the splash, keep the app's own blue mark; the splash icon lands on the
+case ring's disc and the device picture takes over there.
 
 Home's listening tiles follow the mode the earbuds are in, not one just tapped, and the case tile
 stays whenever the case's level is known, so nothing moves while a change is on its way.

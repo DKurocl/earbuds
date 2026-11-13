@@ -71,7 +71,7 @@ fun DeviceInfoContent(
     }
 }
 
-/** Pixel's device details header: the owner's earbuds and case (faithful drawings), name and state. */
+/** Pixel's device details header: the owner's earbuds and case (the product render), name and state. */
 @Composable
 private fun DeviceHero(name: String, status: String) {
     Column(
@@ -80,9 +80,9 @@ private fun DeviceHero(name: String, status: String) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.art_bud_left), null, Modifier.size(64.dp))
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.art_case), null, Modifier.size(width = 124.dp, height = 80.dp))
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.art_bud_right), null, Modifier.size(64.dp))
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.device_bud_left), null, Modifier.size(64.dp))
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.device_case), null, Modifier.size(width = 124.dp, height = 80.dp))
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.device_bud_right), null, Modifier.size(64.dp))
         }
         Text(name, style = MaterialTheme.typography.headlineSmallEmphasized, modifier = Modifier.padding(top = 8.dp))
         Text(status, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
