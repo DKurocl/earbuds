@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The splash icon: the closed case from the artwork sheet (art_case_closed, 562 x 387), centred
+     well inside Android's circle. SplashHandoff relies on these fractions to pick it up in place. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/art_case_closed"
+    android:insetLeft="22%" android:insetRight="22%" android:insetTop="30.7%" android:insetBottom="30.7%" />
