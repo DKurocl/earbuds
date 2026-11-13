@@ -348,11 +348,14 @@ class DockExtras(
 
 @Composable
 private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
-    Surface(
-        shape = RoundedCornerShape(32.dp), color = Surfaces.card, shadowElevation = 6.dp,
-        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+    // No slab behind the controls: the buttons carry their own fills and sit on the page, and the
+    // page fades out under them as it scrolls, so nothing reads as a box inside a box.
+    val page = Surfaces.page
+    Box(
+        Modifier.fillMaxWidth()
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.18f to page, 1f to page)),
     ) {
-        Column(Modifier.padding(8.dp)) {
+        Column(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp)) {
             AnimatedVisibility(
                 state?.mode == Mode.AMBIENT,
                 enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec(), expandFrom = Alignment.Bottom) + fadeIn(),
