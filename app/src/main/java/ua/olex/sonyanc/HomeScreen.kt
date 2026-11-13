@@ -197,8 +197,9 @@ private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol
 
 @Composable
 private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit, confirmed: Mode? = null) {
-    // One decode of the bud cutout shared by both earbud rings; the right one is mirrored.
-    val bud = ImageBitmap.imageResource(R.drawable.wf1000xm5_bud)
+    // The same artwork as the opening (drawable-nodpi/art_*), so its pieces land as these pictures.
+    val budL = ImageBitmap.imageResource(R.drawable.art_bud_left)
+    val budR = ImageBitmap.imageResource(R.drawable.art_bud_right)
     // When the earbuds confirm a new mode, a small swell runs through the rings, left to right:
     // the answer comes from the earbuds, not from the button that was tapped.
     val swell = remember { List(3) { Animatable(1f) } }
@@ -221,13 +222,13 @@ private fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, o
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, { swell[0].value }) { BudArt(bud, mirrored = false) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, { swell[0].value }) { BudArt(budL) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
             BatteryRing("Case", b.case, b.caseCharging, 2 in live, { swell[2].value }) {
-                Image(painterResource(R.drawable.wf1000xm5_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                Image(painterResource(R.drawable.art_case_closed), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, { swell[1].value }) { BudArt(bud, mirrored = true) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, { swell[1].value }) { BudArt(budR) } }
     }
 }
 
@@ -344,13 +345,10 @@ private val RING_BOX = RING_RADIUS * 2 + RING_STROKE + CHIP / 2 + 4.dp
 // A square at 1/√2 of the disc fits inside it entirely, so the product is never clipped.
 private val ART = (RING_RADIUS - RING_STROKE / 2 - RING_GAP) * 2 * 0.70f
 
-/** The bud cutout, centered; the right bud is the same shot mirrored. */
+/** An earbud's artwork, centred. */
 @Composable
-private fun BudArt(image: ImageBitmap, mirrored: Boolean) {
-    Image(
-        image, null, contentScale = ContentScale.Fit,
-        modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = if (mirrored) -1f else 1f },
-    )
+private fun BudArt(image: ImageBitmap) {
+    Image(image, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
 }
 
 /** A home action: Material's medium tonal icon button (wide); it squares off while pressed. */
