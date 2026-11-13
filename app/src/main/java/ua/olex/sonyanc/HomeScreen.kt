@@ -15,6 +15,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -88,7 +89,7 @@ fun HushScreen(
             Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
-            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).semantics { contentDescription = "Settings" }) {
+            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).introFade().semantics { contentDescription = "Settings" }) {
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
         }
@@ -111,7 +112,9 @@ fun HushScreen(
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = onBattery, state = pull,
-            modifier = Modifier.fillMaxSize(),
+            // The page ends where the dock's fade begins: rows never hide half under the toolbar
+            // (unreachable there, and too small a target for the part that shows).
+            modifier = Modifier.fillMaxSize().padding(bottom = (dockHeight - DOCK_FADE).coerceAtLeast(0.dp)),
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = batteryRefreshing || codecRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter))
@@ -121,7 +124,7 @@ fun HushScreen(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Header(deviceName, status, codec, batteryRefreshing, lastSeen)
+            Box(Modifier.introFade()) { Header(deviceName, status, codec, batteryRefreshing, lastSeen) }
 
             // Setup cards already explain a missing permission or device; the banner is for link problems.
             AnimatedVisibility(error != null && granted && hasDevice, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
@@ -134,10 +137,12 @@ fun HushScreen(
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery, confirmed = nc?.mode.takeIf { pending == null })
-                        ListeningTime(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt, onClick = onBatteryDetails)
+                        Box(Modifier.introFade()) {
+                            ListeningTime(battery, state?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt, onClick = onBatteryDetails)
+                        }
                     }
 
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Row(Modifier.fillMaxWidth().introFade(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         // Only what is used day to day. The control link opens and closes by itself (no
                         // Disconnect); Android's Bluetooth settings are one level down in Device info.
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
@@ -145,7 +150,7 @@ fun HushScreen(
                             enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
                     }
 
-                    ListGroup("More controls") {
+                    Box(Modifier.introFade()) { ListGroup("More controls") {
                         // Battery opens from the listening-time tiles above; no second entry here.
                         item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
                         item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls, Speak-to-Chat, voice prompts", onClick = onEarbuds) }
@@ -154,16 +159,16 @@ fun HushScreen(
                             NavRow(it, Glyph.INFO, "Device info", codecLine?.let { c -> "Codec · $c" } ?: "Codec, firmware, power", onClick = onConnection)
                         }
                         item { NavRow(it, Glyph.SETTINGS, "App settings", "Appearance, shortcuts, device", onClick = onAppSettings) }
-                    }
+                    } }
                 }
             }
-            Spacer(Modifier.height(8.dp + dockHeight))
+            Spacer(Modifier.height(8.dp + DOCK_FADE))
         }
         }
         // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
         if (granted && hasDevice) ModeDock(
             state, pending, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient),
-            cardShown, Modifier.align(Alignment.BottomCenter).onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
+            cardShown, Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
         )
         }
     }
@@ -250,7 +255,10 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
     // each new reading.
     val fill = remember { Animatable(0f) }
     val fillSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
-    LaunchedEffect(value) { fill.animateTo((value ?: 0) / 100f, fillSpec) }
+    // On a fresh start each ring waits for its piece to land from the intro (Intro).
+    val landed = Intro.isLanded(label)
+    val shown by animateFloatAsState(if (landed) 1f else 0f, MaterialTheme.motionScheme.fastEffectsSpec(), label = "shown $label")
+    LaunchedEffect(value, landed) { if (landed) fill.animateTo((value ?: 0) / 100f, fillSpec) }
     val progress = fill.value.coerceIn(0f, 1f)
     // Runs only while this ring is charging; otherwise no animation frame is ever requested.
     val phase = if (charging && value != null) {
@@ -266,7 +274,8 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
         },
     ) {
         Box(Modifier.size(RING_BOX).graphicsLayer { val k = swell(); scaleX = k; scaleY = k }, contentAlignment = Alignment.TopCenter) {
-            Canvas(Modifier.fillMaxSize()) {
+            // While the intro plays, the ring waits dimmed, its chip hidden, until its piece lands.
+            Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = 0.35f + 0.65f * shown }) {
                 val stroke = RING_STROKE.toPx()
                 val radius = RING_RADIUS.toPx()
                 val center = Offset(size.width / 2, CHIP.toPx() / 2 + radius)
@@ -297,10 +306,13 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
                 } else if (progress > 0f) drawArc(color, start, sweep * progress, false, arcTopLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 // Chip outline in page color, so it never touches the ring ends.
                 drawCircle(page, chipOuter, Offset(center.x, CHIP.toPx() / 2))
-                drawCircle(if (value == null) track else color, CHIP.toPx() / 2, Offset(center.x, CHIP.toPx() / 2))
+                drawCircle(if (value == null) track else androidx.compose.ui.graphics.lerp(track, color, shown), CHIP.toPx() / 2, Offset(center.x, CHIP.toPx() / 2))
             }
             Box(
-                Modifier.padding(top = CHIP / 2 + RING_RADIUS - ART / 2).size(ART),
+                Modifier.padding(top = CHIP / 2 + RING_RADIUS - ART / 2).size(ART)
+                    .onGloballyPositioned { Intro.targets[label] = it.boundsInRoot() }
+                    // The intro draws this picture in flight; it appears here as it lands.
+                    .graphicsLayer { alpha = if (landed) 1f else 0f },
                 contentAlignment = Alignment.Center,
             ) { art() }
             HushIcon(
@@ -309,12 +321,13 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
                     charging -> Glyph.BATTERY_CHARGING
                     value <= 20 -> Glyph.BATTERY_LOW
                     else -> Glyph.BATTERY
-                }, Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp), chipContent, filled = true,
+                }, Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp).graphicsLayer { alpha = shown }, chipContent, filled = true,
             )
         }
         // The number rolls digit by digit when a new reading arrives.
         RollingText(
-            "$label: " + (value?.let { "$it%" } ?: "—"), MaterialTheme.typography.titleMedium, Modifier.padding(horizontal = 4.dp),
+            "$label: " + (value?.let { "$it%" } ?: "—"), MaterialTheme.typography.titleMedium,
+            Modifier.padding(horizontal = 4.dp).graphicsLayer { alpha = shown; translationY = (1 - shown) * 6.dp.toPx() },
             color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
         )
     }
@@ -383,7 +396,7 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
     Column(
         modifier.fillMaxWidth()
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.22f to page.copy(alpha = .94f), 1f to page))
-            .navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 12.dp),
+            .navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = DOCK_FADE, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         AnimatedVisibility(
@@ -653,3 +666,13 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
  */
 private fun fitText(style: androidx.compose.ui.text.TextStyle) =
     androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp)
+
+/** The soft fade above the floating dock, where the page is allowed to run under it. */
+private val DOCK_FADE = 28.dp
+
+/** The page around the rings waits for the intro and comes in last (see [Intro]). */
+private fun Modifier.introFade() = graphicsLayer {
+    val a = Intro.content
+    alpha = a
+    translationY = (1 - a) * 16.dp.toPx()
+}

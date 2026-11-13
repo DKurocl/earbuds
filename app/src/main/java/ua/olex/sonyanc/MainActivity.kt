@@ -45,6 +45,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A fresh start opens with the intro (Intro, SplashHandoff); a recreated activity has no splash.
+        if (savedInstanceState == null) Intro.prepare()
+        SplashHandoff.install(this)
         Headphones.init(this)
         consumeIntent(intent)
         // Picker previews are a binder call per widget; keep them off the first frame.
@@ -247,6 +250,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                 }
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp))
+            IntroOverlay()
         }
     }
 }

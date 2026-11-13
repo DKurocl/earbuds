@@ -1,5 +1,7 @@
 package ua.olex.sonyanc
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import android.graphics.Bitmap
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
@@ -68,6 +70,38 @@ class ScreenshotTest {
             codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             speakToChat = true,
         )
+    }
+
+    /** The opening: frames of the intro over Home, from the splash's case to the rings (Intro). */
+    @Test fun intro() {
+        compose.mainClock.autoAdvance = false
+        Intro.prepare()
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                Box(Modifier.fillMaxSize()) {
+                    HushScreen(
+                        status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
+                        fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78), granted = true, hasDevice = true,
+                        codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                    )
+                    IntroOverlay()
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        // Where the splash draws the case on this screen: a 288 dp icon, centred (splash_case.xml).
+        val root = compose.activity.findViewById<View>(android.R.id.content)
+        val d = compose.activity.resources.displayMetrics.density
+        val icon = 288 * d
+        val left = (root.width - icon) / 2; val top = (root.height - icon) / 2
+        Intro.start(androidx.compose.ui.geometry.Rect(left + icon * 0.22f, top + icon * 0.32f, left + icon * 0.78f, top + icon * 0.68f))
+        var at = 0L
+        for (t in listOf(0L, 120L, 260L, 420L, 600L, 760L, 880L, 1000L, 1200L)) {
+            compose.mainClock.advanceTimeBy(t - at); at = t
+            save("intro-%04d".format(t))
+        }
+        compose.mainClock.advanceTimeBy(600)
+        Intro.finish()
     }
 
     /** Predictive back posed mid-gesture: the battery page shrinks away, Home waits underneath. */
