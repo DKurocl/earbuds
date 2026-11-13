@@ -48,14 +48,15 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * The opening, once per cold start (1.55 s, a tap skips it). The splash shows the case artwork
- * (drawable-nodpi/art_*, one illustrated parts sheet: closed case, open body, the lid's inside,
- * both earbuds); as the splash lifts, the same case, in the same place, comes alive: a breath and
- * a spring up off its shadow with a glow behind; the lid swings back on its hinge (its inside rises
- * behind the opening, its outside narrows to a band on top); the earbuds rise out of their wells,
- * tilting, and hover over the opening; the status light blooms. Then the earbuds fly on arcs into
- * their battery rings, the lid shuts and the case follows; the rings show the same artwork and
- * each fills as its piece lands, and the rest of the page comes in. Off (the default) elsewhere.
+ * The opening, once per cold start (1.55 s, a tap skips it), on one illustrated parts sheet
+ * (drawable-nodpi/art_*: closed case, empty body, the lid's inside, both earbuds), every layer
+ * aligned to the sheet's own assembled open case. The splash shows the closed case; as it lifts,
+ * the same case in the same place breathes and springs up off its shadow with a glow behind. The
+ * lid flips back over its hinge: its outside turns away, then its inside comes up behind; under
+ * it the earbuds lie in their wells as they really do, only their domes showing. They lift out,
+ * tilting, and hover; the status light blooms. Then the earbuds fly on arcs into their battery
+ * rings, the lid shuts and the case follows; the rings show the same artwork and each fills as
+ * its piece lands, and the rest of the page comes in. Off (the default) everywhere else.
  */
 object Intro {
     enum class Phase { OFF, WAITING, PLAYING }
@@ -116,14 +117,21 @@ private fun spring(x: Float, bounce: Float = 0.35f): Float {
 
 // ---- the overlay -------------------------------------------------------------------------------
 
-// Geometry of the artwork, as fractions of the closed case (562 x 387 px, all parts at one scale).
-private const val SEAM = 0.468f        // lid / body line on the closed case
-private const val BODY_TOP = 0.233f    // the open body's back rim, where the lid is hinged
-private const val FRONT_RIM = 0.47f    // the opening's front rim
-private const val WELL_Y = 0.362f      // the wells' centres
-private const val WELL_X = 0.276f      // ... at 0.5 -/+ this
-private const val LED_X = 0.5f
-private const val LED_Y = 0.556f
+/**
+ * The layers' places on one canvas, in px of the parts sheet's assembled open case (686 x 598),
+ * found by matching each part against it: x, y, width, height.
+ */
+private object Sheet {
+    val CLOSED = floatArrayOf(7f, 171f, 664f, 428f)
+    val BODY = floatArrayOf(0f, 210f, 687f, 389f)
+    val LID = floatArrayOf(10f, 4f, 668f, 270f)
+    val BUD_L = floatArrayOf(71f, 184f, 232f, 273f)
+    val BUD_R = floatArrayOf(378f, 183f, 232f, 272f)
+    const val SEAM = 355f   // bottom of the closed lid
+    const val RIM = 344f    // the opening's front rim: what is below it is inside the case
+    const val LED_X = 339f
+    const val LED_Y = 406f
+}
 
 @Composable
 fun IntroOverlay() {
@@ -151,7 +159,7 @@ fun IntroOverlay() {
         if (Intro.targets.size < 3) return@Canvas
         val t = clock.value
         val dp = density
-        val aspect = closed.width.toFloat() / closed.height
+        val aspect = Sheet.CLOSED[2] / Sheet.CLOSED[3]
         val start = Intro.from ?: Rect(Offset(size.width / 2, size.height * 0.45f), 0f).let {
             Rect(it.center.x - 100 * dp, it.center.y - 100 / aspect * dp, it.center.x + 100 * dp, it.center.y + 100 / aspect * dp)
         }
@@ -161,27 +169,30 @@ fun IntroOverlay() {
         val breath = sin(span(t, 0f, 260f) * PI.toFloat()) * 0.025f
         val rise = spring(span(t, 120f, 680f), 0.3f)
         // The lid shuts once the earbuds are on their way, then the case follows them.
-        val open = spring(span(t, 360f, 900f), 0.2f) * (1 - decel(span(t, 1080f, 1250f)))
-        val ledGlow = decel(span(t, 620f, 820f)) * (1 - span(t, 1100f, 1300f))
+        val open = spring(span(t, 300f, 820f), 0.15f) * (1 - decel(span(t, 1080f, 1250f)))
+        val ledGlow = decel(span(t, 640f, 840f)) * (1 - span(t, 1100f, 1300f))
         val fly = span(t, 1190f, 1500f)
 
         val stage = Offset(start.center.x, start.center.y - rise * 26 * dp)
         val casePiece = fly(Piece(stage, w0 * (1 + breath + 0.05f * rise), 0f, 1f), Intro.targets.getValue("Case"), aspect, fly)
+        // Sheet px -> screen, for the case as staged (the earbuds start from their wells in it).
+        val k0 = w0 * (1 + breath + 0.05f * rise) / Sheet.CLOSED[2]
+        fun stagePoint(x: Float, y: Float) = Offset(
+            stage.x + (x - (Sheet.CLOSED[0] + Sheet.CLOSED[2] / 2)) * k0, stage.y + (y - (Sheet.CLOSED[1] + Sheet.CLOSED[3] / 2)) * k0,
+        )
 
-        // Earbuds: out of their wells, tilting outward, a gentle float, then into their rings.
-        val caseH = w0 / aspect
-        fun bud(side: Int, label: String, delay: Float, art: ImageBitmap): Pair<Piece, Float> {
-            val up = spring(span(t, 560f + delay, 1060f + delay), 0.38f)
+        // Earbuds: lifted out of their wells, tilting outward, a gentle float, then into their rings.
+        fun bud(side: Int, label: String, delay: Float, box: FloatArray, art: ImageBitmap): Piece {
+            val up = spring(span(t, 640f + delay, 1080f + delay), 0.4f)
             val float = sin(span(t, 900f, 1400f) * PI.toFloat() * 2) * 3 * dp
-            val caseTop = stage.y - caseH / 2
-            val well = Offset(stage.x + side * w0 * WELL_X, caseTop + caseH * WELL_Y + w0 * 0.12f)
-            val perch = Offset(stage.x + side * w0 * 0.25f, caseTop - w0 * 0.02f + float)
-            val staged = Piece(lerp(well, perch, up), w0 * 0.36f, lerp(0f, side * 10f, up), if (up <= 0.001f) 0f else 1f)
+            val seat = stagePoint(box[0] + box[2] / 2, box[1] + box[3] / 2)
+            val perch = seat + Offset(side * 46 * k0, -170 * k0 + float)
+            val staged = Piece(lerp(seat, perch, up), box[2] * k0 * (1 + 0.06f * up), lerp(0f, side * 9f, up), 1f)
             val p = span(t, 1000f + delay * 0.6f, 1300f + delay * 0.6f)
-            return fly(staged, Intro.targets.getValue(label), art.width.toFloat() / art.height, p) to up
+            return fly(staged, Intro.targets.getValue(label), art.width.toFloat() / art.height, p)
         }
-        val (left, upL) = bud(-1, "Left", 0f, budL)
-        val (right, upR) = bud(1, "Right", 70f, budR)
+        val left = bud(-1, "Left", 0f, Sheet.BUD_L, budL)
+        val right = bud(1, "Right", 60f, Sheet.BUD_R, budR)
 
         // A glow of the theme colour behind, breathing out as the case comes to life.
         val g = span(t, 0f, 900f)
@@ -189,16 +200,15 @@ fun IntroOverlay() {
         drawCircle(Brush.radialGradient(listOf(glowColor.copy(alpha = 0.30f * (1 - g)), Color.Transparent), stage, glowR), glowR, stage)
         // Contact shadow on the "floor" the case rose from.
         val floor = Offset(start.center.x, start.bottom + 4 * dp)
-        val sh = 1 - fly
         drawOval(
-            Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.42f * sh * (1 - 0.45f * rise)), Color.Transparent), floor, w0 * 0.55f),
+            Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.42f * (1 - fly) * (1 - 0.45f * rise)), Color.Transparent), floor, w0 * 0.55f),
             topLeft = floor - Offset(w0 * (0.48f + 0.08f * rise), w0 * 0.06f), size = Size(w0 * (0.96f + 0.16f * rise), w0 * 0.12f),
         )
 
         val budsAway = t >= 1000f
-        drawCase(casePiece, open * (1 - fly), ledGlow, closed, bodyArt, lidArt) { frontRimY ->
-            // Out of the opening: hidden below its front rim until they rise.
-            if (!budsAway) clipRect(bottom = frontRimY) { drawBud(left, budL); drawBud(right, budR) }
+        drawCase(casePiece, open * (1 - fly), ledGlow, closed, bodyArt, lidArt) { rimY ->
+            // In their wells: only what is above the opening's front rim shows.
+            if (!budsAway) clipRect(bottom = rimY) { drawBud(left, budL); drawBud(right, budR) }
         }
         if (budsAway) { drawBud(left, budL); drawBud(right, budR) }
     }
@@ -218,52 +228,57 @@ private fun fly(staged: Piece, ring: Rect, aspect: Float, p: Float): Piece {
 }
 
 private fun DrawScope.image(img: ImageBitmap, dst: Rect, alpha: Float, src: IntRect = IntRect(0, 0, img.width, img.height)) {
-    if (alpha <= 0f || dst.width <= 0f || dst.height <= 0f) return
+    if (alpha <= 0f || dst.width <= 0.5f || dst.height <= 0.5f) return
     drawImage(img, IntOffset(src.left, src.top), IntSize(src.width, src.height),
         IntOffset(dst.left.roundToInt(), dst.top.roundToInt()), IntSize(dst.width.roundToInt(), dst.height.roundToInt()),
         alpha = alpha, filterQuality = FilterQuality.High)
 }
 
 /**
- * The case. Closed it is the closed artwork itself. Opening, it is three parts: the lid's inside
- * rising from the hinge behind the opening, the open body, and the lid's outside (the closed
- * artwork above the seam) narrowing to a band on top of the inside. [inside] draws what comes
- * out of the opening, given the opening's front rim.
+ * The case, [piece] being its closed outline. Closed it is the closed artwork itself; opening, the
+ * empty body, the earbuds in it ([inside], given the front rim), and the lid flipping back over its
+ * hinge: first its outside turns away (shrinking up towards the hinge, darkening), then its inside
+ * comes up behind the opening (growing from the hinge, brightening).
  */
 private fun DrawScope.drawCase(
     piece: Piece, open: Float, ledGlow: Float, closed: ImageBitmap, bodyArt: ImageBitmap, lidArt: ImageBitmap,
-    inside: DrawScope.(frontRimY: Float) -> Unit,
+    inside: DrawScope.(rimY: Float) -> Unit,
 ) {
     if (piece.alpha <= 0f) return
-    val w = piece.width
-    val h = w * closed.height / closed.width
-    val left = piece.center.x - w / 2
-    val top = piece.center.y - h / 2
+    val k = piece.width / Sheet.CLOSED[2]
+    val ox = piece.center.x - (Sheet.CLOSED[0] + Sheet.CLOSED[2] / 2) * k
+    val oy = piece.center.y - (Sheet.CLOSED[1] + Sheet.CLOSED[3] / 2) * k
+    fun box(b: FloatArray) = Rect(ox + b[0] * k, oy + b[1] * k, ox + (b[0] + b[2]) * k, oy + (b[1] + b[3]) * k)
     val a = piece.alpha
-    val frontRim = top + h * FRONT_RIM
     if (open <= 0.004f) {
-        image(closed, Rect(left, top, left + w, top + h), a)
-        inside(frontRim)
+        image(closed, box(Sheet.CLOSED), a)
     } else {
-        val o = open.coerceIn(0f, 1.15f)
-        val hinge = top + h * BODY_TOP
-        // The lid's inside, standing up from the hinge.
-        val lidH = w * lidArt.height / lidArt.width * o
-        image(lidArt, Rect(left, hinge - lidH + h * 0.015f, left + w, hinge + h * 0.015f), a)
-        // The open body.
-        val bodyH = w * bodyArt.height / bodyArt.width
-        image(bodyArt, Rect(left, top + h - bodyH, left + w, top + h), a)
-        // The lid's outside: the closed artwork above the seam, narrowing to a band on top.
-        val seamPx = (closed.height * SEAM).roundToInt()
-        val bandH = lerp(h * SEAM, h * 0.07f, o.coerceIn(0f, 1f))
-        val bandBottom = lerp(top + h * SEAM, hinge - lidH + h * 0.03f, o.coerceIn(0f, 1f))
-        image(closed, Rect(left, bandBottom - bandH, left + w, bandBottom), a, IntRect(0, 0, closed.width, seamPx))
-        inside(frontRim)
+        val o = open.coerceIn(0f, 1.1f)
+        // The lid's inside, rising from the hinge behind the opening once the lid is past upright.
+        val up = ((o - 0.5f) / 0.5f).coerceIn(0f, 1.1f)
+        if (up > 0f) {
+            val full = box(Sheet.LID)
+            val r = Rect(full.left, full.bottom - full.height * up, full.right, full.bottom)
+            image(lidArt, r, a)
+            drawRect(Color.Black.copy(alpha = 0.3f * (1 - up.coerceAtMost(1f)) * a), r.topLeft, r.size)
+        }
+        image(bodyArt, box(Sheet.BODY), a)
+        inside(oy + Sheet.RIM * k)
+        // The lid's outside: the closed artwork above the seam, turning away towards the hinge.
+        val away = (o / 0.5f).coerceIn(0f, 1f)
+        if (away < 1f) {
+            val c = box(Sheet.CLOSED)
+            val seamPx = ((Sheet.SEAM - Sheet.CLOSED[1]) / Sheet.CLOSED[3] * closed.height).roundToInt()
+            val h = (Sheet.SEAM - Sheet.CLOSED[1]) * k * (1 - away)
+            val r = Rect(c.left, c.top - 8 * k * away, c.right, c.top - 8 * k * away + h)
+            image(closed, r, a, IntRect(0, 0, closed.width, seamPx))
+            drawRect(Color.Black.copy(alpha = 0.35f * away * a), r.topLeft, r.size)
+        }
     }
     // Status light blooming.
     if (ledGlow > 0.01f) {
-        val led = Offset(left + w * LED_X, top + h * LED_Y)
-        val r = w * 0.06f * (1 + ledGlow)
+        val led = Offset(ox + Sheet.LED_X * k, oy + Sheet.LED_Y * k)
+        val r = piece.width * 0.05f * (1 + ledGlow)
         drawCircle(Brush.radialGradient(listOf(Color(0xFF34A853).copy(alpha = 0.6f * ledGlow * a), Color.Transparent), led, r), r, led)
     }
 }

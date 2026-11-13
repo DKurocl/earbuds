@@ -16,7 +16,7 @@ import androidx.core.graphics.ColorUtils
 object SplashHandoff {
     // Where splash_case.xml draws the case in the icon's square (its insets).
     private const val X0 = 0.22f; private const val X1 = 0.78f
-    private const val Y0 = 0.307f; private const val Y1 = 0.693f
+    private const val Y0 = 0.3195f; private const val Y1 = 0.6805f
 
     fun install(activity: Activity) {
         activity.splashScreen.setOnExitAnimationListener { splash -> lift(splash) }
