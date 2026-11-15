@@ -265,7 +265,8 @@ class ScreenshotTest {
     private fun gallery(name: String, battery: Boolean) = shoot(name) {
         val sizes = if (battery)
             listOf(252 to 104, 164 to 104, 84 to 104, 340 to 208, 252 to 150, 252 to 80)
-        else listOf(424 to 96, 340 to 96, 252 to 96, 164 to 96, 340 to 56, 164 to 208, 300 to 150, 200 to 64)
+        // 297 x 97: four cells on the owner's Pixel 10 Pro XL, as measured on their home screen.
+        else listOf(424 to 96, 340 to 96, 297 to 97, 252 to 96, 164 to 96, 340 to 56, 164 to 208, 300 to 150, 200 to 64)
         Column(
             Modifier.background(Color(0xFF101418)).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
