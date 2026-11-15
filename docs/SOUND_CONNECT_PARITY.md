@@ -1,4 +1,4 @@
-# WF-1000XM5 replacement audit — Earbuds 1.4
+# WF-1000XM5 replacement audit - Earbuds 1.4
 
 Goal: independent everyday control, with no Sony app, account, network permission, notification service or simulated settings.
 
@@ -7,7 +7,7 @@ Goal: independent everyday control, with no Sony app, account, network permissio
 | Function | Hush implementation |
 |---|---|
 | ANC / ambient / off | Direct V2 command, ACK and state readback |
-| Ambient intensity and voice focus | 0–20 slider and presets |
+| Ambient intensity and voice focus | 0 to 20 slider and presets |
 | Codec | Device report, not inferred from phone preferences |
 | Left / right / case battery | Direct replies, partial updates preserve last known values; unknown remains unknown |
 | Charging | Accepts known V2 charging/charged/unknown states |
