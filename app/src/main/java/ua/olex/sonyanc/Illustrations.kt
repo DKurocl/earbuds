@@ -50,7 +50,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
@@ -86,7 +86,8 @@ fun IllustrationCard(topic: Topic, modifier: Modifier = Modifier, onLoop: () -> 
     Surface(
         shape = RoundedCornerShape(28.dp), color = Surfaces.card,
         modifier = modifier.fillMaxWidth().clickable(onClickLabel = "Next tip", onClick = onTap)
-            .semantics { contentDescription = "${topic.title}. ${topic.line}" },
+            // One thing to a screen reader: the rows below carry the same titles.
+            .clearAndSetSemantics { contentDescription = "${topic.title}. ${topic.line}" },
     ) {
         AnimatedContent(
             topic, label = "illustration",
