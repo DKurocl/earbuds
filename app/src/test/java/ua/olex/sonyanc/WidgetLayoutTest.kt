@@ -15,6 +15,9 @@ class WidgetLayoutTest {
     @Test fun oneRowSlotsShowIconsOnlyUnlessNamesFitBeside() {
         // 3×1: icons only, as the owner asked; wider one-row slots put the name beside the icon.
         assertFalse(modes(252, 96).labels)
+        assertFalse(modes(203, 96).labels)
+        // Four cells on the owner's phone (about 276 to 297 dp wide, 97 high): names under the icons.
+        for (w in listOf(276, 297)) { val s = modes(w, 97); assertTrue("$w", s.labels); assertEquals(ROW, s.variant) }
         for (w in listOf(340, 424)) assertEquals(INLINE, modes(w, 96).variant)
         for (w in listOf(252, 340, 424)) {
             val s = modes(w, 96)

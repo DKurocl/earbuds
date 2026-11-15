@@ -52,15 +52,17 @@ internal object WidgetLayout {
         val tile = (w - 2 * GAP) / 3
         val inline = tile >= 2 * TILE_PAD + ICON + 8 + label
         val stackedHeight = minOf(h, MAX_ROW_STACKED, tile)
-        // A one-row slot (3×1) shows icons only; names under icons only in taller slots.
-        val stacked = height >= TWO_ROWS && tile >= 2 * TILE_PAD + label && stackedHeight >= ICON + 4 + line + 16
+        // A 3×1 slot shows icons only, as the owner asked. From four cells (Google's estimate is
+        // 73n - 16 dp, so about 276 dp; the owner's Pixel 10 Pro XL measures about 297) the name goes
+        // under the icon as soon as the height allows, as in Quick Settings tiles: a lone 24 dp icon
+        // in a wide pill reads as empty.
+        val stacked = tile >= 2 * TILE_PAD + label + 12 && stackedHeight >= ICON + 4 + line + 16
         val flat = minOf(h, MAX_ROW_FLAT, tile)
         return when {
             // Wide enough for "icon label" side by side: the calmest layout, one line high.
-            inline && (h < ICON + 4 + line + 16 || tile >= 2 * TILE_PAD + ICON + 8 + label + 16) ->
-                ModeSpec(ModeVariant.INLINE, true, ICON, flat)
-            stacked -> ModeSpec(ModeVariant.ROW, true, ICON, stackedHeight)
             inline -> ModeSpec(ModeVariant.INLINE, true, ICON, flat)
+            // Not side by side, but tall enough: the name under the icon.
+            stacked -> ModeSpec(ModeVariant.ROW, true, ICON, stackedHeight)
             else -> ModeSpec(ModeVariant.ROW, false, ICON, flat)
         }
     }
