@@ -74,7 +74,7 @@ than wide (`WidgetLayout.modes`). `WidgetAnimationTest` seeks the animators and 
 - **Listening time**: two tiles under the rings. Starts from Sony's rating (8 h with ANC or
   ambient, 12 h off, case two charges) and switches to the owner's measured drain (`BatteryLog`:
   same out-of-case session, not charging, falling readings, ≥ 30 min / ≥ 5 %), kept within
-  0.5–1.5× the rating. The emptier earbud decides.
+  0.5 to 1.5× the rating. The emptier earbud decides.
 - **Instant start**: the last battery reading is stored and shown at launch, dimmed, with
   "Last seen 5 min ago", until the earbuds answer.
 - **LDAC hint**: Device info reads Bluetooth quality; when it is Stable connection and the codec

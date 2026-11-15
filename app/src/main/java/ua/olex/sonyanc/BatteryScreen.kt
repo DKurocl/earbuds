@@ -109,7 +109,7 @@ private fun DrainRow(shape: ListItemShapes, glyph: Glyph, title: String, log: Li
     InfoRow(shape, glyph, title, value)
 }
 
-/** One week: earbuds (solid) and case (dashed) over a 0–100 % axis; drag or tap to read a moment. */
+/** One week: earbuds (solid) and case (dashed) over a 0 to 100 % axis; drag or tap to read a moment. */
 @Composable
 private fun WeekChart(samples: List<BatterySample>, now: Long) {
     val cs = MaterialTheme.colorScheme

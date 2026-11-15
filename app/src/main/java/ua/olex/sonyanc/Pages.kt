@@ -46,8 +46,8 @@ fun DeviceInfoContent(
     }) {
         DeviceHero(deviceName, statusText(status))
         ListGroup {
-            item { InfoRow(it, Glyph.EQ, "Audio codec", if (connected) codec?.label ?: if (refreshing) "Reading…" else "Not reported" else "—") }
-            item { InfoRow(it, Glyph.INFO, "Firmware", if (connected) firmware ?: "Reading…" else "—") }
+            item { InfoRow(it, Glyph.EQ, "Audio codec", if (connected) codec?.label ?: if (refreshing) "Reading…" else "Not reported" else "\u2014") }
+            item { InfoRow(it, Glyph.INFO, "Firmware", if (connected) firmware ?: "Reading…" else "\u2014") }
         }
         if (ldacBlocked) HintCard(
             "LDAC is turned off by a setting",

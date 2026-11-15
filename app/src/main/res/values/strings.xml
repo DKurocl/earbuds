@@ -8,7 +8,7 @@
     <string name="shortcut_ambient">Ambient</string>
     <string name="shortcut_off">Off</string>
     <string name="w_device">WF-1000XM5</string>
-    <string name="w_unknown">—</string>
+    <string name="w_unknown">\u2014</string>
     <string name="w_left">Left</string>
     <string name="w_case">Case</string>
     <string name="w_right">Right</string>

@@ -3,7 +3,7 @@
 
     <!-- Android 12+ -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!-- Android 8–11 -->
+    <!-- Android 8 to 11 -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <!-- Mode-specific haptic compositions on the Pixel actuator. -->
     <uses-permission android:name="android.permission.VIBRATE" />

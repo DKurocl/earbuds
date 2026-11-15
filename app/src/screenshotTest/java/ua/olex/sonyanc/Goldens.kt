@@ -13,7 +13,7 @@ import kotlin.math.max
  * New or intentionally changed screens: run once with -PrecordGoldens=true and commit the goldens.
  */
 object Goldens {
-    /** A pixel differs when a channel moves more than this (0–255). */
+    /** A pixel differs when a channel moves more than this (0 to 255). */
     private const val CHANNEL = 24
     /** A render fails when more than this share of its pixels differs. */
     private const val SHARE = 0.002

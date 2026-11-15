@@ -92,7 +92,7 @@ class BatteryWidget : AppWidgetProvider() {
                 val inset = (34f * GLYPH_INSET * ctx.resources.displayMetrics.density).toInt()
                 v.setViewPadding(art, inset, inset, inset, inset)
             }
-            v.setTextViewText(value, level?.let { "$it%" } ?: "—")
+            v.setTextViewText(value, level?.let { "$it%" } ?: "\u2014")
             val text = ctx.getColor(if (level != null && level <= 20 && !charging) R.color.w_low else R.color.w_off_text)
             v.setTextColor(value, text)
             // Charging shows as a badge on the ring (like the app's chip), not as a glyph after the number.
@@ -127,7 +127,7 @@ class BatteryWidget : AppWidgetProvider() {
                 val charging = if (useRight) b.rightCharging else b.leftCharging
                 part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, R.id.w_left_charge, "Earbuds", level, charging)
                 v.setImageViewResource(R.id.w_left_art, if (useRight) R.drawable.w_glyph_bud_right else R.drawable.w_glyph_bud_left)
-                v.setTextViewText(R.id.w_status, "Case " + (b.case?.let { "$it%" } ?: "—"))
+                v.setTextViewText(R.id.w_status, "Case " + (b.case?.let { "$it%" } ?: "\u2014"))
                 spoken += "case " + (b.case?.let { "$it percent" } ?: "unknown")
             } else {
                 part(R.id.w_left_box, R.id.w_left_ring, R.id.w_left_art, R.id.w_left_value, R.id.w_left_label, R.id.w_left_charge, "Left", b.left, b.leftCharging)

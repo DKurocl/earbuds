@@ -327,7 +327,7 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
         }
         // The number rolls digit by digit when a new reading arrives.
         RollingText(
-            "$label: " + (value?.let { "$it%" } ?: "—"), MaterialTheme.typography.titleMedium,
+            "$label: " + (value?.let { "$it%" } ?: "\u2014"), MaterialTheme.typography.titleMedium,
             Modifier.padding(horizontal = 4.dp).graphicsLayer { alpha = shown; translationY = (1 - shown) * 6.dp.toPx() },
             color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
         )
