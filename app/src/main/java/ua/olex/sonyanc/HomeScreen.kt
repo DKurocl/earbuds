@@ -155,7 +155,7 @@ fun HushScreen(
                         item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
                         item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls, Speak-to-Chat, voice prompts", onClick = onEarbuds) }
                         item {
-                            val codecLine = if (ready) codec?.label ?: if (codecRefreshing) "Reading codec…" else null else null
+                            val codecLine = if (ready) codec?.label else null
                             NavRow(it, Glyph.INFO, "Device info", codecLine?.let { c -> "Codec · $c" } ?: "Codec, firmware, power", onClick = onConnection)
                         }
                         item { NavRow(it, Glyph.SETTINGS, "App settings", "Appearance, shortcuts, device", onClick = onAppSettings) }
