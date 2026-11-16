@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -138,13 +140,29 @@ fun NavRow(
     ) { Text(title) }
 }
 
-/** A value to read, not to tap. */
+/**
+ * A value to read, not to tap. A null [value] is still being read: a quiet placeholder bar holds
+ * its place (as Google's apps do while loading), so the row does not jump when the answer comes.
+ */
 @Composable
-fun InfoRow(shape: ListItemShapes, glyph: Glyph?, title: String, value: String) {
+fun InfoRow(shape: ListItemShapes, glyph: Glyph?, title: String, value: String?) {
     ListItem(
-        headlineContent = { Text(title) }, supportingContent = { Text(value) }, leadingContent = leading(glyph),
+        headlineContent = { Text(title) },
+        supportingContent = { if (value != null) Text(value) else ValuePlaceholder() },
+        leadingContent = leading(glyph),
         colors = ListItemDefaults.colors(containerColor = Surfaces.card),
         modifier = Modifier.fillMaxWidth().clip(shape.shape),
+    )
+}
+
+/** A static bar the height of a line of supporting text: no animation, so nothing redraws while it waits. */
+@Composable
+private fun ValuePlaceholder() {
+    androidx.compose.foundation.layout.Box(
+        Modifier.padding(vertical = 4.dp).size(width = 96.dp, height = 12.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .semantics { contentDescription = "Reading" },
     )
 }
 
@@ -161,7 +179,7 @@ fun SwitchRow(
     checked: Boolean?, busy: Boolean = false, enabled: Boolean = true, onChange: (Boolean) -> Unit,
 ) {
     if (checked == null) {
-        InfoRow(shape, glyph, title, if (busy) "Reading…" else "Not available")
+        InfoRow(shape, glyph, title, if (busy) null else "Not available")
         return
     }
     val haptics = LocalHapticFeedback.current
@@ -192,7 +210,7 @@ fun ChoiceRow(
 ) {
     var open by remember { mutableStateOf(false) }
     if (selected == null) {
-        InfoRow(shape, glyph, title, if (busy) "Reading…" else "Not available")
+        InfoRow(shape, glyph, title, if (busy) null else "Not available")
         return
     }
     // Same quiet rule as SwitchRow: the last known value, no spinner, taps wait for the answer.
