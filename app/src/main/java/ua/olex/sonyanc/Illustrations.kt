@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -137,7 +138,8 @@ fun Illustration(topic: Topic, modifier: Modifier = Modifier, pose: Float? = nul
     val bud = painterResource(R.drawable.device_bud_left)
     val shapes = remember { Shapes() }
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = SymbolFont.get(ctx); textAlign = Paint.Align.CENTER } }
-    Canvas(modifier.clipToBounds()) {
+    // Slow drawings: 30 frames a second look the same and let the panel leave 120 Hz.
+    Canvas(modifier.preferredFrameRate(30f).clipToBounds()) {
         val scene = Scene(this, pose ?: time, ink, bud, shapes, paint)
         when (topic) {
             Topic.CHAT -> scene.chat()
