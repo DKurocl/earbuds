@@ -102,7 +102,26 @@ fun SectionTitle(text: String) {
 @Composable
 private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surfaces.card)
 
-private fun leading(glyph: Glyph?): (@Composable () -> Unit)? = glyph?.let { { HushIcon(it, color = LocalContentColor.current) } }
+/**
+ * A row's icon in a light circle coloured by what it is about, as Android's own Settings (and
+ * Music): sound, power, connection, the app. The "fixed" tones of the wallpaper's palette read the
+ * same in light and dark; a destructive row takes the error colour.
+ */
+private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> Unit)? = glyph?.let { g -> {
+    val cs = MaterialTheme.colorScheme
+    val (circle, onCircle) = when {
+        danger -> cs.errorContainer to cs.onErrorContainer
+        else -> when (g) {
+            Glyph.EQ, Glyph.TUNE, Glyph.QUIET, Glyph.AMBIENT, Glyph.OFF, Glyph.HEADPHONES, Glyph.EARBUDS, Glyph.CHAT -> cs.primaryFixedDim to cs.onPrimaryFixed
+            Glyph.BATTERY, Glyph.BATTERY_CHARGING, Glyph.BATTERY_LOW, Glyph.BATTERY_UNKNOWN, Glyph.POWER, Glyph.TIMER -> cs.tertiaryFixedDim to cs.onTertiaryFixed
+            Glyph.BLUETOOTH, Glyph.LINK, Glyph.LOCATION, Glyph.FIND, Glyph.HOME -> cs.secondaryFixedDim to cs.onSecondaryFixed
+            else -> cs.surfaceContainerHighest to cs.onSurfaceVariant
+        }
+    }
+    Surface(shape = androidx.compose.foundation.shape.CircleShape, color = circle, contentColor = onCircle, modifier = Modifier.size(40.dp)) {
+        androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) { HushIcon(g, Modifier.size(22.dp), onCircle) }
+    }
+} }
 
 @Composable
 fun NavRow(
@@ -113,7 +132,7 @@ fun NavRow(
     SegmentedListItem(
         onClick = onClick, shapes = shape, enabled = enabled,
         colors = if (danger) ListItemDefaults.segmentedColors(containerColor = Surfaces.card, contentColor = error, leadingContentColor = error) else rowColors(),
-        leadingContent = leading(glyph), trailingContent = trailing,
+        leadingContent = leading(glyph, danger), trailingContent = trailing,
         supportingContent = summary?.let { { Text(it) } },
         modifier = Modifier.fillMaxWidth(),
     ) { Text(title) }

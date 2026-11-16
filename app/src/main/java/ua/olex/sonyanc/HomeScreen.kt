@@ -31,6 +31,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -262,10 +263,11 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
     LaunchedEffect(value, landed) { if (landed) fill.animateTo((value ?: 0) / 100f, fillSpec) }
     val progress = fill.value.coerceIn(0f, 1f)
     // Runs only while this ring is charging; otherwise no animation frame is ever requested.
-    val phase = if (charging && value != null) {
+    // Read only while drawing: a charging frame redraws the ring and recomposes nothing.
+    val phaseState = if (charging && value != null) {
         val waves = rememberInfiniteTransition(label = "charging $label")
-        waves.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "phase").value
-    } else 0f
+        waves.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "phase")
+    } else null
     Column(
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.semantics(mergeDescendants = true) {
@@ -276,7 +278,9 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
     ) {
         Box(Modifier.size(RING_BOX).graphicsLayer { val k = swell(); scaleX = k; scaleY = k }, contentAlignment = Alignment.TopCenter) {
             // While the intro plays, the ring waits dimmed, its chip hidden, until its piece lands.
-            Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = 0.35f + 0.65f * shown }) {
+            // A slow charging wave: 30 frames a second look the same and let the panel leave 120 Hz.
+            Canvas(Modifier.fillMaxSize().then(if (phaseState != null) Modifier.preferredFrameRate(30f) else Modifier).graphicsLayer { alpha = 0.35f + 0.65f * shown }) {
+                val phase = phaseState?.value ?: 0f
                 val stroke = RING_STROKE.toPx()
                 val radius = RING_RADIUS.toPx()
                 val center = Offset(size.width / 2, CHIP.toPx() / 2 + radius)
