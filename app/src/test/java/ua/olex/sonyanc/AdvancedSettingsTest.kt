@@ -25,7 +25,25 @@ class AdvancedSettingsTest {
         val value=AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 08 00 07 09"))!!.second
         assertEquals("F8 08 01 07 09",SonyProtocol.hex(key.set(value.toMutableList().apply{this[0]=1})))
         assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("FB 03 01 35 01 00 05")))
-        assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 03 02 80 20")))
+        // A touch function this app doesn't name is kept (shown as "Device setting"), a wrong shape is not.
+        assertEquals(listOf(2,0x80,0x20),AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 03 02 80 20"))!!.second)
+        assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 03 01 00 20")))
+        // And only named functions are written: the unknown side is preserved untouched.
+        assertEquals(listOf(2,0x80,0x10),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x10))
+        assertNull(AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x80))
         assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 0C 02 01")))
+    }
+    @Test fun touchFunctionsSwapRatherThanRepeat() {
+        val key=AdvancedSettings.Key.TOUCH
+        // Left: noise control, right: playback (the XM5's default).
+        val current=listOf(2,0x35,0x20)
+        // Right to noise control: the left earbud takes playback instead.
+        assertEquals(listOf(2,0x20,0x35),AdvancedSettings.patch(key,current,2,0))
+        // Right to volume: nothing to swap.
+        assertEquals(listOf(2,0x35,0x10),AdvancedSettings.patch(key,current,2,0x10))
+        // Left to playback: the right earbud takes noise control.
+        assertEquals(listOf(2,0x20,0x35),AdvancedSettings.patch(key,current,1,0x20))
+        // Off can be on both.
+        assertEquals(listOf(2,0xFF,0xFF),AdvancedSettings.patch(key,listOf(2,0xFF,0x20),2,0xFF))
     }
 }

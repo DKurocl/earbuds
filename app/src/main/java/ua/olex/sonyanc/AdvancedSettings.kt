@@ -29,7 +29,9 @@ object AdvancedSettings {
             GUIDANCE_VOLUME -> listOf(Field("Volume",0,choices(254 to "−2",255 to "−1",0 to "Default",1 to "+1",2 to "+2")))
         }
         fun valid(v:List<Int>):Boolean = when(this) {
-            TOUCH -> v.size==3 && v[0]==2 && v.drop(1).all{it in listOf(0,0x35,0x10,0x20,0xFF)}
+            // Either side may report a function this app doesn't name (newer firmware): it is shown as
+            // "Device setting" and kept as is; only named functions are ever written (see patch).
+            TOUCH -> v.size==3 && v[0]==2
             CYCLE -> v.size==5 && v[0]==1 && v[1] in listOf(0,0x35) && v[2]==1 && v[3]==0 && v[4] in 1..4
             CHAT -> v.size==2 && v[0] in 0..1 && v[1]==1
             CHAT_CONFIG -> v.size==2 && v[0] in 0..2 && v[1] in 0..3
@@ -57,8 +59,16 @@ object AdvancedSettings {
         if(!key.valid(current)) return null
         val field=key.fields.firstOrNull{it.index==index} ?: return null
         if(field.choices.none{it.code==code}) return null
-        return current.toMutableList().apply{this[index]=if(key==Key.TOUCH && code==0 && current.drop(1).contains(0x35)) 0x35 else code}
-            .takeIf{key.valid(it)}
+        val chosen=if(key==Key.TOUCH && code==0 && current.drop(1).contains(0x35)) 0x35 else code
+        val next=current.toMutableList().apply{this[index]=chosen}
+        // The earbuds take each function on one side only (both "Off" is fine): choosing what the
+        // other earbud has swaps the two, as Sony's app does. Sent as a pair, never refused.
+        if(key==Key.TOUCH && index in 1..2 && chosen!=0xFF) {
+            val other=3-index
+            fun same(a:Int,b:Int)=(if(a==0x35) 0 else a)==(if(b==0x35) 0 else b)
+            if(same(current[other],chosen)) next[other]=current[index]
+        }
+        return next.takeIf{key.valid(it)}
     }
     fun equivalent(key:Key,left:List<Int>?,right:List<Int>):Boolean {
         if(left==null) return false
