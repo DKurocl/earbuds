@@ -13,7 +13,7 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 ## Foundations (`Theme.kt`, `Components.kt`)
 
-- **Color**: dynamic color by default; a blue fallback scheme matches the icon. Page background
+- **Color**: dynamic color by default; without it, a warm tonal scheme from the icon's sunrise (#FF6536). Page background
   is `surfaceContainer` (light) / `surfaceContainerLow` (dark); cards one step up
   (`surfaceContainerLowest` / `surfaceContainerHigh`). See `Surfaces`.
 - **Type**: Google Sans Flex is bundled (`res/font/google_sans_flex.ttf`, OFL, Latin subset) and
@@ -190,10 +190,10 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 ## Opening and widgets (1.7)
 
-- **Opening** (`SplashHandoff.kt`, `Intro.kt`, `docs/icon/splash.py`), as Google's apps do it,
+- **Opening** (`SplashHandoff.kt`, `Intro.kt`, `docs/icon/brand_icon.py`), as Google's apps do it,
   played off the launcher icon itself: Android shows the icon in its white circle and plays its
-  gesture (650 ms: the lid pops up on its hinge and clicks shut, the body answers with a tiny
-  squash, the status light blinks and sends out one ring). Then that same circle comes down onto
+  gesture (580 ms: the sunrise slab settles from 88 %, the case lands on it with a small spring,
+  its lid lifts once on the hinge and shuts). Then that same circle comes down onto
   Home's case ring, shrinking to the ring's disc on the emphasized curve while the splash
   dissolves (520 ms); the earbuds' rings come in, the case ring takes over as the circle lands, and
   the page fades up. Fresh starts only; nothing is drawn over the app.
