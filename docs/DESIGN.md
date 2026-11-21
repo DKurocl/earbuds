@@ -172,9 +172,9 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 - **Dock**: Material 3 Expressive's floating toolbar. A pill above the page holds the three modes
   (no container at rest, a filled pill when chosen, the pressed one widens). What the chosen mode
-  offers (Ambient's level and voice; Speak-to-Chat and "Ambient for a moment" with ANC) grows out
-  of it as a floating card; scrolling down tucks the card away and the modes stay. The page
-  scrolls under both, with a soft fade so the list never shows between them.
+  offers (Ambient's level and voice; Speak-to-Chat and "Ambient for a moment" with ANC) is a card
+  in the page under Find (1.14), growing with the mode. The toolbar floats on nothing: no band of
+  page colour behind it and nothing that moves with the scroll.
 - **Haptics** (`Haptics.kt`): one vocabulary. ANC closes the world in (deep press), Ambient opens it
   (deep to crisp), Off lets go (a fade), a setting accepted is a click, a refusal two knocks.
   Shaped with Android 16 envelope effects on the Pixel, primitives elsewhere; low strength,
@@ -204,8 +204,8 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 - **Widgets**: the mode buttons follow the floating toolbar. No container at rest; the chosen
   mode is a pill that grows in from 80 % and fades in (`docs/widget/segments.py`), the old one
   shrinks out. Same in the dashboard.
-- **Page and dock**: the page ends where the dock's fade begins, so no row hides half under the
-  toolbar (the accessibility check on the emulator holds this).
+- **Page and dock**: the page ends above the toolbar, so no row hides under it (the
+  accessibility check on the emulator holds this).
 
 ## Pictures of the earbuds (1.9)
 
@@ -224,11 +224,8 @@ sides, a rounder base, the seam at 44 %); the splash reads its hinge and light f
 
 ## Explained by doing (1.9)
 
-- Earbud settings open with an illustration card (`Illustrations.kt`), as Pixel's settings pages
-  do: ten scenes, one per setting, each a 4.8 s loop of Material's expressive shapes, the app's
-  symbols and the earbud. It steps through them while nothing is changed and follows the setting
-  you change; tapping it shows the next. With animations off it rests on one telling frame
-  (`Topic.rest`). Drawn parts for richer scenes: `docs/illustrations/CHATGPT_BRIEF.md`.
+- Earbud settings had an illustration card (1.9 to 1.13); it was removed in 1.14. As Android's
+  own settings, each row says in one line what it does.
 - The connected sheet (`ConnectedSheet.kt`), as a Pixel shows its own earbuds: when the earbuds
   connect, a floating card springs up from the bottom over whatever is open, with the name and the
   three battery rings; it goes after 8 s untouched, on a swipe down, Done or a tap outside, and
