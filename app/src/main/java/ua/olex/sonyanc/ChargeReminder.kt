@@ -73,7 +73,9 @@ object ChargeReminder {
     internal fun fire(ctx: Context) {
         reschedule(ctx)
         if (!Prefs.chargeReminder(ctx) || Prefs.linked(ctx) == true) return // already out: too late to help
-        val (battery, _) = Prefs.lastBattery(ctx) ?: return
+        val (battery, at) = Prefs.lastBattery(ctx) ?: return
+        // A reading older than a day may miss a charge since (the case alone tells the phone nothing).
+        if (System.currentTimeMillis() - at > 24 * 60 * 60_000L) return
         val case = battery.case ?: return
         if (case >= THRESHOLD || battery.caseCharging) return
         if (ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
