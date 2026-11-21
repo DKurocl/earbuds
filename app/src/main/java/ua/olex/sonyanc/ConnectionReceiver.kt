@@ -44,14 +44,17 @@ class ConnectionReceiver : BroadcastReceiver() {
         CaseReminder.clear(ctx)
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
-        ConnectedSheet.show(ctx, "Bluetooth")
         // "When earbuds connect", or the home mode when the phone is at home (Places).
         val apply = Places.modeOnConnect(ctx)
         val pending = goAsync()
         scope.launch {
             try {
+                // The sheet comes from Stay in sync's presence event, the moment Android lets a
+                // companion open a screen; this broadcast only backs it up if that has not come.
+                delay(SHEET_BACKUP_MS)
+                ConnectedSheet.show(ctx, "Bluetooth")
                 // Let Android finish A2DP/HFP setup before opening the control channel.
-                delay(SETTLE_MS)
+                delay(SETTLE_MS - SHEET_BACKUP_MS)
                 withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(apply) }
                 // Normally LinkService's presence event does this; the broadcast backs it up.
                 if (LiveLink.enabled(ctx)) Headphones.stay(true)
@@ -66,6 +69,7 @@ class ConnectionReceiver : BroadcastReceiver() {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         // Settle + budget stays well inside the broadcast deadline.
         internal const val SETTLE_MS = 2000L
+        private const val SHEET_BACKUP_MS = 1500L
         internal const val SYNC_BUDGET_MS = 7500L
     }
 }
