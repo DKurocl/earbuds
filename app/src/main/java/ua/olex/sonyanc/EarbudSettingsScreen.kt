@@ -24,7 +24,13 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
     var loading by remember { mutableStateOf(Key.entries.filter { it !in Headphones.advanced.value }.toSet()) }
     var featureLoading by remember { mutableStateOf(Feature.entries.filter { it !in Headphones.features.value }.toSet()) }
     var writing by remember { mutableStateOf<Key?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
+    // What a change did, shown in the row it happened to (and in the other touch row when that one
+    // changed by itself), never in a bar over the page. Each note fades after a few seconds.
+    var notes by remember { mutableStateOf<Map<String, RowNote>>(emptyMap()) }
+    fun note(id: String, note: RowNote) {
+        notes = notes + (id to note)
+        scope.launch { kotlinx.coroutines.delay(5000); if (notes[id] == note) notes = notes - id }
+    }
 
     suspend fun load(force: Boolean = false) {
         val keys = SETTINGS_ORDER.filter { force || it !in Headphones.advanced.value }
@@ -53,27 +59,40 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
     val shownValues = cachedValues + values
     val shownFeatures = cachedFeatures + features
     EarbudSettingsContent(
-        shownValues, shownFeatures, loading, featureLoading, writing, message, onBack, onAppSettings,
+        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings,
         onRefresh = { scope.launch { load(force = true) } },
         onUpdate = { key, index, code ->
             scope.launch {
-                writing = key; message = null
-                try { if (!Headphones.writeAdvancedField(key, index, code)) message = "Change not confirmed. Refresh to see the current setting." }
+                writing = key; notes = notes - rowId(key, index)
+                // A touch change can move the other earbud's function too (a swap, or Playback, which
+                // the earbuds keep on one side): that row says so, as it changes by itself.
+                val before = shownValues[key]
+                val planned = before?.let { AdvancedSettings.patch(key, it, index, code) }
+                try {
+                    if (!Headphones.writeAdvancedField(key, index, code)) note(rowId(key, index), RowNote("The earbuds didn't take this change", error = true))
+                    else if (key == Key.TOUCH && before != null && planned != null && index in 1..2) {
+                        val other = 3 - index
+                        if (planned[other] != before[other]) note(rowId(key, other),
+                            RowNote(if (planned[other] == AdvancedSettings.PLAYBACK) "Playback moved here: one earbud always keeps it" else "Swapped with the other earbud"))
+                    }
+                }
                 finally { writing = null }
             }
         },
         onBasic = { feature, wanted ->
             scope.launch {
-                featureLoading = featureLoading + feature; message = null
-                try { if (!Headphones.writeFeature(feature, wanted)) message = "Change not confirmed. Refresh to see the current setting." }
+                featureLoading = featureLoading + feature; notes = notes - feature.name
+                try { if (!Headphones.writeFeature(feature, wanted)) note(feature.name, RowNote("The earbuds didn't take this change", error = true)) }
                 finally { featureLoading = featureLoading - feature }
             }
         },
     )
 }
 
+private fun rowId(key: Key, index: Int) = "${key.name}$index"
+
 private val SETTINGS_ORDER = listOf(
-    Key.CHAT, Key.CHAT_CONFIG, Key.SIDETONE, Key.TOUCH, Key.CYCLE, Key.GESTURES,
+    Key.CHAT, Key.CHAT_CONFIG, Key.SIDETONE, Key.PANEL, Key.TOUCH, Key.CYCLE, Key.GESTURES,
     Key.POWER, Key.QUALITY, Key.GUIDANCE, Key.GUIDANCE_VOLUME,
 )
 
@@ -82,7 +101,7 @@ private val SETTINGS_ORDER = listOf(
 fun EarbudSettingsContent(
     values: Map<Key, List<Int>>, features: Map<Feature, Boolean>,
     loading: Set<Key> = emptySet(), featureLoading: Set<Feature> = emptySet(),
-    writing: Key? = null, message: String? = null, onBack: () -> Unit = {}, onAppSettings: () -> Unit = {},
+    writing: Key? = null, notes: Map<String, RowNote> = emptyMap(), onBack: () -> Unit = {}, onAppSettings: () -> Unit = {},
     onRefresh: () -> Unit = {}, onUpdate: (Key, Int, Int) -> Unit = { _, _, _ -> }, onBasic: (Feature, Boolean) -> Unit = { _, _ -> },
     firstTopic: Topic = Topic.CHAT,
 ) {
@@ -94,8 +113,6 @@ fun EarbudSettingsContent(
     val basic: (Feature, Boolean) -> Unit = { feature, on -> topic = feature.topic(); settled = true; onBasic(feature, on) }
     var laps by remember { mutableIntStateOf(0) }
 
-    val show = LocalMessages.current
-    LaunchedEffect(message) { message?.let(show) }
     val idle = loading.isEmpty() && featureLoading.isEmpty() && writing == null
 
     // Helpers that bind a protocol field to a row.
@@ -114,26 +131,34 @@ fun EarbudSettingsContent(
             onTap = { settled = true; topic = Topic.entries[(topic.ordinal + 1) % Topic.entries.size] },
         )
         ListGroup("Sound") {
-            item { FeatureSwitch(it, Feature.DSEE, "Restores detail in compressed music", features, featureLoading, basic) }
-            item { KeySwitch(it, Key.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, update) }
-            item { ChoiceRow(it, null, "Conversation sensitivity", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null) { c -> update(Key.CHAT_CONFIG, 0, c) } }
-            item { ChoiceRow(it, null, "Resume after conversation", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), writing == null) { c -> update(Key.CHAT_CONFIG, 1, c) } }
-            item { KeySwitch(it, Key.SIDETONE, "Hear my voice in calls", "Lets you hear yourself while talking", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update) }
+            item { FeatureSwitch(it, Feature.DSEE, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
+            item { KeySwitch(it, Key.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, update, notes[rowId(Key.CHAT, 0)]) }
+            item { ChoiceRow(it, null, "Conversation sensitivity", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
+            item { ChoiceRow(it, null, "Resume after conversation", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
+            item { KeySwitch(it, Key.SIDETONE, "Hear my voice in calls", "Lets you hear yourself while talking", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update, notes[rowId(Key.SIDETONE, 0)]) }
         }
         ListGroup("Controls") {
-            item { ChoiceRow(it, null, "Left touch control", choices(Key.TOUCH, 1), code(Key.TOUCH, 1), busy(Key.TOUCH), writing == null) { c -> update(Key.TOUCH, 1, c) } }
-            item { ChoiceRow(it, null, "Right touch control", choices(Key.TOUCH, 2), code(Key.TOUCH, 2), busy(Key.TOUCH), writing == null) { c -> update(Key.TOUCH, 2, c) } }
-            item { ChoiceRow(it, null, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null) { c -> update(Key.CYCLE, 4, c) } }
-            item { KeySwitch(it, Key.GESTURES, "Head gestures", "Nod or shake your head to answer calls", code(Key.GESTURES, 0), busy(Key.GESTURES), writing == null, update) }
+            item {
+                // The whole panel: Sony's app turns all touch controls off with this, as the
+                // per-earbud functions always keep Playback on one side.
+                val panel = values[Key.PANEL]
+                SwitchRow(it, null, "Touch controls", "Turn off to ignore every tap on the earbuds", panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), writing == null, note = notes[rowId(Key.PANEL, 1)]) { on ->
+                    panel?.let { v -> update(Key.PANEL, 1, AdvancedSettings.panelCode(v, on)) }
+                }
+            }
+            item { ChoiceRow(it, null, "Left touch control", choices(Key.TOUCH, 1), code(Key.TOUCH, 1), busy(Key.TOUCH), writing == null, note = notes[rowId(Key.TOUCH, 1)]) { c -> update(Key.TOUCH, 1, c) } }
+            item { ChoiceRow(it, null, "Right touch control", choices(Key.TOUCH, 2), code(Key.TOUCH, 2), busy(Key.TOUCH), writing == null, note = notes[rowId(Key.TOUCH, 2)]) { c -> update(Key.TOUCH, 2, c) } }
+            item { ChoiceRow(it, null, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null, note = notes[rowId(Key.CYCLE, 4)]) { c -> update(Key.CYCLE, 4, c) } }
+            item { KeySwitch(it, Key.GESTURES, "Head gestures", "Nod or shake your head to answer calls", code(Key.GESTURES, 0), busy(Key.GESTURES), writing == null, update, notes[rowId(Key.GESTURES, 0)]) }
         }
         ListGroup("Playback & connection") {
-            item { FeatureSwitch(it, Feature.AUTO_PAUSE, "Pauses playback when you take an earbud out", features, featureLoading, basic) }
-            item { ChoiceRow(it, null, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null) { c -> update(Key.POWER, 0, c) } }
-            item { ChoiceRow(it, null, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null) { c -> update(Key.QUALITY, 0, c) } }
+            item { FeatureSwitch(it, Feature.AUTO_PAUSE, "Pauses playback when you take an earbud out", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }
+            item { ChoiceRow(it, null, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null, note = notes[rowId(Key.POWER, 0)]) { c -> update(Key.POWER, 0, c) } }
+            item { ChoiceRow(it, null, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null, note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
         }
         ListGroup("Voice prompts") {
-            item { KeySwitch(it, Key.GUIDANCE, "Voice guidance", "Spoken prompts for battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), writing == null, update) }
-            item { ChoiceRow(it, null, "Voice guidance volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), writing == null) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
+            item { KeySwitch(it, Key.GUIDANCE, "Voice guidance", "Spoken prompts for battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), writing == null, update, notes[rowId(Key.GUIDANCE, 0)]) }
+            item { ChoiceRow(it, null, "Voice guidance volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), writing == null, note = notes[rowId(Key.GUIDANCE_VOLUME, 0)]) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
         }
     }
 }
@@ -142,15 +167,15 @@ fun EarbudSettingsContent(
 @Composable
 private fun KeySwitch(
     shape: ListItemShapes, key: Key, title: String, summary: String,
-    code: Int?, busy: Boolean, enabled: Boolean, onUpdate: (Key, Int, Int) -> Unit,
+    code: Int?, busy: Boolean, enabled: Boolean, onUpdate: (Key, Int, Int) -> Unit, note: RowNote? = null,
 ) {
-    SwitchRow(shape, null, title, summary, code?.let { it == 0 }, busy, enabled) { on -> onUpdate(key, 0, if (on) 0 else 1) }
+    SwitchRow(shape, null, title, summary, code?.let { it == 0 }, busy, enabled, note) { on -> onUpdate(key, 0, if (on) 0 else 1) }
 }
 
 @Composable
 private fun FeatureSwitch(
     shape: ListItemShapes, feature: Feature, summary: String,
-    features: Map<Feature, Boolean>, loading: Set<Feature>, onBasic: (Feature, Boolean) -> Unit,
+    features: Map<Feature, Boolean>, loading: Set<Feature>, onBasic: (Feature, Boolean) -> Unit, note: RowNote? = null,
 ) {
-    SwitchRow(shape, null, feature.title, summary, features[feature], feature in loading, loading.isEmpty()) { onBasic(feature, it) }
+    SwitchRow(shape, null, feature.title, summary, features[feature], feature in loading, loading.isEmpty(), note) { onBasic(feature, it) }
 }

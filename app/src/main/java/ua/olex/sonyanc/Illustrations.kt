@@ -486,7 +486,7 @@ private class Scene(val d: DrawScope, val t: Float, val ink: Ink, val bud: Paint
 fun AdvancedSettings.Key.topic(): Topic = when (this) {
     AdvancedSettings.Key.CHAT, AdvancedSettings.Key.CHAT_CONFIG -> Topic.CHAT
     AdvancedSettings.Key.SIDETONE -> Topic.SIDETONE
-    AdvancedSettings.Key.TOUCH -> Topic.TOUCH
+    AdvancedSettings.Key.TOUCH, AdvancedSettings.Key.PANEL -> Topic.TOUCH
     AdvancedSettings.Key.CYCLE -> Topic.CYCLE
     AdvancedSettings.Key.GESTURES -> Topic.GESTURES
     AdvancedSettings.Key.POWER -> Topic.POWER
