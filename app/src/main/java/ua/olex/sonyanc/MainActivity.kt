@@ -107,15 +107,6 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
 
     // ---- what needs an Activity: permission dialogs and other apps ----
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission(), model::onPermission)
-    // The "Case lid" test in Diagnostics: Bluetooth scanning, asked for only when the test starts.
-    val lidTesting by LidTest.running.collectAsStateWithLifecycle()
-    val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) scope.launch { LidTest.run(ctx) } else Headphones.addLog("✗ Case lid test: Nearby devices permission is off")
-    }
-    fun lidTest() {
-        if (ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == android.content.pm.PackageManager.PERMISSION_GRANTED) scope.launch { LidTest.run(ctx) }
-        else scanLauncher.launch(Manifest.permission.BLUETOOTH_SCAN)
-    }
     val widgetManager = remember { AppWidgetManager.getInstance(ctx) }
     fun bluetooth() = ctx.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     /** Google Find Hub, where the earbuds are registered; its web page if the app is missing. */
@@ -262,7 +253,6 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                                 }
                             },
                             onClear = { Headphones.clearLog() },
-                            lidTesting = lidTesting, onLidTest = ::lidTest,
                         )
                     }
                 }
