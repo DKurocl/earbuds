@@ -55,11 +55,15 @@ object AdvancedSettings {
         val value=p.drop(2).map{it.toInt() and 255}
         return if(key.valid(value)) key to value else null
     }
-    fun patch(key:Key,current:List<Int>,index:Int,code:Int):List<Int>? {
+    /** The codes to try for a touch choice: noise control is 0x35 on firmware that reports it, 0 on older. */
+    fun touchCodes(current:List<Int>,code:Int):List<Int> =
+        if(code!=0) listOf(code) else if(current.drop(1).contains(0x35)) listOf(0x35,0) else listOf(0,0x35)
+    fun patch(key:Key,current:List<Int>,index:Int,code:Int,wire:Int?=null):List<Int>? {
         if(!key.valid(current)) return null
         val field=key.fields.firstOrNull{it.index==index} ?: return null
         if(field.choices.none{it.code==code}) return null
-        val chosen=if(key==Key.TOUCH && code==0 && current.drop(1).contains(0x35)) 0x35 else code
+        val chosen=wire?.takeIf{key==Key.TOUCH && code==0 && it in listOf(0,0x35)}
+            ?: if(key==Key.TOUCH && code==0 && current.drop(1).contains(0x35)) 0x35 else code
         val next=current.toMutableList().apply{this[index]=chosen}
         // The earbuds take each function on one side only (both "Off" is fine): choosing what the
         // other earbud has swaps the two, as Sony's app does. Sent as a pair, never refused.

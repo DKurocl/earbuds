@@ -46,4 +46,12 @@ class AdvancedSettingsTest {
         // Off can be on both.
         assertEquals(listOf(2,0xFF,0xFF),AdvancedSettings.patch(key,listOf(2,0xFF,0x20),2,0xFF))
     }
+
+    @Test fun noiseControlTriesTheOtherCodeToo() {
+        assertEquals(listOf(0,0x35), AdvancedSettings.touchCodes(listOf(2,0xFF,0x20),0))
+        assertEquals(listOf(0x35,0), AdvancedSettings.touchCodes(listOf(2,0x35,0x20),0))
+        assertEquals(listOf(0x10), AdvancedSettings.touchCodes(listOf(2,0xFF,0x20),0x10))
+        assertEquals(listOf(2,0x35,0x20), AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0xFF,0x20),1,0,0x35))
+        assertEquals(listOf(2,0,0x20), AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0xFF,0x20),1,0,0))
+    }
 }
