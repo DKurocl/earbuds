@@ -147,34 +147,6 @@ class ScreenshotTest {
 
     @Config(qualifiers = "w448dp-h1500dp-night-xxhdpi")
     /** Every setting's illustration, at the moment of its loop that explains it on its own. */
-    @Test fun illustrations1() = shoot("illustrations-1") { IllustrationGrid(Topic.entries.take(5)) }
-    @Test fun illustrations2() = shoot("illustrations-2") { IllustrationGrid(Topic.entries.drop(5)) }
-
-    /** Six moments of each loop, for review only (no golden). */
-    @Test fun illustrationFrames() {
-        val dir = File(System.getProperty("screenshotDir")!!, "illustrations").apply { mkdirs() }
-        val times = listOf(0.4f, 1.2f, 2.0f, 2.8f, 3.6f)
-        val at = androidx.compose.runtime.mutableStateOf(Topic.entries.first())
-        compose.setContent {
-                AppTheme(dynamic = false) {
-                    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(8.dp)) {
-                        times.forEach { t ->
-                            Box(Modifier.padding(bottom = 8.dp).fillMaxWidth().height(164.dp).background(Surfaces.card, androidx.compose.foundation.shape.RoundedCornerShape(28.dp))) {
-                                Illustration(at.value, Modifier.fillMaxSize(), pose = t)
-                            }
-                        }
-                    }
-                }
-        }
-        for (topic in Topic.entries) {
-            at.value = topic
-            compose.waitForIdle()
-            val root = compose.activity.findViewById<View>(android.R.id.content)
-            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-            root.draw(Canvas(bitmap))
-            File(dir, "${topic.name.lowercase()}.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        }
-    }
 
     /** The sheet that comes up when the earbuds connect, over another app. */
     @Test fun connectedSheet() = shoot("connected-sheet") {
@@ -313,17 +285,3 @@ class ScreenshotTest {
     @Test fun batteryWidgets() = gallery("widgets-battery", battery = true)
 }
 
-@Composable
-private fun IllustrationGrid(topics: List<Topic>) {
-    Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        topics.forEach { topic ->
-            Column(Modifier.fillMaxWidth().background(Surfaces.card, androidx.compose.foundation.shape.RoundedCornerShape(28.dp))) {
-                Illustration(topic, Modifier.fillMaxWidth().height(140.dp), pose = topic.rest)
-                Text(topic.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
-            }
-        }
-    }
-}
