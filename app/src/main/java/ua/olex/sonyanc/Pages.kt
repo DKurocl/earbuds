@@ -188,8 +188,7 @@ fun AppSettingsContent(
 // ---- Diagnostics -------------------------------------------------------------------------
 
 @Composable
-fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () -> Unit = {}, onClear: () -> Unit = {},
-    lidTesting: Boolean = false, onLidTest: (() -> Unit)? = null) {
+fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () -> Unit = {}, onClear: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Diagnostics", onBack, actions = {
         IconButton(onClick = onCopy, enabled = log.isNotEmpty(), modifier = Modifier.semantics { contentDescription = "Copy log" }) { HushIcon(Glyph.COPY) }
@@ -199,12 +198,6 @@ fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () ->
             "Commands sent to the earbuds (→) and their replies (←).",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),
         )
-        if (onLidTest != null) ListGroup {
-            item {
-                NavRow(it, Glyph.FIND, if (lidTesting) "Listening… open and close the case" else "Case lid test",
-                    "${LidTest.SECONDS} s of Bluetooth: does opening the case announce the earbuds?", enabled = !lidTesting, onClick = onLidTest)
-            }
-        }
         Surface(shape = RoundedCornerShape(24.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             Text(
                 log.joinToString("\n").ifEmpty { "No messages yet" },

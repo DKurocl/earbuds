@@ -99,7 +99,13 @@ internal object DeviceReads {
     internal fun batteryFamily(p: ByteArray) =
         if (SonyProtocol.parseBattery(p, SonyProtocol.Battery()) == null) null else if (p[1].toInt() == 0x0A) 2 else 1
 
+    /** When a battery read last got an answer: callers that line up behind it reuse it. */
+    @Volatile private var lastBatteryRead = 0L
+
     suspend fun queryBattery() = batteryLock.withLock {
+        // On connect several parts ask at once (the connect sync, Stay in sync, the screen): the
+        // ones that waited behind a read that just answered take its result instead of asking again.
+        if (System.currentTimeMillis() - lastBatteryRead < 3_000L) return@withLock
         _state.update { it.copy(batteryRefreshing = true) }
         var received = false
         try {
@@ -115,6 +121,7 @@ internal object DeviceReads {
                 yield()
             }
             if (!received) addLog("Battery: no decoded reply; requested 22 01 / 22 09 / 22 0A")
+            else lastBatteryRead = System.currentTimeMillis()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
