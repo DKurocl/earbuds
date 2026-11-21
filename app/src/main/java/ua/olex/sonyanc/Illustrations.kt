@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -135,12 +136,11 @@ fun Illustration(topic: Topic, modifier: Modifier = Modifier, pose: Float? = nul
         tertiary = cs.tertiary, tertiaryContainer = cs.tertiaryContainer, onTertiaryContainer = cs.onTertiaryContainer,
         quiet = cs.surfaceContainerHighest, onQuiet = cs.onSurfaceVariant, line = cs.outlineVariant,
     )
-    val bud = painterResource(R.drawable.device_bud_left)
     val shapes = remember { Shapes() }
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = SymbolFont.get(ctx); textAlign = Paint.Align.CENTER } }
     // Slow drawings: 30 frames a second look the same and let the panel leave 120 Hz.
     Canvas(modifier.preferredFrameRate(30f).clipToBounds()) {
-        val scene = Scene(this, pose ?: time, ink, bud, shapes, paint)
+        val scene = Scene(this, pose ?: time, ink, shapes, paint)
         when (topic) {
             Topic.CHAT -> scene.chat()
             Topic.DSEE -> scene.dsee()
@@ -193,31 +193,39 @@ private fun pop(x: Float): Float {
 }
 private fun bump(x: Float) = sin(PI.toFloat() * x.coerceIn(0f, 1f))
 
-private class Scene(val d: DrawScope, val t: Float, val ink: Ink, val bud: Painter, val shapes: Shapes, val paint: Paint) {
+private class Scene(val d: DrawScope, val t: Float, val ink: Ink, val shapes: Shapes, val paint: Paint) {
     val w = d.size.width
     val h = d.size.height
     val dp = d.density
 
     // ---- pieces ----------------------------------------------------------------------------
 
-    /** The left earbud, its picture [height] tall, centred on [c]. */
+    /**
+     * The left earbud as a flat drawing in the theme's colours, the language of the app icon and of
+     * Google's own illustrations (no photo): the round body, the soft ear tip below it, and the
+     * touch surface on its outer face. [height] tall, centred on [c].
+     */
     fun earbud(c: Offset, height: Float, alpha: Float = 1f, degrees: Float = 0f, mirror: Boolean = false) {
-        val s = bud.intrinsicSize
-        val width = height * s.width / s.height
+        if (alpha <= 0f) return
         d.withTransform({
             translate(c.x, c.y)
             rotate(degrees, Offset.Zero)
             if (mirror) scale(-1f, 1f, Offset.Zero)
-            translate(-width / 2, -height / 2)
-        }) { with(bud) { draw(Size(width, height), alpha) } }
+        }) {
+            val u = height
+            // The ear tip, tucked under the body towards the ear.
+            drawOval(ink.tertiary.copy(alpha = alpha), Offset(-0.44f * u, 0.04f * u), Size(0.38f * u, 0.32f * u))
+            // The body, a rounded bean a little wider than tall.
+            drawRoundRect(ink.primary.copy(alpha = alpha), Offset(-0.36f * u, -0.38f * u), Size(0.84f * u, 0.72f * u), CornerRadius(0.36f * u))
+            // The touch surface: the same colour a shade lighter, so it reads as a flat panel, not an eye.
+            val pad = Offset(0.08f * u, -0.04f * u)
+            drawCircle(lerp(ink.primary, ink.onPrimary, 0.16f).copy(alpha = alpha), 0.24f * u, pad)
+            drawCircle(ink.onPrimary.copy(alpha = 0.45f * alpha), 0.022f * u, Offset(0.36f * u, -0.24f * u))
+        }
     }
 
-    /** Where the earbud's touch surface is, for a picture [height] tall centred on [c]. */
-    fun touchPoint(c: Offset, height: Float): Offset {
-        val s = bud.intrinsicSize
-        val width = height * s.width / s.height
-        return Offset(c.x - width / 2 + width * 0.60f, c.y - height / 2 + height * 0.40f)
-    }
+    /** Where the earbud's touch surface is, for a drawing [height] tall centred on [c]. */
+    fun touchPoint(c: Offset, height: Float): Offset = Offset(c.x + 0.08f * height, c.y - 0.04f * height)
 
     fun shape(p: RoundedPolygon, c: Offset, size: Float, color: Color, degrees: Float = 0f, to: RoundedPolygon? = null, k: Float = 0f, sy: Float = size) {
         if (size <= 0.5f || color.alpha <= 0f) return
