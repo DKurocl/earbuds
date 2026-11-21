@@ -88,7 +88,7 @@ internal object EarbudSettingsLink {
             if (AdvancedSettings.equivalent(key, now, target)) {
                 now?.let { v -> _advanced.update { it + (key to v) } }
                 // The owner's choice of quality is kept by Earbuds too (see keepQuality).
-                if (key == AdvancedSettings.Key.QUALITY && index == 0) Prefs.setPreferQuality(app, code == 0)
+                if (key == AdvancedSettings.Key.QUALITY && index == 0 && !Prefs.qualityByPlace(app)) Prefs.setPreferQuality(app, code == 0)
                 return@withLock true
             }
             if (now == null) break // no answer at all: another code will not help
@@ -115,15 +115,22 @@ internal object EarbudSettingsLink {
     val panelRefused by lazy { MutableStateFlow(Prefs.panelRefused(app)) }
 
     /**
-     * Once per connection: when the owner chose "Prefer sound quality" and the earbuds report
-     * Stable connection again (a reset, or Sony's app), set it back. LDAC follows on the next link.
+     * Once per connection, the Bluetooth quality the owner asked for:
+     *  - "Best sound at home": sound quality (LDAC) at home, a stable connection elsewhere, where
+     *    the street and pockets break up LDAC; nothing changes when the place can't be told;
+     *  - otherwise "Prefer sound quality": set back when the earbuds report Stable connection again
+     *    (a reset, or Sony's app). LDAC follows on the next link.
      */
     suspend fun keepQuality() {
-        if (!Prefs.preferQuality(app)) return
+        val wanted = when {
+            Prefs.qualityByPlace(app) -> when (Places.atHome(app)) { true -> 0; false -> 1; null -> return }
+            Prefs.preferQuality(app) -> 0
+            else -> return
+        }
         val now = readAdvanced(AdvancedSettings.Key.QUALITY)?.firstOrNull() ?: return
-        if (now != 1) return
-        addLog("Quality: earbuds were on Stable connection; preferring sound quality again")
-        if (!writeAdvancedField(AdvancedSettings.Key.QUALITY, 0, 0)) addLog("✗ Quality: not confirmed")
+        if (now == wanted) return
+        addLog("Quality: ${if (wanted == 0) "preferring sound quality" else "preferring a stable connection"}${if (Prefs.qualityByPlace(app)) " (by place)" else ""}")
+        if (!writeAdvancedField(AdvancedSettings.Key.QUALITY, 0, wanted)) addLog("✗ Quality: not confirmed")
     }
 
     private fun isFeatureReply(feature: DeviceSettingsProtocol.Feature, type: Int, p: ByteArray) =

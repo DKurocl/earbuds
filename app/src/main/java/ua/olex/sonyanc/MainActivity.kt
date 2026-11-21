@@ -129,6 +129,18 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
             else -> model.saveHereAsHome()
         }
     }
+    // "Charge before you go" posts a notification; "Ambient while walking" reads the step detector.
+    val chargeNotificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> model.chargeReminderChanged(granted) }
+    fun setChargeReminder(on: Boolean) {
+        if (on && ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            chargeNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else model.chargeReminderChanged(on)
+    }
+    val stepsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> model.activityModeChanged(granted) }
+    fun setActivityMode(on: Boolean) {
+        if (on && !ActivityMode.allowed(ctx)) stepsLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        else model.activityModeChanged(on)
+    }
     val budsNotificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission(), model::onBudsReminderPermission)
     val caseNotificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission(), model::onCaseReminderPermission)
     // "Stay in sync" (LiveLink): Android's companion consent dialog, then presence events.
@@ -227,6 +239,10 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         caseReminder = model.caseReminder, onCaseReminder = { on ->
                             if (!model.setCaseReminder(on)) caseNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         },
+                        qualityByPlace = model.qualityByPlace, onQualityByPlace = model::updateQualityByPlace,
+                        afterSleep = model.afterSleep, onAfterSleep = model::updateAfterSleep,
+                        chargeReminder = model.chargeReminder, onChargeReminder = ::setChargeReminder,
+                        activityMode = model.activityMode, onActivityMode = ::setActivityMode,
                         homeMode = model.homeMode, onHomeMode = { m -> model.updateHomeMode(m); if (m != null && model.home == null) setHome() },
                         homeSummary = model.homeSummary,
                         onSetHome = ::setHome,

@@ -116,6 +116,10 @@ fun AppSettingsContent(
     ambientMinutes: Int = 5, onAmbientMinutes: (Int) -> Unit = {}, onVibrations: () -> Unit = {},
     liveLink: Boolean? = null, onLiveLink: (Boolean) -> Unit = {},
     connectSheet: Boolean = true, onConnectSheet: (Boolean) -> Unit = {},
+    qualityByPlace: Boolean = false, onQualityByPlace: (Boolean) -> Unit = {},
+    afterSleep: AfterSleep = AfterSleep.POWER_OFF, onAfterSleep: (AfterSleep) -> Unit = {},
+    chargeReminder: Boolean = false, onChargeReminder: (Boolean) -> Unit = {},
+    activityMode: Boolean = false, onActivityMode: (Boolean) -> Unit = {},
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
@@ -150,6 +154,9 @@ fun AppSettingsContent(
                     homeMode?.ordinal ?: -1) { i -> onHomeMode(OnConnect.entries.getOrNull(i)) }
             }
             if (homeMode != null) item { NavRow(it, Glyph.LOCATION, "Home", homeSummary, onClick = onSetHome) }
+            if (homeMode != null) item {
+                SwitchRow(it, Glyph.HQ, "Best sound at home", "LDAC at home, a steadier link when you're out", qualityByPlace, onChange = onQualityByPlace)
+            }
             item {
                 ChoiceRow(it, Glyph.TIMER, "Ambient for a moment", AmbientTimer.CHOICES.map { m -> m to "$m minutes, then back" }, ambientMinutes) { m ->
                     onAmbientMinutes(m)
@@ -162,6 +169,21 @@ fun AppSettingsContent(
             item {
                 SwitchRow(it, Glyph.EARBUDS, "Low earbud battery",
                     "A heads-up at ${LowBattery.THRESHOLD} % while you listen, with the time left", budsReminder, onChange = onBudsReminder)
+            }
+            item {
+                SwitchRow(it, Glyph.UPCOMING, "Charge before you go",
+                    "Before the time you usually take the earbuds out, if the case is under ${ChargeReminder.THRESHOLD} %", chargeReminder, onChange = onChargeReminder)
+            }
+        }
+        ListGroup("Automatic") {
+            item {
+                SwitchRow(it, Glyph.WALK, "Ambient while walking",
+                    "Ambient when you start walking, noise cancelling when you stop", activityMode, onChange = onActivityMode)
+            }
+            item {
+                ChoiceRow(it, Glyph.BEDTIME, "When Music's sleep timer ends", AfterSleep.entries.map { a -> a.ordinal to a.label }, afterSleep.ordinal) { i ->
+                    onAfterSleep(AfterSleep.entries[i])
+                }
             }
         }
         ListGroup("Appearance") {

@@ -5,6 +5,20 @@ import android.content.Context
 object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("sonyanc", Context.MODE_PRIVATE)
 
+    /** First time out each day: "day,weekend,minute;..." (ChargeReminder). */
+    fun outTimes(ctx: Context): List<Triple<Int, Boolean, Int>> = p(ctx).getString("out_times", "").orEmpty().split(';').mapNotNull { e ->
+        e.split(',').takeIf { it.size == 3 }?.let { (d, w, m) -> runCatching { Triple(d.toInt(), w == "1", m.toInt()) }.getOrNull() }
+    }
+    fun setOutTimes(ctx: Context, v: List<Triple<Int, Boolean, Int>>) =
+        p(ctx).edit().putString("out_times", v.joinToString(";") { "${it.first},${if (it.second) 1 else 0},${it.third}" }).apply()
+    fun chargeReminder(ctx: Context) = p(ctx).getBoolean("charge_reminder", false)
+    fun setChargeReminder(ctx: Context, on: Boolean) = p(ctx).edit().putBoolean("charge_reminder", on).apply()
+    fun activityMode(ctx: Context) = p(ctx).getBoolean("activity_mode", false)
+    fun setActivityMode(ctx: Context, on: Boolean) = p(ctx).edit().putBoolean("activity_mode", on).apply()
+    fun afterSleep(ctx: Context) = AfterSleep.entries.getOrNull(p(ctx).getInt("after_sleep", 0)) ?: AfterSleep.POWER_OFF
+    fun setAfterSleep(ctx: Context, value: AfterSleep) = p(ctx).edit().putInt("after_sleep", value.ordinal).apply()
+    fun qualityByPlace(ctx: Context) = p(ctx).getBoolean("quality_by_place", false)
+    fun setQualityByPlace(ctx: Context, on: Boolean) = p(ctx).edit().putBoolean("quality_by_place", on).apply()
     fun panelRefused(ctx: Context) = p(ctx).getBoolean("panel_refused", false)
     fun setPanelRefused(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("panel_refused", value).apply()
     fun dynamicColor(ctx: Context) = p(ctx).getBoolean("dynamic_color", true)

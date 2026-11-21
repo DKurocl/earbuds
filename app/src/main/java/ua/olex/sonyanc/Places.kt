@@ -42,6 +42,14 @@ object Places {
     fun hasBackground(ctx: Context) =
         ctx.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
 
+    /** Whether the phone is at home now, from a fresh last-known fix; null when it can't tell. */
+    fun atHome(ctx: Context): Boolean? {
+        val home = Prefs.home(ctx) ?: return null
+        if (!hasLocation(ctx) || !hasBackground(ctx)) return null
+        val here = lastLocation(ctx)?.takeIf { System.currentTimeMillis() - it.time <= FRESH_MS } ?: return null
+        return isHome(home.first, home.second, here.latitude, here.longitude, here.accuracy)
+    }
+
     /** The mode to apply as the earbuds connect: home's at home, otherwise "When earbuds connect". */
     fun modeOnConnect(ctx: Context): SonyProtocol.Mode? {
         val usual = Prefs.onConnect(ctx).mode

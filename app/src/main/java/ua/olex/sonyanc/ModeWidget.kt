@@ -139,6 +139,14 @@ class ModeWidget : AppWidgetProvider() {
          */
         private fun bindTiles(ctx:Context,v:RemoteViews,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                               away:Boolean,labels:Boolean,icon:Float,interactive:Boolean) {
+            // Anywhere that is not a mode (the padding, the gaps between the modes, the header and
+            // rings of the dashboard) opens the app, as Google's own widgets do; a mode sets it.
+            if(interactive) {
+                val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                val openApp=PendingIntent.getActivity(ctx,101,open,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                v.setOnClickPendingIntent(android.R.id.background,openApp)
+                v.setOnClickPendingIntent(R.id.w_group,openApp)
+            }
             val chosen=pending ?: current
             for(tile in tiles) {
                 val mode=tile.mode

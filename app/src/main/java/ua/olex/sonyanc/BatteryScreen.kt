@@ -71,6 +71,14 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
                 } else WeekChart(week, now)
             }
         }
+        // The week in the ears: a quiet summary, no reminder.
+        val listened = remember(log, now) { BatteryLog.week(log, now) }
+        if (listened.minutes >= 30) ListGroup("This week") {
+            item {
+                InfoRow(it, Glyph.INSIGHTS, "${BatteryLife.short(listened.minutes)} in your ears",
+                    if (listened.anc >= 1) "${BatteryLife.short(listened.anc)} of it with noise cancelling" else "None of it with noise cancelling")
+            }
+        }
         HealthCard(BatteryHealth.verdict(health))
         ListGroup("A full charge lasts") {
             item { DrainRow(it, Glyph.QUIET, "Noise cancelling & ambient", log, Mode.ANC) }

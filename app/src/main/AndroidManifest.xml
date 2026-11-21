@@ -3,10 +3,18 @@
 
     <!-- Android 12+ -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- The owner's Music app asks for things through this (MusicLinkReceiver); only apps signed
+         with the same key may. -->
+    <permission android:name="ua.olex.sonyanc.permission.CONTROL" android:protectionLevel="signature" />
     <!-- Android 8 to 11 -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <!-- Mode-specific haptic compositions on the Pixel actuator. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- "Charge before you go": its one daily alarm is set again after a restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- "Ambient while walking": the phone's step detector, only while the earbuds are connected. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-feature android:name="android.hardware.sensor.stepdetector" android:required="false" />
     <!-- Only for the opt-in case battery reminder; requested when it is turned on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- "At home": compare the last known location with home when the earbuds connect. Coarse is
@@ -80,6 +88,19 @@
             <intent-filter><action android:name="android.companion.CompanionDeviceService" /></intent-filter>
         </service>
         <receiver android:name=".AmbientTimerReceiver" android:exported="false" />
+        <receiver android:name=".ChargeReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".MusicLinkReceiver" android:exported="true"
+            android:permission="ua.olex.sonyanc.permission.CONTROL">
+            <intent-filter>
+                <action android:name="ua.olex.sonyanc.action.EQ_OFF" />
+                <action android:name="ua.olex.sonyanc.action.SLEEP" />
+            </intent-filter>
+        </receiver>
         <receiver android:name=".LowBatteryReceiver" android:exported="false" />
         <!-- ACL broadcasts for the saved earbuds; exempt from implicit-broadcast limits. -->
         <receiver android:name=".ConnectionReceiver" android:exported="true">
