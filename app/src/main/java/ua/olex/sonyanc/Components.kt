@@ -119,7 +119,7 @@ private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> 
             Glyph.EQ, Glyph.TUNE, Glyph.QUIET, Glyph.AMBIENT, Glyph.OFF, Glyph.HEADPHONES, Glyph.EARBUDS, Glyph.CHAT -> cs.primaryFixedDim to cs.onPrimaryFixed
             Glyph.BATTERY, Glyph.BATTERY_CHARGING, Glyph.BATTERY_LOW, Glyph.BATTERY_UNKNOWN, Glyph.POWER, Glyph.TIMER -> cs.tertiaryFixedDim to cs.onTertiaryFixed
             Glyph.BLUETOOTH, Glyph.LINK, Glyph.LOCATION, Glyph.FIND, Glyph.HOME -> cs.secondaryFixedDim to cs.onSecondaryFixed
-            else -> cs.surfaceContainerHighest to cs.onSurfaceVariant
+            else -> cs.secondaryFixedDim to cs.onSecondaryFixed
         }
     }
     Surface(shape = androidx.compose.foundation.shape.CircleShape, color = circle, contentColor = onCircle, modifier = Modifier.size(40.dp)) {
