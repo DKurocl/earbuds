@@ -12,8 +12,8 @@ import java.time.Instant
 
 /**
  * From the splash into the app, as Google's apps do it. Android shows the launcher icon in its
- * circle and plays its little animation (drawable/splash_icon.xml: the lid clicks, the light
- * blinks). Then that same circle comes down onto Home's case ring, shrinking to the ring's disc on
+ * circle and plays its little animation (drawable/splash_icon.xml from docs/icon/brand_icon.py:
+ * the slab settles, the case lands on it, its lid lifts once). Then that same circle comes down onto Home's case ring, shrinking to the ring's disc on
  * an emphasized curve, as the splash dissolves; the earbuds' rings come in, the case ring takes
  * over as the circle lands, and the page fades up ([Intro]). Without the ring on screen (setup, a
  * page) the splash simply dissolves.

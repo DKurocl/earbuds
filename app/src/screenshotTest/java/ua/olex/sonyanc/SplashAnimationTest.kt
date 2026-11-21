@@ -14,7 +14,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * The splash icon (docs/icon/splash.py) as Android shows it: the launcher icon in its white circle,
+ * The splash icon (docs/icon/brand_icon.py) as Android shows it: the launcher icon in its white circle,
  * frame by frame. A strip (splash-anim.png, compared like every render) and every 20 ms in
  * build/screenshots/splashvid for a video.
  */
