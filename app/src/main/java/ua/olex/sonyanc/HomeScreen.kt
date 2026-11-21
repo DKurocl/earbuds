@@ -98,24 +98,13 @@ fun HushScreen(
         // The dock floats over the page; the page scrolls under it and ends above it.
         val density = LocalDensity.current
         var dockHeight by remember { mutableStateOf(0.dp) }
-        // Scrolling down tucks the dock's card away (the modes stay); scrolling up brings it back.
-        var cardShown by remember { mutableStateOf(true) }
-        val tuck = remember {
-            object : NestedScrollConnection {
-                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                    if (consumed.y < -6f) cardShown = false else if (consumed.y > 6f) cardShown = true
-                    return Offset.Zero
-                }
-            }
-        }
-        Box(Modifier.padding(top = insets.calculateTopPadding()).fillMaxSize().nestedScroll(tuck)) {
+        Box(Modifier.padding(top = insets.calculateTopPadding()).fillMaxSize()) {
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = onBattery, state = pull,
-            // The page ends where the dock's fade begins: rows never hide half under the toolbar
-            // (unreachable there, and too small a target for the part that shows).
-            modifier = Modifier.fillMaxSize().padding(bottom = (dockHeight - DOCK_FADE).coerceAtLeast(0.dp)),
+            // The page ends above the floating toolbar: nothing scrolls under it or shows behind it.
+            modifier = Modifier.fillMaxSize().padding(bottom = dockHeight),
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = batteryRefreshing || codecRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter))
@@ -150,6 +139,11 @@ fun HushScreen(
                             enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
                     }
 
+                    // What the chosen mode offers, in the page as a card (as Pixel Buds settings do),
+                    // never floating: Ambient's level and voice focus, or Speak-to-Chat and
+                    // "Ambient for a moment" with noise cancelling.
+                    ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
+
                     Box(Modifier.introFade()) { ListGroup("More controls") {
                         // Battery opens from the listening-time tiles above; no second entry here.
                         item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
@@ -162,13 +156,13 @@ fun HushScreen(
                     } }
                 }
             }
-            Spacer(Modifier.height(8.dp + DOCK_FADE))
+            Spacer(Modifier.height(8.dp))
         }
         }
         // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
         if (granted && hasDevice) ModeDock(
-            state, pending, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient),
-            cardShown, Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
+            state, pending, ::choose,
+            Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
         )
         }
     }
@@ -384,52 +378,54 @@ class DockExtras(
     val minutes: Int, val until: Long?, val onAmbientFor: () -> Unit, val onStay: () -> Unit,
 )
 
+/** The chosen mode's options as a card in the page; it grows in and out with the mode. */
 @Composable
-private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras, cardShown: Boolean, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
+private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
     val motion = MaterialTheme.motionScheme
-    // What the chosen mode offers grows out of the toolbar as a floating card: Ambient's level and
-    // voice focus, or Speak-to-Chat and "Ambient for a moment" with noise cancelling.
     val card = state?.mode?.takeIf { it != Mode.OFF }
     var lastCard by remember { mutableStateOf(card) }
     if (card != null) lastCard = card
-    // A soft fade of the page behind the floating parts, so the list never shows between them.
-    val page = Surfaces.page
-    Column(
-        modifier.fillMaxWidth()
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page.copy(alpha = 0f), 0.22f to page.copy(alpha = .94f), 1f to page))
-            .navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = DOCK_FADE, bottom = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+    AnimatedVisibility(
+        visible = card != null,
+        enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec()),
+        exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec()),
     ) {
-        AnimatedVisibility(
-            visible = card != null && cardShown,
-            enter = fadeIn(motion.fastEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.8f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-                expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Bottom),
-            exit = fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.8f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-                shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Bottom),
-        ) {
-            Surface(shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh, shadowElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
-                AnimatedContent(
-                    lastCard, label = "dock card",
-                    transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
-                ) { shown ->
-                    Box(Modifier.padding(8.dp)) {
-                        when (shown) {
-                            Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
-                            else -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                extras.speakToChat?.let { on ->
-                                    SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
-                                        extras.onSpeakToChat(!on)
-                                    }
+        Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+            AnimatedContent(
+                lastCard, label = "mode card",
+                transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
+            ) { shown ->
+                Box(Modifier.padding(8.dp)) {
+                    when (shown) {
+                        Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
+                        else -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            extras.speakToChat?.let { on ->
+                                SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
+                                    extras.onSpeakToChat(!on)
                                 }
-                                SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
-                                    description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                             }
+                            SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
+                                description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Noise control: Material 3 Expressive's floating toolbar at the bottom, where the thumb is. Only
+ * the three modes, on nothing: no band of page colour behind it and nothing that slides with the
+ * scroll. The page ends above it, so it never covers a row.
+ */
+@Composable
+private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         // Material 3 Expressive's floating toolbar: a pill above the page with the three modes. The
         // pressed mode widens and its neighbours give way (animateWidth); the chosen one fills in.
         Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
@@ -669,9 +665,6 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
  */
 private fun fitText(style: androidx.compose.ui.text.TextStyle) =
     androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = style.fontSize, stepSize = 0.5.sp)
-
-/** The soft fade above the floating dock, where the page is allowed to run under it. */
-private val DOCK_FADE = 28.dp
 
 /** The page around the rings waits for the intro and comes in last (see [Intro]). */
 private fun Modifier.introFade() = graphicsLayer {

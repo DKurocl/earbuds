@@ -58,8 +58,9 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
     val cachedFeatures = remember { Prefs.cachedFeatures(ctx) }
     val shownValues = cachedValues + values
     val shownFeatures = cachedFeatures + features
+    val panelRefused by EarbudSettingsLink.panelRefused.collectAsState()
     EarbudSettingsContent(
-        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings,
+        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused,
         onRefresh = { scope.launch { load(force = true) } },
         onUpdate = { key, index, code ->
             scope.launch {
@@ -105,15 +106,11 @@ fun EarbudSettingsContent(
     loading: Set<Key> = emptySet(), featureLoading: Set<Feature> = emptySet(),
     writing: Key? = null, notes: Map<String, RowNote> = emptyMap(), onBack: () -> Unit = {}, onAppSettings: () -> Unit = {},
     onRefresh: () -> Unit = {}, onUpdate: (Key, Int, Int) -> Unit = { _, _, _ -> }, onBasic: (Feature, Boolean) -> Unit = { _, _ -> },
-    firstTopic: Topic = Topic.CHAT,
+    panelHidden: Boolean = false,
 ) {
-    // The card on top shows what a setting does. It goes through them by itself until a setting is
-    // changed; then it shows that setting, playing it out.
-    var topic by rememberSaveable { mutableStateOf(firstTopic) }
-    var settled by rememberSaveable { mutableStateOf(false) }
-    val update: (Key, Int, Int) -> Unit = { key, index, code -> topic = key.topic(); settled = true; onUpdate(key, index, code) }
-    val basic: (Feature, Boolean) -> Unit = { feature, on -> topic = feature.topic(); settled = true; onBasic(feature, on) }
-    var laps by remember { mutableIntStateOf(0) }
+    // As Android's own settings: each row says in one line what it does; no illustration on top.
+    val update = onUpdate
+    val basic = onBasic
 
     val idle = loading.isEmpty() && featureLoading.isEmpty() && writing == null
 
@@ -127,11 +124,6 @@ fun EarbudSettingsContent(
         else IconButton(enabled = idle, onClick = onRefresh, modifier = Modifier.semantics { contentDescription = "Refresh settings" }) { HushIcon(Glyph.REFRESH) }
         IconButton(onClick = onAppSettings, modifier = Modifier.semantics { contentDescription = "App settings" }) { HushIcon(Glyph.SETTINGS) }
     }) {
-        IllustrationCard(
-            topic,
-            onLoop = { if (!settled && ++laps % 2 == 0) topic = Topic.entries[(topic.ordinal + 1) % Topic.entries.size] },
-            onTap = { settled = true; topic = Topic.entries[(topic.ordinal + 1) % Topic.entries.size] },
-        )
         ListGroup("Sound") {
             item { FeatureSwitch(it, Feature.DSEE, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
             item { KeySwitch(it, Key.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, update, notes[rowId(Key.CHAT, 0)]) }
@@ -140,7 +132,8 @@ fun EarbudSettingsContent(
             item { KeySwitch(it, Key.SIDETONE, "Hear my voice in calls", "Lets you hear yourself while talking", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update, notes[rowId(Key.SIDETONE, 0)]) }
         }
         ListGroup("Controls") {
-            item {
+            // Shown only where the earbuds report the panel and have not refused turning it off.
+            if (!panelHidden && values[Key.PANEL] != null) item {
                 // The whole panel: Sony's app turns all touch controls off with this, as the
                 // per-earbud functions always keep Playback on one side.
                 val panel = values[Key.PANEL]

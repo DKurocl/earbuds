@@ -93,8 +93,26 @@ internal object EarbudSettingsLink {
             }
             if (now == null) break // no answer at all: another code will not help
         }
+        // The touch panel has two encodings (Sony's V1 and V2 differ in the first byte and flip the
+        // second): when the reported one is refused, try the other once. If the earbuds refuse both,
+        // they do not let the panel be turned off, and the switch is taken away (panelRefused).
+        if (key == AdvancedSettings.Key.PANEL) {
+            val on = AdvancedSettings.panelOn(listOf(current[0], code))
+            val other = 1 - current[0]
+            val target = listOf(other, AdvancedSettings.panelCode(listOf(other, 0), on))
+            addLog("→ ${key.title}: $current → $target (other encoding)")
+            conn.send(key.set(target, subtype), key.type)
+            delay(250)
+            val now = state(exchange(1000, accepts = { type, p -> isAdvancedReply(key, type, p) }) { conn.send(get, key.type) })
+            addLog("← ${key.title}: $now")
+            if (now != null && AdvancedSettings.panelOn(now) == on) { _advanced.update { it + (key to now) }; return@withLock true }
+            if (now != null) { panelRefused.value = true; Prefs.setPanelRefused(app, true) }
+        }
         false
     }
+
+    /** The earbuds refused to turn the touch panel off in either encoding: the switch is hidden. */
+    val panelRefused by lazy { MutableStateFlow(Prefs.panelRefused(app)) }
 
     /**
      * Once per connection: when the owner chose "Prefer sound quality" and the earbuds report

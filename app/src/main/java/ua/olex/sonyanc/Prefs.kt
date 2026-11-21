@@ -5,6 +5,8 @@ import android.content.Context
 object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("sonyanc", Context.MODE_PRIVATE)
 
+    fun panelRefused(ctx: Context) = p(ctx).getBoolean("panel_refused", false)
+    fun setPanelRefused(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("panel_refused", value).apply()
     fun dynamicColor(ctx: Context) = p(ctx).getBoolean("dynamic_color", true)
     fun haptics(ctx: Context) = p(ctx).getBoolean("haptics", true)
     fun setDynamicColor(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("dynamic_color", value).apply()
