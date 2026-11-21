@@ -48,7 +48,10 @@ object LiveLink {
     fun enable(ctx: Context, confirm: (IntentSender) -> Unit, done: (Boolean) -> Unit) {
         val address = Prefs.deviceAddress(ctx)
         val manager = cdm(ctx)
-        if (!supported || address == null || manager == null) return done(false)
+        if (!supported || address == null || manager == null) {
+            Headphones.addLog("✗ Stay in sync: ${if (!supported) "needs Android 16" else if (address == null) "no earbuds chosen" else "no companion service"}")
+            return done(false)
+        }
         association(ctx)?.let { observe(ctx, it.id); return done(true) }
         val request = AssociationRequest.Builder()
             .addDeviceFilter(BluetoothDeviceFilter.Builder().setAddress(address).build())
@@ -89,6 +92,7 @@ object LiveLink {
     private fun observe(ctx: Context, id: Int) {
         if (!supported) return
         runCatching { cdm(ctx)?.startObservingDevicePresence(ObservingDevicePresenceRequest.Builder().setAssociationId(id).build()) }
+            .onSuccess { Headphones.addLog("· Stay in sync: Android watches the earbuds (association $id)") }
             .onFailure { Headphones.addLog("✗ companion observe: ${it.message}") }
     }
 
@@ -107,10 +111,13 @@ object LiveLink {
 @RequiresApi(36)
 class LinkService : CompanionDeviceService() {
     override fun onDevicePresenceEvent(event: DevicePresenceEvent) {
-        val present = LiveLink.presenceChange(event.event) ?: return
-        if (present && !Headphones.hasPermission(this)) return
         Headphones.init(this)
+        Headphones.addLog("· Stay in sync: Android reports event ${event.event}")
+        val present = LiveLink.presenceChange(event.event) ?: return
+        if (present && !Headphones.hasPermission(this)) return Headphones.addLog("✗ Stay in sync: no Bluetooth permission")
         Headphones.stay(present)
+        // Android binds this service for the companion: the surest moment to bring the sheet up.
+        if (present) ConnectedSheet.show(this, "Stay in sync")
     }
 
     override fun onDestroy() {

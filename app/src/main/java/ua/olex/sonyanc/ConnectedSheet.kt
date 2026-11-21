@@ -68,13 +68,18 @@ object ConnectedSheet {
     @Volatile private var lastShown = 0L
     private const val QUIET_MS = 90_000L // a link that drops and comes back does not bring it up again
 
-    fun show(ctx: Context) {
-        if (!Prefs.connectSheet(ctx) || appVisible || !LiveLink.enabled(ctx)) return
+    fun show(ctx: Context, from: String) {
+        // Each reason it stays away is written to Diagnostics, so "it never came up" can be read there.
+        fun skip(why: String) { Headphones.addLog("· connected sheet ($from): $why") }
+        if (!Prefs.connectSheet(ctx)) return skip("turned off in App settings")
+        if (appVisible) return skip("the app is open")
+        if (!LiveLink.enabled(ctx)) return skip("Stay in sync is off (Android lets only a companion app open it)")
         val now = System.currentTimeMillis()
-        if (now - lastShown < QUIET_MS) return
-        if (ctx.getSystemService(PowerManager::class.java)?.isInteractive != true) return
-        if (ctx.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != false) return
+        if (now - lastShown < QUIET_MS) return skip("shown a moment ago")
+        if (ctx.getSystemService(PowerManager::class.java)?.isInteractive != true) return skip("screen off")
+        if (ctx.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != false) return skip("phone locked")
         lastShown = now
+        Headphones.addLog("✓ connected sheet ($from)")
         runCatching {
             ctx.startActivity(Intent(ctx, ConnectedSheetActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
         }.onFailure { Headphones.addLog("✗ connected sheet: ${it.message}") }
