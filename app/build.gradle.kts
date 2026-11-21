@@ -20,7 +20,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // CI run numbers only grow, so every CI build installs over the previous one.
         versionCode = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull()?.plus(1000) ?: 15
-        versionName = "1.14.0"
+        versionName = "1.14.1"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

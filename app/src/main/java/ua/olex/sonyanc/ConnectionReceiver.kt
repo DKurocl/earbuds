@@ -25,6 +25,8 @@ class ConnectionReceiver : BroadcastReceiver() {
         val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         val saved = Prefs.deviceAddress(ctx) ?: return
         if (device?.address != saved) return
+        Headphones.init(ctx)
+        Headphones.addLog(if (action == BluetoothDevice.ACTION_ACL_CONNECTED) "· Bluetooth: earbuds connected" else "· Bluetooth: earbuds disconnected")
 
         if (action == BluetoothDevice.ACTION_ACL_DISCONNECTED) {
             Prefs.setLinked(ctx, false)
@@ -42,7 +44,7 @@ class ConnectionReceiver : BroadcastReceiver() {
         CaseReminder.clear(ctx)
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
-        ConnectedSheet.show(ctx)
+        ConnectedSheet.show(ctx, "Bluetooth")
         // "When earbuds connect", or the home mode when the phone is at home (Places).
         val apply = Places.modeOnConnect(ctx)
         val pending = goAsync()
