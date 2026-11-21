@@ -102,7 +102,9 @@ object Headphones {
         _state.update {
             it.copy(status = Status.DISCONNECTED, ncConfirmed = false, codecLive = false, liveBatteryParts = emptySet())
         }
-        EarbudSettingsLink.clearDeviceSettings()
+        // The earbuds keep their settings across a dropped link: the values stay known, so a change
+        // made after a reconnect (Stay in sync reconnects on its own) can patch them. Only choosing
+        // another device forgets them (selectDevice).
         waiters.forEach { it.reply.complete(null) }
     }
 
@@ -228,7 +230,6 @@ object Headphones {
         _state.update {
             it.copy(status = Status.CONNECTING, ncConfirmed = false, liveBatteryParts = emptySet(), codecLive = false, firmware = null)
         }
-        EarbudSettingsLink.clearDeviceSettings()
         DeviceReads.codecPushed = false
         DeviceReads.batteryPushed = false
         try {
