@@ -59,21 +59,34 @@ internal object EarbudSettingsLink {
     }
 
     suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
-        var wanted: List<Int>? = null
-        val reply = exchange(1200, connect = false, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
-            // Patch the newest device values so other fields are preserved.
-            val current = _advanced.value[key] ?: return@exchange false
-            val next = AdvancedSettings.patch(key, current, index, code) ?: return@exchange false
-            val subtype = advancedInquiries[key] ?: key.subtype
-            wanted = next
-            conn.send(key.set(next, subtype), key.type) &&
-                conn.send(byteArrayOf(key.getCode.toByte(), subtype.toByte()), key.type)
+        val current = _advanced.value[key] ?: return@withLock false
+        val subtype = advancedInquiries[key] ?: key.subtype
+        val get = byteArrayOf(key.getCode.toByte(), subtype.toByte())
+        fun state(reply: ByteArray?) = reply?.let { AdvancedSettings.parse(key.type.toInt(), it)?.second }
+        // Noise control on a touch sensor is 0x35 on newer firmware and 0 on older: try the likely one first.
+        val wires = if (key == AdvancedSettings.Key.TOUCH) AdvancedSettings.touchCodes(current, code) else listOf(code)
+        for (wire in wires) {
+            val target = AdvancedSettings.patch(key, current, index, code, wire) ?: return@withLock false
+            addLog("→ ${key.title}: $current → $target")
+            var now = state(exchange(1200, connect = false, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
+                conn.send(key.set(target, subtype), key.type) && conn.send(get, key.type)
+            })
+            // Some settings (touch controls) are applied a moment after the earbuds answer: look again.
+            for (look in 1..3) {
+                if (AdvancedSettings.equivalent(key, now, target)) break
+                delay(250)
+                now = state(exchange(1000, connect = false, accepts = { type, p -> isAdvancedReply(key, type, p) }) { conn.send(get, key.type) }) ?: now
+            }
+            addLog("← ${key.title}: $now")
+            if (AdvancedSettings.equivalent(key, now, target)) {
+                now?.let { v -> _advanced.update { it + (key to v) } }
+                // The owner's choice of quality is kept by Earbuds too (see keepQuality).
+                if (key == AdvancedSettings.Key.QUALITY && index == 0) Prefs.setPreferQuality(app, code == 0)
+                return@withLock true
+            }
+            if (now == null) break // no answer at all: another code will not help
         }
-        val target = wanted ?: return@withLock false
-        val ok = AdvancedSettings.equivalent(key, reply?.let { AdvancedSettings.parse(key.type.toInt(), it)?.second }, target)
-        // The owner's choice of quality is kept by Earbuds too (see keepQuality).
-        if (ok && key == AdvancedSettings.Key.QUALITY && index == 0) Prefs.setPreferQuality(app, code == 0)
-        ok
+        false
     }
 
     /**
