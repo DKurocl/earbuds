@@ -59,8 +59,9 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
     val shownValues = cachedValues + values
     val shownFeatures = cachedFeatures + features
     val panelRefused by EarbudSettingsLink.panelRefused.collectAsState()
+    val device by Headphones.state.collectAsState()
     EarbudSettingsContent(
-        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused,
+        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused, hideMissing = device.connected && loading.isEmpty(),
         onRefresh = { scope.launch { load(force = true) } },
         onUpdate = { key, index, code ->
             scope.launch {
@@ -105,6 +106,8 @@ fun EarbudSettingsContent(
     writing: Key? = null, notes: Map<String, RowNote> = emptyMap(), onBack: () -> Unit = {}, onAppSettings: () -> Unit = {},
     onRefresh: () -> Unit = {}, onUpdate: (Key, Int, Int) -> Unit = { _, _, _ -> }, onBasic: (Feature, Boolean) -> Unit = { _, _ -> },
     panelHidden: Boolean = false,
+    /** The earbuds are connected and were asked: a setting they did not answer is left out. */
+    hideMissing: Boolean = false,
 ) {
     // As Android's own settings: each row says in one line what it does; no illustration on top.
     val update = onUpdate
@@ -122,11 +125,11 @@ fun EarbudSettingsContent(
         else IconButton(enabled = idle, onClick = onRefresh, modifier = Modifier.semantics { contentDescription = "Refresh settings" }) { HushIcon(Glyph.REFRESH) }
         IconButton(onClick = onAppSettings, modifier = Modifier.semantics { contentDescription = "App settings" }) { HushIcon(Glyph.SETTINGS) }
     }) {
-        // Rows the earbuds don't answer are left out once reading is done (a setting this model
+        // Rows the earbuds don't answer (while connected) are left out once reading is done (a setting this model
         // lacks is not a row to read "Not available" on), and the settings that only matter when
         // another is on (Speak-to-Chat's detection, the prompts' volume) follow it.
-        fun has(key: Key) = values[key] != null || key in loading
-        fun has(feature: Feature) = features[feature] != null || feature in featureLoading
+        fun has(key: Key) = !hideMissing || values[key] != null || key in loading
+        fun has(feature: Feature) = !hideMissing || features[feature] != null || feature in featureLoading
         val chatOn = code(Key.CHAT, 0) == 0
         val promptsOn = code(Key.GUIDANCE, 0) == 0
         ListGroup("Sound") {
@@ -134,7 +137,7 @@ fun EarbudSettingsContent(
             if (has(Key.QUALITY)) item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null, note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
             if (has(Key.CYCLE)) item { ChoiceRow(it, Glyph.NOISE_AWARE, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null, note = notes[rowId(Key.CYCLE, 4)]) { c -> update(Key.CYCLE, 4, c) } }
         }
-        if (has(Key.CHAT)) ListGroup("Speak-to-Chat") {
+        if (has(Key.CHAT)) ListGroup("Conversation") {
             item { KeySwitch(it, Key.CHAT, Glyph.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, update, notes[rowId(Key.CHAT, 0)]) }
             if (chatOn && has(Key.CHAT_CONFIG)) {
                 item { ChoiceRow(it, Glyph.VOICE_SETTINGS, "Voice detection", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
