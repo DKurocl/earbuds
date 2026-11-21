@@ -6,7 +6,9 @@ object AdvancedSettings {
     data class Field(val label:String,val index:Int,val choices:List<Choice>)
     private fun choices(vararg pairs:Pair<Int,String>)=pairs.map{Choice(it.first,it.second)}
     private val toggle=choices(0 to "On",1 to "Off")
-    private val touch=choices(0 to "Noise control",0x10 to "Volume",0x20 to "Playback",0xFF to "Off")
+    // No "Volume" (0x10): the WF-1000XM5 refused it on either side in every pair the owner tried,
+    // with Playback on the other side too (FF 10, 10 FF, 35 10, 10 20).
+    private val touch=choices(0 to "Noise control",0x20 to "Playback",0xFF to "Off")
     enum class Key(val title:String,val getCode:Int,val subtype:Int,val type:Byte=SonyProtocol.TYPE_COMMAND) {
         TOUCH("Touch controls",0xF6,0x03),
         // The whole touch panel on or off (Sony's "touch sensor", D6 D2). Two bytes: the first says

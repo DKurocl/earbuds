@@ -37,7 +37,7 @@ class SettingsUiTest {
     }
     @Test fun allBooleanControlsAreImmediatelyEditable() {
         content()
-        listOf("DSEE","Speak-to-Chat","Hear my voice in calls","Head gestures","Pause when removed","Voice guidance").forEach {title ->
+        listOf("DSEE","Speak-to-Chat","Hear my voice","Head gestures","Pause when removed","Voice prompts").forEach {title ->
             compose.onNodeWithText(title).performScrollTo().assertIsOn().performClick().assertIsOff()
         }
         compose.onNodeWithText("Device controls").assertDoesNotExist()
@@ -47,12 +47,12 @@ class SettingsUiTest {
         var last:Triple<AdvancedSettings.Key,Int,Int>?=null
         content {key,index,code->last=Triple(key,index,code)}
         val titles=mapOf(
-            AdvancedSettings.Key.TOUCH to listOf("Left touch control","Right touch control"),
+            AdvancedSettings.Key.TOUCH to listOf("Left earbud","Right earbud"),
             AdvancedSettings.Key.CYCLE to listOf("Noise control cycle"),
-            AdvancedSettings.Key.CHAT_CONFIG to listOf("Conversation sensitivity","Resume after conversation"),
+            AdvancedSettings.Key.CHAT_CONFIG to listOf("Voice detection","Music comes back"),
             AdvancedSettings.Key.POWER to listOf("Automatic power off"),
             AdvancedSettings.Key.QUALITY to listOf("Bluetooth quality"),
-            AdvancedSettings.Key.GUIDANCE_VOLUME to listOf("Voice guidance volume"))
+            AdvancedSettings.Key.GUIDANCE_VOLUME to listOf("Prompt volume"))
         titles.forEach {(key,labels)->key.fields.forEachIndexed {i,field->field.choices.forEach {choice->
             compose.onNodeWithText(labels[i]).performScrollTo().performClick()
             compose.onAllNodesWithText(choice.label).onLast().performClick()
@@ -63,7 +63,8 @@ class SettingsUiTest {
         compose.setContent {AppTheme(dynamic=false){EarbudSettingsContent(emptyMap(),emptyMap())}}
         compose.onAllNodes(isToggleable()).assertCountEquals(0)
         compose.onNodeWithText("Earbud settings").assertIsDisplayed()
-        compose.onNodeWithText("Voice guidance volume").performScrollTo().assertIsDisplayed()
+        // Settings the earbuds never answered are left out, not shown as dead rows.
+        compose.onNodeWithText("Prompt volume").assertDoesNotExist()
     }
     @Test fun rapidModesAmbientLevelAndVoiceFocusUseTheLatestState() {
         compose.setContent {
@@ -89,7 +90,7 @@ class SettingsUiTest {
                 AppTheme(dynamic=false) {EarbudSettingsContent(fixtures,DeviceSettingsProtocol.Feature.entries.associateWith{true})}
             }
         }
-        listOf("Left touch control","Right touch control","Automatic power off","Bluetooth quality","Voice guidance volume").forEach {title->
+        listOf("Left earbud","Right earbud","Automatic power off","Bluetooth quality","Prompt volume").forEach {title->
             compose.onNodeWithText(title).performScrollTo()
             val label=compose.onNode(hasText(title),useUnmergedTree=true).fetchSemanticsNode()
             // The value is the next text below the label in the same column (it may sit inside the

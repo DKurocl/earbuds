@@ -30,7 +30,7 @@ class AdvancedSettingsTest {
         assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 03 01 00 20")))
         // And only named functions are written: the unknown side is kept unless Playback must move there.
         assertEquals(listOf(2,0x80,0xFF),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0xFF),2,0xFF))
-        assertEquals(listOf(2,0x20,0x10),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x10))
+        assertEquals(listOf(2,0x20,0xFF),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0xFF))
         assertNull(AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x80))
         assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 0C 02 01")))
     }
@@ -45,16 +45,17 @@ class AdvancedSettingsTest {
         // Playback stays on one earbud (the XM5 refuses FF FF and 35 FF): it moves to the other side.
         assertEquals(listOf(2,0x20,0xFF),AdvancedSettings.patch(key,listOf(2,0xFF,0x20),2,0xFF))
         assertEquals(listOf(2,0x20,0xFF),AdvancedSettings.patch(key,current,2,0xFF))
-        assertEquals(listOf(2,0x20,0x10),AdvancedSettings.patch(key,current,2,0x10))
+        // Volume is not offered: the XM5 refused it everywhere.
+        assertNull(AdvancedSettings.patch(key,current,2,0x10))
         // Changes that keep Playback somewhere are sent as chosen.
         assertEquals(listOf(2,0xFF,0x20),AdvancedSettings.patch(key,current,1,0xFF))
-        assertEquals(listOf(2,0x10,0x20),AdvancedSettings.patch(key,current,1,0x10))
+        assertEquals(listOf(2,0xFF,0x20),AdvancedSettings.patch(key,current,1,0xFF))
     }
 
     @Test fun noiseControlTriesTheOtherCodeToo() {
         assertEquals(listOf(0,0x35), AdvancedSettings.touchCodes(listOf(2,0xFF,0x20),0))
         assertEquals(listOf(0x35,0), AdvancedSettings.touchCodes(listOf(2,0x35,0x20),0))
-        assertEquals(listOf(0x10), AdvancedSettings.touchCodes(listOf(2,0xFF,0x20),0x10))
+        assertEquals(listOf(0x20), AdvancedSettings.touchCodes(listOf(2,0xFF,0x35),0x20))
         assertEquals(listOf(2,0x35,0x20), AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0xFF,0x20),1,0,0x35))
         assertEquals(listOf(2,0,0x20), AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0xFF,0x20),1,0,0))
     }
