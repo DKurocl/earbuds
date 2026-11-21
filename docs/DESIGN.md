@@ -13,7 +13,9 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 ## Foundations (`Theme.kt`, `Components.kt`)
 
-- **Color**: dynamic color by default; without it, a warm tonal scheme from the icon's sunrise (#FF6536). Page background
+- **Icon**: Google's product-icon style (Calendar, Tasks, Meet): the case as one bold coral shape on white, lid slit and
+  light cut out in white, a peach copy peeking below, one pink glow (`docs/icon/brand_icon.py`).
+- **Color**: dynamic color by default; without it, a warm tonal scheme from the icon's coral (#FF6536). Page background
   is `surfaceContainer` (light) / `surfaceContainerLow` (dark); cards one step up
   (`surfaceContainerLowest` / `surfaceContainerHigh`). See `Surfaces`.
 - **Type**: Google Sans Flex is bundled (`res/font/google_sans_flex.ttf`, OFL, Latin subset) and
@@ -192,7 +194,7 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
 
 - **Opening** (`SplashHandoff.kt`, `Intro.kt`, `docs/icon/brand_icon.py`), as Google's apps do it,
   played off the launcher icon itself: Android shows the icon in its white circle and plays its
-  gesture (580 ms: the sunrise slab settles from 88 %, the case lands on it with a small spring,
+  gesture (580 ms: the coral case drops in with a small spring, its peach copy settles under it,
   its lid lifts once on the hinge and shuts). Then that same circle comes down onto
   Home's case ring, shrinking to the ring's disc on the emphasized curve while the splash
   dissolves (520 ms); the earbuds' rings come in, the case ring takes over as the circle lands, and
