@@ -113,15 +113,11 @@ private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surf
  */
 private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> Unit)? = glyph?.let { g -> {
     val cs = MaterialTheme.colorScheme
-    val (circle, onCircle) = when {
-        danger -> cs.errorContainer to cs.onErrorContainer
-        else -> when (g) {
-            Glyph.EQ, Glyph.TUNE, Glyph.QUIET, Glyph.AMBIENT, Glyph.OFF, Glyph.HEADPHONES, Glyph.EARBUDS, Glyph.CHAT -> cs.primaryFixedDim to cs.onPrimaryFixed
-            Glyph.BATTERY, Glyph.BATTERY_CHARGING, Glyph.BATTERY_LOW, Glyph.BATTERY_UNKNOWN, Glyph.POWER, Glyph.TIMER -> cs.tertiaryFixedDim to cs.onTertiaryFixed
-            Glyph.BLUETOOTH, Glyph.LINK, Glyph.LOCATION, Glyph.FIND, Glyph.HOME -> cs.secondaryFixedDim to cs.onSecondaryFixed
-            else -> cs.secondaryFixedDim to cs.onSecondaryFixed
-        }
-    }
+    // One style for every row: the same light circle and dark symbol (the wallpaper's primary in its
+    // fixed tone, the same in light and dark); the symbol alone tells the settings apart. A
+    // destructive row takes the error colour.
+    val (circle, onCircle) = if (danger) cs.errorContainer to cs.onErrorContainer else cs.primaryFixedDim to cs.onPrimaryFixed
+
     Surface(shape = androidx.compose.foundation.shape.CircleShape, color = circle, contentColor = onCircle, modifier = Modifier.size(40.dp)) {
         androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) { HushIcon(g, Modifier.size(22.dp), onCircle) }
     }

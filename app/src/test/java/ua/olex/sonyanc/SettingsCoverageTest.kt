@@ -60,7 +60,7 @@ class SettingsCoverageTest {
         assertThrows(IllegalArgumentException::class.java){EqualizerProtocol.preset(255)}
     }    @Test fun editsMergeWithFreshValuesAndAmbientAliasesCompareEqual() {
         val key=AdvancedSettings.Key.TOUCH
-        assertEquals(listOf(2,0x10,0x20),AdvancedSettings.patch(key,listOf(2,0x35,0x20),1,0x10))
+        assertEquals(listOf(2,0xFF,0x20),AdvancedSettings.patch(key,listOf(2,0x35,0x20),1,0xFF))
         assertTrue(AdvancedSettings.equivalent(key,listOf(2,0,0x20),listOf(2,0x35,0x20)))
         assertNull(AdvancedSettings.patch(key,listOf(2,0,0x20),0,0))
         assertNull(AdvancedSettings.patch(key,listOf(2,0,0x20),1,0x80))
