@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -128,16 +129,39 @@ private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> 
 @Composable
 fun NavRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, summary: String? = null,
-    enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, danger: Boolean = false, onClick: () -> Unit,
+    enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, danger: Boolean = false, note: RowNote? = null, onClick: () -> Unit,
 ) {
     val error = MaterialTheme.colorScheme.error
     SegmentedListItem(
         onClick = onClick, shapes = shape, enabled = enabled,
         colors = if (danger) ListItemDefaults.segmentedColors(containerColor = Surfaces.card, contentColor = error, leadingContentColor = error) else rowColors(),
         leadingContent = leading(glyph, danger), trailingContent = trailing,
-        supportingContent = summary?.let { { Text(it) } },
+        supportingContent = supporting(summary, note),
         modifier = Modifier.fillMaxWidth(),
     ) { Text(title) }
+}
+
+/**
+ * What a change just did, said in the row it happened to: in the primary colour, or the error
+ * colour when the earbuds refused it. It replaces the row's summary for a few seconds and fades
+ * back, so nothing floats over the page and nothing has to be dismissed.
+ */
+data class RowNote(val text: String, val error: Boolean = false)
+
+private fun supporting(summary: String?, note: RowNote?): (@Composable () -> Unit)? {
+    if (summary == null && note == null) return null
+    return {
+        val enter = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        val exit = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+        androidx.compose.animation.AnimatedContent(
+            note to summary, label = "row note",
+            transitionSpec = { androidx.compose.animation.fadeIn(enter) togetherWith androidx.compose.animation.fadeOut(exit) },
+        ) { (n, text) ->
+            if (n != null) Text(n.text, color = if (n.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
+            else if (text != null) Text(text)
+        }
+    }
 }
 
 /**
@@ -176,7 +200,7 @@ private fun ValuePlaceholder() {
 @Composable
 fun SwitchRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, summary: String?,
-    checked: Boolean?, busy: Boolean = false, enabled: Boolean = true, onChange: (Boolean) -> Unit,
+    checked: Boolean?, busy: Boolean = false, enabled: Boolean = true, note: RowNote? = null, onChange: (Boolean) -> Unit,
 ) {
     if (checked == null) {
         InfoRow(shape, glyph, title, if (busy) null else "Not available")
@@ -191,7 +215,7 @@ fun SwitchRow(
             onChange(!checked)
         },
         shapes = shape, enabled = enabled, colors = rowColors(),
-        leadingContent = leading(glyph), supportingContent = summary?.let { { Text(it) } },
+        leadingContent = leading(glyph), supportingContent = supporting(summary, note),
         trailingContent = {
             Switch(
                 checked = checked, onCheckedChange = null, enabled = enabled,
@@ -206,7 +230,7 @@ fun SwitchRow(
 @Composable
 fun ChoiceRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, choices: List<Pair<Int, String>>, selected: Int?,
-    busy: Boolean = false, enabled: Boolean = true, onSelect: (Int) -> Unit,
+    busy: Boolean = false, enabled: Boolean = true, note: RowNote? = null, onSelect: (Int) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     if (selected == null) {
@@ -214,7 +238,7 @@ fun ChoiceRow(
         return
     }
     // Same quiet rule as SwitchRow: the last known value, no spinner, taps wait for the answer.
-    NavRow(shape, glyph, title, choices.firstOrNull { it.first == selected }?.second ?: "Device setting", enabled = enabled) {
+    NavRow(shape, glyph, title, choices.firstOrNull { it.first == selected }?.second ?: "Device setting", enabled = enabled, note = note) {
         if (!busy) open = true
     }
     if (open) ChoiceDialog(title, choices, selected, onDismiss = { open = false }) { open = false; onSelect(it) }

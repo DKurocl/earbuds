@@ -28,8 +28,9 @@ class AdvancedSettingsTest {
         // A touch function this app doesn't name is kept (shown as "Device setting"), a wrong shape is not.
         assertEquals(listOf(2,0x80,0x20),AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 03 02 80 20"))!!.second)
         assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 03 01 00 20")))
-        // And only named functions are written: the unknown side is preserved untouched.
-        assertEquals(listOf(2,0x80,0x10),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x10))
+        // And only named functions are written: the unknown side is kept unless Playback must move there.
+        assertEquals(listOf(2,0x80,0xFF),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0xFF),2,0xFF))
+        assertEquals(listOf(2,0x20,0x10),AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x10))
         assertNull(AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0x80,0x20),2,0x80))
         assertNull(AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("F7 0C 02 01")))
     }
@@ -39,12 +40,15 @@ class AdvancedSettingsTest {
         val current=listOf(2,0x35,0x20)
         // Right to noise control: the left earbud takes playback instead.
         assertEquals(listOf(2,0x20,0x35),AdvancedSettings.patch(key,current,2,0))
-        // Right to volume: nothing to swap.
-        assertEquals(listOf(2,0x35,0x10),AdvancedSettings.patch(key,current,2,0x10))
         // Left to playback: the right earbud takes noise control.
         assertEquals(listOf(2,0x20,0x35),AdvancedSettings.patch(key,current,1,0x20))
-        // Off can be on both.
-        assertEquals(listOf(2,0xFF,0xFF),AdvancedSettings.patch(key,listOf(2,0xFF,0x20),2,0xFF))
+        // Playback stays on one earbud (the XM5 refuses FF FF and 35 FF): it moves to the other side.
+        assertEquals(listOf(2,0x20,0xFF),AdvancedSettings.patch(key,listOf(2,0xFF,0x20),2,0xFF))
+        assertEquals(listOf(2,0x20,0xFF),AdvancedSettings.patch(key,current,2,0xFF))
+        assertEquals(listOf(2,0x20,0x10),AdvancedSettings.patch(key,current,2,0x10))
+        // Changes that keep Playback somewhere are sent as chosen.
+        assertEquals(listOf(2,0xFF,0x20),AdvancedSettings.patch(key,current,1,0xFF))
+        assertEquals(listOf(2,0x10,0x20),AdvancedSettings.patch(key,current,1,0x10))
     }
 
     @Test fun noiseControlTriesTheOtherCodeToo() {
@@ -53,5 +57,15 @@ class AdvancedSettingsTest {
         assertEquals(listOf(0x10), AdvancedSettings.touchCodes(listOf(2,0xFF,0x20),0x10))
         assertEquals(listOf(2,0x35,0x20), AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0xFF,0x20),1,0,0x35))
         assertEquals(listOf(2,0,0x20), AdvancedSettings.patch(AdvancedSettings.Key.TOUCH,listOf(2,0xFF,0x20),1,0,0))
+    }
+
+    @Test fun touchPanelReadsBothEncodings() {
+        val v2=AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("D7 D2 00 00"))!!
+        assertEquals(AdvancedSettings.Key.PANEL,v2.first)
+        assertTrue(AdvancedSettings.panelOn(v2.second))
+        assertEquals(listOf(0xD8,0xD2,0x00,0x01),AdvancedSettings.Key.PANEL.set(listOf(0,AdvancedSettings.panelCode(v2.second,false))).map{it.toInt() and 255})
+        val v1=AdvancedSettings.parse(0x0C,SonyProtocol.parseHex("D9 D2 01 00"))!!
+        assertFalse(AdvancedSettings.panelOn(v1.second))
+        assertEquals(1,AdvancedSettings.panelCode(v1.second,true))
     }
 }

@@ -6,6 +6,7 @@ import org.junit.Test
 class SettingsCoverageTest {
     private val fixtures=mapOf(
         AdvancedSettings.Key.TOUCH to "F7 03 02 00 20",
+        AdvancedSettings.Key.PANEL to "D7 D2 00 00",
         AdvancedSettings.Key.CYCLE to "FB 03 01 35 01 00 01",
         AdvancedSettings.Key.CHAT to "F7 0C 00 01",
         AdvancedSettings.Key.CHAT_CONFIG to "FB 0C 00 01",
@@ -59,7 +60,7 @@ class SettingsCoverageTest {
         assertThrows(IllegalArgumentException::class.java){EqualizerProtocol.preset(255)}
     }    @Test fun editsMergeWithFreshValuesAndAmbientAliasesCompareEqual() {
         val key=AdvancedSettings.Key.TOUCH
-        assertEquals(listOf(2,0x35,0x10),AdvancedSettings.patch(key,listOf(2,0x35,0x20),2,0x10))
+        assertEquals(listOf(2,0x10,0x20),AdvancedSettings.patch(key,listOf(2,0x35,0x20),1,0x10))
         assertTrue(AdvancedSettings.equivalent(key,listOf(2,0,0x20),listOf(2,0x35,0x20)))
         assertNull(AdvancedSettings.patch(key,listOf(2,0,0x20),0,0))
         assertNull(AdvancedSettings.patch(key,listOf(2,0,0x20),1,0x80))

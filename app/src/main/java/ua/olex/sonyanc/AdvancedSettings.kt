@@ -9,6 +9,9 @@ object AdvancedSettings {
     private val touch=choices(0 to "Noise control",0x10 to "Volume",0x20 to "Playback",0xFF to "Off")
     enum class Key(val title:String,val getCode:Int,val subtype:Int,val type:Byte=SonyProtocol.TYPE_COMMAND) {
         TOUCH("Touch controls",0xF6,0x03),
+        // The whole touch panel on or off (Sony's "touch sensor", D6 D2). Two bytes: the first says
+        // how the second reads, 0 = MDR V2 (second byte 0 = on), 1 = V1 (second byte 1 = on).
+        PANEL("Touch panel",0xD6,0xD2),
         CYCLE("Noise control cycle",0xFA,0x03),
         CHAT("Speak-to-Chat",0xF6,0x0C),
         CHAT_CONFIG("Conversation detection",0xFA,0x0C),
@@ -21,6 +24,7 @@ object AdvancedSettings {
         val get get()=byteArrayOf(getCode.toByte(),subtype.toByte())
         val fields get():List<Field> = when(this) {
             TOUCH -> listOf(Field("Left",1,touch),Field("Right",2,touch))
+            PANEL -> listOf(Field("State",1,choices(0 to "0",1 to "1")))
             CYCLE -> listOf(Field("Modes",4,choices(1 to "ANC · Ambient · Off",2 to "ANC · Ambient",3 to "ANC · Off",4 to "Ambient · Off")))
             CHAT, SIDETONE, GESTURES, GUIDANCE -> listOf(Field("Enabled",0,toggle))
             CHAT_CONFIG -> listOf(Field("Sensitivity",0,choices(0 to "Auto",1 to "High",2 to "Low")),Field("Resume music",1,choices(0 to "Short",1 to "Standard",2 to "Long",3 to "Manually")))
@@ -32,6 +36,7 @@ object AdvancedSettings {
             // Either side may report a function this app doesn't name (newer firmware): it is shown as
             // "Device setting" and kept as is; only named functions are ever written (see patch).
             TOUCH -> v.size==3 && v[0]==2
+            PANEL -> v.size==2 && v[0] in 0..1 && v[1] in 0..1
             CYCLE -> v.size==5 && v[0]==1 && v[1] in listOf(0,0x35) && v[2]==1 && v[3]==0 && v[4] in 1..4
             CHAT -> v.size==2 && v[0] in 0..1 && v[1]==1
             CHAT_CONFIG -> v.size==2 && v[0] in 0..2 && v[1] in 0..3
@@ -48,6 +53,11 @@ object AdvancedSettings {
             return (listOf(getCode+2,wireSubtype)+body).map{it.toByte()}.toByteArray()
         }
     }
+    const val PLAYBACK=0x20
+    /** Whether the touch panel is on, from its two reported bytes (see [Key.PANEL]). */
+    fun panelOn(v:List<Int>)=if(v[0]==0) v[1]==0 else v[1]==1
+    /** The second byte that turns the panel on or off, in the encoding the earbuds reported. */
+    fun panelCode(v:List<Int>,on:Boolean)=if(v[0]==0) (if(on) 0 else 1) else (if(on) 1 else 0)
     fun parse(type:Int,p:ByteArray):Pair<Key,List<Int>>? {
         if(p.size<3) return null
         val op=p[0].toInt() and 255;val subtype=p[1].toInt() and 255
@@ -65,12 +75,16 @@ object AdvancedSettings {
         val chosen=wire?.takeIf{key==Key.TOUCH && code==0 && it in listOf(0,0x35)}
             ?: if(key==Key.TOUCH && code==0 && current.drop(1).contains(0x35)) 0x35 else code
         val next=current.toMutableList().apply{this[index]=chosen}
-        // The earbuds take each function on one side only (both "Off" is fine): choosing what the
-        // other earbud has swaps the two, as Sony's app does. Sent as a pair, never refused.
-        if(key==Key.TOUCH && index in 1..2 && chosen!=0xFF) {
+        if(key==Key.TOUCH && index in 1..2) {
             val other=3-index
+            // The earbuds take each function on one side only: choosing what the other earbud has
+            // swaps the two, as Sony's app does.
             fun same(a:Int,b:Int)=(if(a==0x35) 0 else a)==(if(b==0x35) 0 else b)
-            if(same(current[other],chosen)) next[other]=current[index]
+            if(chosen!=0xFF && same(current[other],chosen)) next[other]=current[index]
+            // And the WF-1000XM5 keeps Playback on one earbud (calls are answered with it): a change
+            // that leaves neither side with it is refused, so Playback moves to the other earbud.
+            // Seen on the owner's earbuds: FF FF and 35 FF were refused, 35 20 and FF 20 accepted.
+            if(PLAYBACK in current.drop(1) && PLAYBACK !in next.drop(1)) next[other]=PLAYBACK
         }
         return next.takeIf{key.valid(it)}
     }
