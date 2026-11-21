@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.toggleableState
@@ -97,8 +98,8 @@ fun ListGroup(title: String? = null, build: GroupScope.() -> Unit) {
 @Composable
 fun SectionTitle(text: String) {
     Text(
-        text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 4.dp),
+        text, style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary, modifier = Modifier.semantics { heading() }.padding(start = 12.dp, top = 6.dp),
     )
 }
 
