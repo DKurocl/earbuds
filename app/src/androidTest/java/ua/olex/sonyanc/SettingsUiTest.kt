@@ -92,7 +92,11 @@ class SettingsUiTest {
         listOf("Left touch control","Right touch control","Automatic power off","Bluetooth quality","Voice guidance volume").forEach {title->
             compose.onNodeWithText(title).performScrollTo()
             val label=compose.onNode(hasText(title),useUnmergedTree=true).fetchSemanticsNode()
-            val value=label.parent!!.children.first {it.id!=label.id && it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text)}
+            // The value is the next text below the label in the same column (it may sit inside the
+            // row note's crossfade, so it is not always the label's sibling).
+            val value=compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Text),useUnmergedTree=true)
+                .fetchSemanticsNodes().filter {it.id!=label.id && it.boundsInRoot.top>label.boundsInRoot.top &&
+                    kotlin.math.abs(it.boundsInRoot.left-label.boundsInRoot.left)<4f}.minBy {it.boundsInRoot.top}
             assertTrue("$title value overlaps its label",label.boundsInRoot.bottom<=value.boundsInRoot.top+1f)
         }
     }
