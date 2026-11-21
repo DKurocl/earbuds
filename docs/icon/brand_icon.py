@@ -29,6 +29,9 @@ PEACH = "#FFFDBBA2"
 # Inside the launcher's safe circle (radius 33 around 54, 54).
 L, R, T, B, C = 24.0, 84.0, 25.0, 75.0, 24.0  # the case: left, right, top, bottom, corner
 BACK = (27.0, 33.0, 81.0, 83.0, 23.0)  # the case again, lower; clipped below the slit
+# The case is drawn large for its proportions and shrunk to sit at the same optical size as
+# Google's icons (and Music's) on the launcher: about 60 % of the visible circle.
+SCALE = 0.74
 SEAM_TOP, SEAM_BOTTOM = 42.6, 45.6  # the white slit between lid and base
 LIGHT_Y = 55.0
 
@@ -76,6 +79,10 @@ def parts():
     return back, base, lid
 
 
+def fit(body):
+    return f'<group android:pivotX="54" android:pivotY="54" android:scaleX="{SCALE}" android:scaleY="{SCALE}">{body}</group>'
+
+
 def write(name, body):
     (OUT / name).write_text(HEADER + body + "\n")
 
@@ -84,18 +91,19 @@ def main():
     write("ic_launcher_background.xml",
           f'<vector {NS} {SIZE}><path android:fillColor="{BACKGROUND}" android:pathData="M0,0h108v108h-108z"/></vector>')
     back, base, lid = parts()
-    write("ic_launcher_foreground.xml", f'<vector {NS} {AAPT} {SIZE}>{back}{base}{lid}</vector>')
+    write("ic_launcher_foreground.xml", f'<vector {NS} {AAPT} {SIZE}>{fit(back + base + lid)}</vector>')
     # Themed icons: one ink. The case with its slit and light cut out; the back copy at lower alpha.
-    mono = (f'<vector {NS} {SIZE}>'
+    mono = (f'<vector {NS} {SIZE}><group android:pivotX="54" android:pivotY="54" android:scaleX="{SCALE}" android:scaleY="{SCALE}">'
             f'<group><clip-path android:pathData="{BACK_CLIP}"/><path android:fillColor="#FF000000" android:fillAlpha="0.45" android:pathData="{rounded(*BACK)}"/></group>'
             f'<group><clip-path android:pathData="{LID_CLIP}"/><path android:fillColor="#FF000000" android:pathData="{CASE}"/></group>'
-            f'<group><clip-path android:pathData="{BASE_CLIP}"/><path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="{CASE}{DOT}"/></group></vector>')
+            f'<group><clip-path android:pathData="{BASE_CLIP}"/><path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="{CASE}{DOT}"/></group></group></vector>')
     write("ic_launcher_monochrome.xml", mono)
 
     drawable = (f'<aapt:attr name="android:drawable"><vector {SIZE}>'
+                f'<group android:pivotX="54" android:pivotY="54" android:scaleX="{SCALE}" android:scaleY="{SCALE}">'
                 f'<group android:name="mark" android:pivotX="54" android:pivotY="54">{back}'
                 f'<group android:name="case" android:pivotX="54" android:pivotY="50">{base}{lid}</group>'
-                f'</group></vector></aapt:attr>')
+                f'</group></group></vector></aapt:attr>')
 
     def target(name, animators):
         return f'<target android:name="{name}"><aapt:attr name="android:animation"><set>{animators}</set></aapt:attr></target>'
