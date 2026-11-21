@@ -66,6 +66,9 @@ object ConnectedSheet {
     /** True while the app's own screen is started: the sheet would only repeat it. */
     @Volatile var appVisible = false
     @Volatile private var lastShown = 0L
+    @Volatile private var lastAsked = 0L
+    /** The sheet came up: the quiet period starts now. */
+    fun appeared() { lastShown = System.currentTimeMillis(); Headphones.addLog("✓ connected sheet is on screen") }
     private const val QUIET_MS = 90_000L // a link that drops and comes back does not bring it up again
 
     fun show(ctx: Context, from: String) {
@@ -76,10 +79,13 @@ object ConnectedSheet {
         if (!LiveLink.enabled(ctx)) return skip("Stay in sync is off (Android lets only a companion app open it)")
         val now = System.currentTimeMillis()
         if (now - lastShown < QUIET_MS) return skip("shown a moment ago")
+        if (now - lastAsked < 1_000L) return skip("already on its way")
         if (ctx.getSystemService(PowerManager::class.java)?.isInteractive != true) return skip("screen off")
         if (ctx.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != false) return skip("phone locked")
-        lastShown = now
-        Headphones.addLog("✓ connected sheet ($from)")
+        // Counted as shown only once it really opens (onCreate): Android may refuse a start from the
+        // background without a word, and then the other trigger must still be allowed to try.
+        lastAsked = now
+        Headphones.addLog("→ connected sheet ($from)")
         runCatching {
             ctx.startActivity(Intent(ctx, ConnectedSheetActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
         }.onFailure { Headphones.addLog("✗ connected sheet: ${it.message}") }
@@ -91,6 +97,7 @@ class ConnectedSheetActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         Headphones.init(this)
+        ConnectedSheet.appeared()
         val name = Prefs.displayName(this) ?: Prefs.deviceName(this) ?: "WF-1000XM5"
         val earlier = Prefs.lastBattery(this)?.first
         setContent {
