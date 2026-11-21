@@ -42,6 +42,18 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     // ---- owner's settings ----
     var haptics by mutableStateOf(Prefs.haptics(ctx)); private set
     var dynamicColor by mutableStateOf(Prefs.dynamicColor(ctx)); private set
+    var qualityByPlace by mutableStateOf(Prefs.qualityByPlace(ctx)); private set
+    var afterSleep by mutableStateOf(Prefs.afterSleep(ctx)); private set
+    fun updateAfterSleep(value: AfterSleep) { afterSleep = value; Prefs.setAfterSleep(ctx, value) }
+    var chargeReminder by mutableStateOf(Prefs.chargeReminder(ctx)); private set
+    fun chargeReminderChanged(on: Boolean) { chargeReminder = on; Prefs.setChargeReminder(ctx, on); ChargeReminder.reschedule(ctx) }
+    var activityMode by mutableStateOf(Prefs.activityMode(ctx)); private set
+    fun activityModeChanged(on: Boolean) { activityMode = on; Prefs.setActivityMode(ctx, on); ActivityMode.update(ctx) }
+    fun updateQualityByPlace(on: Boolean) {
+        qualityByPlace = on; Prefs.setQualityByPlace(ctx, on)
+        // Applied now when the earbuds are connected, otherwise on the next connection.
+        if (on) viewModelScope.launch { EarbudSettingsLink.keepQuality() }
+    }
     var onConnect by mutableStateOf(Prefs.onConnect(ctx)); private set
     var caseReminder by mutableStateOf(Prefs.caseReminder(ctx)); private set
     var budsReminder by mutableStateOf(Prefs.budsReminder(ctx) && notificationsAllowed()); private set

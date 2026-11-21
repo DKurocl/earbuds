@@ -177,6 +177,7 @@ object Headphones {
         stayJob = null
         if (on) stayJob = scope.launch { keepLinked() }
         else if (!usage.active) { ModeControl.cancelModes(); conn.close() }
+        ActivityMode.update(app) // "Ambient while walking" listens only while the earbuds are here
     }
 
     val staying get() = usage.staying

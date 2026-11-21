@@ -39,7 +39,8 @@ enum class Glyph(val codepoint: Int) {
     LINK(0xE1A8), TIMER(0xE425), CHAT(0xE91F), HOME(0xE9B2), LOCATION(0xE55C), DONE(0xF0BE), HEADPHONES(0xF01F),
     // Earbud settings, one symbol per setting (docs/icon: subset from Material Symbols Rounded).
     HQ(0xE024), VOICE_SETTINGS(0xE8C8), AUTOPLAY(0xF6B5), SWIPE_LEFT(0xEB59), SWIPE_RIGHT(0xEB52),
-    NOISE_AWARE(0xEBEC), FACE(0xF008), MIC(0xE31D), PAUSE_CIRCLE(0xE1A2), CAMPAIGN(0xEF49), VOLUME(0xE050);
+    NOISE_AWARE(0xEBEC), FACE(0xF008), MIC(0xE31D), PAUSE_CIRCLE(0xE1A2), CAMPAIGN(0xEF49), VOLUME(0xE050),
+    BEDTIME(0xF159), WALK(0xE536), INSIGHTS(0xF092), UPCOMING(0xF238);
 
     val text: String = String(Character.toChars(codepoint))
 }

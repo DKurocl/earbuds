@@ -111,6 +111,16 @@ class ConnectedSheetActivity : ComponentActivity() {
                         close()
                     },
                     onGone = ::close,
+                    // What was playing last (Music or any player) picks up where it stopped:
+                    // Android sends Play to the most recent media session.
+                    canResume = !getSystemService(android.media.AudioManager::class.java).isMusicActive,
+                    onResume = {
+                        val audio = getSystemService(android.media.AudioManager::class.java)
+                        val key = android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+                        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, key))
+                        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, key))
+                        Headphones.addLog("· connected sheet: resume music")
+                    },
                 )
             }
         }
@@ -127,6 +137,7 @@ class ConnectedSheetActivity : ComponentActivity() {
 fun ConnectedSheetContent(
     name: String, status: Headphones.Status, battery: SonyProtocol.Battery, live: Set<Int>,
     onOpen: () -> Unit = {}, onGone: () -> Unit = {}, shown: Float? = null,
+    canResume: Boolean = false, onResume: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
@@ -177,6 +188,13 @@ fun ConnectedSheetContent(
                 Spacer(Modifier.height(20.dp))
                 Batteries(battery, live, ready = false, onRefresh = {})
                 Spacer(Modifier.height(20.dp))
+                // With nothing playing yet, the first thing wanted after putting the earbuds in.
+                if (canResume) {
+                    androidx.compose.material3.FilledTonalButton(onClick = { onResume(); dismiss() }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        Text("Resume music", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(onClick = ::dismiss, modifier = Modifier.weight(1f).height(48.dp)) { Text("Done") }
                     Button(onClick = onOpen, modifier = Modifier.weight(1f).height(48.dp)) { Text("Open Earbuds") }

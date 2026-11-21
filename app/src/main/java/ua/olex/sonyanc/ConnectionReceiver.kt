@@ -40,6 +40,7 @@ class ConnectionReceiver : BroadcastReceiver() {
 
         Prefs.setLinked(ctx, true)
         Prefs.nextSession(ctx) // out of the case: a new continuous-use session for BatteryLog
+        ChargeReminder.recordOut(ctx)
         Widgets.refreshAll(ctx)
         CaseReminder.clear(ctx)
         if (!Headphones.hasPermission(ctx)) return

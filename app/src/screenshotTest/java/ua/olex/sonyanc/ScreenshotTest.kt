@@ -152,7 +152,7 @@ class ScreenshotTest {
     @Test fun connectedSheet() = shoot("connected-sheet") {
         Box(Modifier.fillMaxSize().background(Color(0xFF3B4A5C))) {
             ConnectedSheetContent(
-                "WF-1000XM5", Headphones.Status.CONNECTED, SonyProtocol.Battery(82, 79, 56, caseCharging = true), setOf(0, 1, 2), shown = 1f,
+                "WF-1000XM5", Headphones.Status.CONNECTED, SonyProtocol.Battery(82, 79, 56, caseCharging = true), setOf(0, 1, 2), shown = 1f, canResume = true,
             )
         }
     }

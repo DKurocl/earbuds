@@ -100,6 +100,25 @@ object BatteryLog {
 
     private fun bucket(mode: Mode?) = if (mode == Mode.OFF) 1 else 0
 
+    /** Minutes in the ears over the week before [now], and how many of them with noise cancelling. */
+    data class Week(val minutes: Int, val anc: Int)
+
+    /**
+     * The week's listening from the readings already kept: the time between two readings of the
+     * same out-of-case session (not charging, at most [MAX_GAP] apart) counts, in the mode of the
+     * first. Readings are sparse, so this is a floor, never an overstatement.
+     */
+    fun week(samples: List<BatterySample>, now: Long): Week {
+        var all = 0L; var anc = 0L
+        for ((a, b) in samples.zipWithNext()) {
+            if (now - a.at !in 0..7 * 24 * 60 * 60_000L) continue
+            val dt = b.at - a.at
+            if (a.session != b.session || a.charging || dt <= 0 || dt > MAX_GAP) continue
+            all += dt; if (a.mode == Mode.ANC) anc += dt
+        }
+        return Week((all / 60_000L).toInt(), (anc / 60_000L).toInt())
+    }
+
     /** Percent per minute for [mode]'s bucket, or null until there is enough real use. */
     fun rate(samples: List<BatterySample>, mode: Mode?): Double? = drain(samples, mode)?.rate
 
