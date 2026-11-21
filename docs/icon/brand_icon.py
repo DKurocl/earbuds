@@ -2,13 +2,14 @@
 
 usage: python docs/icon/brand_icon.py   (from the repository root; writes app/src/main/res/drawable)
 
-The mark: two soft slabs, the back one pale and peeking above, the front one in Music's sunrise
-gradient (#FFCB00 > #FFA412 > #FF6536 > #F551C6), and on it the WF-1000XM5 case as a smooth
-pebble (domed lid, gently tapering base) in white turning to blush, with its lid seam and light. The
-launcher background is Music's #FFFDFE, so the two icons sit together on the home screen.
+The mark follows Google's Material 3 Expressive product icons (Calendar, Tasks, Meet): one bold
+object on white, its details cut out in white, a lighter copy of it peeking out behind, and one soft
+glow of a second hue. Here: the earbuds case in coral (#FF6536) with a pink glow (#F551C6) to the
+right, the lid parted from the base by a white slit, the status light a white dot, and a peach copy
+of the case below it.
 
-The splash plays the same story in about half a second: the slab settles from 88 %, the case
-lands on it, and its lid lifts once and closes, as a real case does when the earbuds come out.
+The splash plays it in about half a second: the case drops in, its back copy settles under it, and
+the lid lifts once and closes, as a real case does when the earbuds come out.
 """
 import sys
 from pathlib import Path
@@ -21,19 +22,15 @@ NS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
 AAPT = 'xmlns:aapt="http://schemas.android.com/aapt"'
 SIZE = 'android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"'
 
-BACKGROUND = "#FFFFFDFE"
-SUNRISE = ((0.0, "#FFFFCB00"), (0.36, "#FFFFA412"), (0.62, "#FFFF6536"), (1.0, "#FFF551C6"))
-DAWN = ((0.0, "#FFFCE6AF"), (1.0, "#FFFAD1EF"))
-CASE = ((0.0, "#FFFFFFFF"), (1.0, "#FFFBD0EA"))
+BACKGROUND = "#FFFFFFFF"
+CORAL = "#FFFF6536"
+PEACH = "#FFFDBBA2"
 
-# Inside the launcher's circular mask (radius 33 around 54, 54): the slabs keep clear of it.
-FRONT = (31.0, 34.0, 77.0, 78.0, 13.0)  # left, top, right, bottom, corner
-BACK = (35.0, 28.0, 73.0, 58.0, 11.0)
-CASE_WIDTH = 34.0
-CASE_CX, CASE_CY = 54.0, 57.0
-CASE_H = 23.0
-CASE_TOP = CASE_CY - CASE_H / 2
-SEAM_Y = CASE_TOP + 0.41 * CASE_H
+# Inside the launcher's safe circle (radius 33 around 54, 54).
+L, R, T, B, C = 24.0, 84.0, 25.0, 75.0, 24.0  # the case: left, right, top, bottom, corner
+BACK = (27.0, 33.0, 81.0, 83.0, 23.0)  # the case again, lower; clipped below the slit
+SEAM_TOP, SEAM_BOTTOM = 42.6, 45.6  # the white slit between lid and base
+LIGHT_Y = 55.0
 
 
 def num(v):
@@ -41,15 +38,11 @@ def num(v):
 
 
 def rounded(l, t, r, b, c):
-    return (f"M{num(l + c)},{num(t)}H{num(r - c)}A{num(c)},{num(c)} 0 0 1 {num(r)},{num(t + c)}"
-            f"V{num(b - c)}A{num(c)},{num(c)} 0 0 1 {num(r - c)},{num(b)}H{num(l + c)}"
-            f"A{num(c)},{num(c)} 0 0 1 {num(l)},{num(b - c)}V{num(t + c)}A{num(c)},{num(c)} 0 0 1 {num(l + c)},{num(t)}Z")
-
-
-def linear(stops, x1, y1, x2, y2):
-    items = "".join(f'<item android:offset="{o}" android:color="{c}"/>' for o, c in stops)
-    return (f'<aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="{num(x1)}" '
-            f'android:startY="{num(y1)}" android:endX="{num(x2)}" android:endY="{num(y2)}">{items}</gradient></aapt:attr>')
+    k = c * 0.552
+    return (f"M{num(l)},{num(t + c)}C{num(l)},{num(t + c - k)} {num(l + c - k)},{num(t)} {num(l + c)},{num(t)}"
+            f"H{num(r - c)}C{num(r - c + k)},{num(t)} {num(r)},{num(t + c - k)} {num(r)},{num(t + c)}"
+            f"V{num(b - c)}C{num(r)},{num(b - c + k)} {num(r - c + k)},{num(b)} {num(r - c)},{num(b)}"
+            f"H{num(l + c)}C{num(l + c - k)},{num(b)} {num(l)},{num(b - c + k)} {num(l)},{num(b - c)}Z")
 
 
 def radial(cx, cy, r, inner, outer):
@@ -58,52 +51,29 @@ def radial(cx, cy, r, inner, outer):
             f'android:endColor="{outer}"/></aapt:attr>')
 
 
-def pebble():
-    """The case from the front: broad rounded lid corners, straight sides, softer base corners
-    (the WF-1000XM5's charging case)."""
-    l, r = CASE_CX - CASE_WIDTH / 2, CASE_CX + CASE_WIDTH / 2
-    t, b = CASE_TOP, CASE_TOP + CASE_H
-    return (f"M{num(l)},{num(t + 11)}C{num(l)},{num(t + 4.9)} {num(l + 4.9)},{num(t)} {num(l + 11)},{num(t)}"
-            f"H{num(r - 11)}C{num(r - 4.9)},{num(t)} {num(r)},{num(t + 4.9)} {num(r)},{num(t + 11)}"
-            f"V{num(b - 9)}C{num(r)},{num(b - 4)} {num(r - 4)},{num(b)} {num(r - 9)},{num(b)}"
-            f"H{num(l + 9)}C{num(l + 4)},{num(b)} {num(l)},{num(b - 4)} {num(l)},{num(b - 9)}Z")
+CASE = rounded(L, T, R, B, C)
+LID_CLIP = f"M0,0H108V{num(SEAM_TOP)}H0Z"
+BASE_CLIP = f"M0,{num(SEAM_BOTTOM)}H108V108H0Z"
+BACK_CLIP = f"M0,{num(SEAM_BOTTOM + 8)}H108V108H0Z"
+DOT = f"M{num(54 - 2.6)},{num(LIGHT_Y)}a2.6,2.6 0 1 0 5.2,0a2.6,2.6 0 1 0 -5.2,0Z"
 
 
-CASE_PATH = pebble()
-SMILE = 1.0  # how far the seam dips at the middle of the case
-_L, _R = CASE_CX - CASE_WIDTH / 2 - 1, CASE_CX + CASE_WIDTH / 2 + 1
-_dip = f"{num(CASE_CX)},{num(SEAM_Y + 2 * SMILE)}"
-LID_CLIP = f"M0,0H108V{num(SEAM_Y)}H{num(_R)}Q{_dip} {num(_L)},{num(SEAM_Y)}H0Z"
-BASE_CLIP = f"M0,{num(SEAM_Y)}H{num(_L)}Q{_dip} {num(_R)},{num(SEAM_Y)}H108V108H0Z"
-SEAM_LINE = (f"M{num(_L)},{num(SEAM_Y - 0.35)}Q{num(CASE_CX)},{num(SEAM_Y + 2 * SMILE - 0.35)} {num(_R)},{num(SEAM_Y - 0.35)}"
-             f"V{num(SEAM_Y + 0.35)}Q{num(CASE_CX)},{num(SEAM_Y + 2 * SMILE + 0.35)} {num(_L)},{num(SEAM_Y + 0.35)}Z")
-LIGHT = f"M{num(CASE_CX - 0.85)},{num(SEAM_Y + SMILE + 3.6)}a0.85,0.85 0 1 0 1.7,0a0.85,0.85 0 1 0 -1.7,0Z"
-SHADOW = (f"M{num(CASE_CX - 14)},{num(CASE_CY + CASE_H / 2 + 0.6)}a14,2.4 0 1 0 28,0"
-          f"a14,2.4 0 1 0 -28,0Z")
+def coloured(clip):
+    """The case cut to the lid or the base: flat coral with the pink glow from the right."""
+    glow = radial(R + 2, B - 6, 40, "#FFF551C6", "#00F551C6")
+    return (f'<group><clip-path android:pathData="{clip}"/>'
+            f'<path android:fillColor="{CORAL}" android:pathData="{CASE}"/>'
+            f'<path android:pathData="{CASE}">{glow}</path></group>')
 
 
-def slabs(named=False):
-    back_name = ' android:name="back"' if named else ""
-    front_name = ' android:name="front"' if named else ""
-    l, t, r, b, c = BACK
-    back = f'<path{back_name} android:pathData="{rounded(l, t, r, b, c)}">{linear(DAWN, l, t, r, t)}</path>'
-    l, t, r, b, c = FRONT
-    front = f'<path{front_name} android:pathData="{rounded(l, t, r, b, c)}">{linear(SUNRISE, l, t, r, b)}</path>'
-    return back + front
-
-
-def case_parts():
-    """The case: a soft contact shadow, the base and the lid (separate, so the lid can lift)."""
-    shadow = f'<path android:name="shadow" android:pathData="{SHADOW}">{radial(CASE_CX, CASE_CY + CASE_H / 2 + 0.6, 14, "#2E9A2C5E", "#009A2C5E")}</path>'
-    fill = linear(CASE, CASE_CX - CASE_WIDTH / 2, CASE_TOP, CASE_CX + CASE_WIDTH / 2, CASE_TOP + CASE_H)
-    base = (f'<group><clip-path android:pathData="{BASE_CLIP}"/><path android:name="base" android:pathData="{CASE_PATH}">{fill}</path></group>'
-            f'<path android:fillColor="#FFC98BAE" android:pathData="{LIGHT}"/>')
-    # The lid scales from the seam (its bottom edge), so opening shortens it upwards.
-    lid = (f'<group android:name="lid" android:pivotX="{num(CASE_CX)}" android:pivotY="{num(SEAM_Y)}">'
-           f'<group><clip-path android:pathData="{LID_CLIP}"/><path android:pathData="{CASE_PATH}">{fill}</path></group>'
-           f'<group><clip-path android:pathData="{CASE_PATH}"/><path android:fillColor="#FFF7B9DA" android:pathData="{SEAM_LINE}"/></group>'
-           f'</group>')
-    return shadow, base, lid
+def parts():
+    # The clip stays put while the copy inside it slides (the splash), so the slit stays white.
+    back = (f'<group><clip-path android:pathData="{BACK_CLIP}"/><group android:name="back">'
+            f'<path android:fillColor="{PEACH}" android:pathData="{rounded(*BACK)}"/></group></group>')
+    base = coloured(BASE_CLIP) + f'<path android:fillColor="#FFFFFFFF" android:pathData="{DOT}"/>'
+    # The lid scales from its bottom edge, so opening shortens it upwards.
+    lid = f'<group android:name="lid" android:pivotX="54" android:pivotY="{num(SEAM_TOP)}">{coloured(LID_CLIP)}</group>'
+    return back, base, lid
 
 
 def write(name, body):
@@ -113,20 +83,18 @@ def write(name, body):
 def main():
     write("ic_launcher_background.xml",
           f'<vector {NS} {SIZE}><path android:fillColor="{BACKGROUND}" android:pathData="M0,0h108v108h-108z"/></vector>')
-    shadow, base, lid = case_parts()
-    write("ic_launcher_foreground.xml", f'<vector {NS} {AAPT} {SIZE}>{slabs()}<group><clip-path android:pathData="{rounded(*FRONT)}"/>{shadow}</group>{base}{lid}</vector>')
-    # Themed icons: one ink. The front slab, with the case cut out of it and its seam drawn back in.
-    l, t, r, b, c = FRONT
-    mono = (f'<vector {NS} {SIZE}><path android:fillColor="#FF000000" android:fillType="evenOdd" '
-            f'android:pathData="{rounded(l, t, r, b, c)}{CASE_PATH}"/>'
-            f'<group><clip-path android:pathData="{CASE_PATH}"/><path android:fillColor="#FF000000" android:pathData="{SEAM_LINE}"/></group></vector>')
+    back, base, lid = parts()
+    write("ic_launcher_foreground.xml", f'<vector {NS} {AAPT} {SIZE}>{back}{base}{lid}</vector>')
+    # Themed icons: one ink. The case with its slit and light cut out; the back copy at lower alpha.
+    mono = (f'<vector {NS} {SIZE}>'
+            f'<group><clip-path android:pathData="{BACK_CLIP}"/><path android:fillColor="#FF000000" android:fillAlpha="0.45" android:pathData="{rounded(*BACK)}"/></group>'
+            f'<group><clip-path android:pathData="{LID_CLIP}"/><path android:fillColor="#FF000000" android:pathData="{CASE}"/></group>'
+            f'<group><clip-path android:pathData="{BASE_CLIP}"/><path android:fillColor="#FF000000" android:fillType="evenOdd" android:pathData="{CASE}{DOT}"/></group></vector>')
     write("ic_launcher_monochrome.xml", mono)
 
-    # Splash: the same mark, animated (about 520 ms).
     drawable = (f'<aapt:attr name="android:drawable"><vector {SIZE}>'
-                f'<group android:name="mark" android:pivotX="54" android:pivotY="56">{slabs()}'
-                f'<group><clip-path android:pathData="{rounded(*FRONT)}"/>{shadow}</group>'
-                f'<group android:name="case" android:pivotX="{num(CASE_CX)}" android:pivotY="{num(CASE_CY)}">{base}{lid}</group>'
+                f'<group android:name="mark" android:pivotX="54" android:pivotY="54">{back}'
+                f'<group android:name="case" android:pivotX="54" android:pivotY="50">{base}{lid}</group>'
                 f'</group></vector></aapt:attr>')
 
     def target(name, animators):
@@ -136,24 +104,22 @@ def main():
         return (f'<objectAnimator android:propertyName="{prop}" android:duration="{duration}" android:startOffset="{delay}" '
                 f'android:valueType="floatType" android:valueFrom="{start}" android:valueTo="{end}" android:interpolator="{interpolator}"/>')
 
-    mark = target("mark", anim("scaleX", 0.88, 1, 250) + anim("scaleY", 0.88, 1, 250))
-    case = target("case", anim("translateY", -9, 0, 300, 60, "@interpolator/splash_spring")
-                  + anim("scaleX", 1.08, 1, 300, 60) + anim("scaleY", 1.08, 1, 300, 60))
-    # The lid lifts once the case has landed, then shuts. One
-    # animator per property with keyframes: two animators on one property would apply the second
-    # one's start value at once, and the lid would sit open from the first frame.
+    # One animator per property with keyframes: two animators on one property would apply the
+    # second one's start value at once.
     def keyframes(prop, frames, duration=580):
         kf = "".join(f'<keyframe android:fraction="{f}" android:value="{v}"'
                      + (f' android:interpolator="{i}"' if i else "") + "/>" for f, v, i in frames)
         return (f'<objectAnimator android:duration="{duration}" android:interpolator="@android:interpolator/linear">'
                 f'<propertyValuesHolder android:propertyName="{prop}" android:valueType="floatType">{kf}</propertyValuesHolder></objectAnimator>')
-    # Seen from the front a lid tipping back on its hinge rises and grows shorter: a gap opens
-    # under it and it closes again with a small spring.
-    lift = [(0, 0, None), (0.52, 0, None), (0.72, -2.4, "@interpolator/w_emphasized"), (1, 0, "@interpolator/splash_spring")]
-    squash = [(0, 1, None), (0.52, 1, None), (0.72, 0.86, "@interpolator/w_emphasized"), (1, 1, "@interpolator/splash_spring")]
-    lid_set = keyframes("translateY", lift) + keyframes("scaleY", squash)
-    lid_anim = target("lid", lid_set)
-    write("splash_icon.xml", f'<animated-vector {NS} {AAPT}>{drawable}{mark}{case}{lid_anim}</animated-vector>')
+
+    mark = target("mark", anim("scaleX", 0.9, 1, 260) + anim("scaleY", 0.9, 1, 260))
+    case = target("case", anim("translateY", -8, 0, 320, 0, "@interpolator/splash_spring"))
+    # The back copy slides out from under the case once it has landed.
+    back_anim = target("back", anim("translateY", -8, 0, 300, 120, "@interpolator/splash_spring"))
+    lift = [(0, 0, None), (0.5, 0, None), (0.7, -2.6, "@interpolator/w_emphasized"), (1, 0, "@interpolator/splash_spring")]
+    squash = [(0, 1, None), (0.5, 1, None), (0.7, 0.9, "@interpolator/w_emphasized"), (1, 1, "@interpolator/splash_spring")]
+    lid_anim = target("lid", keyframes("translateY", lift) + keyframes("scaleY", squash))
+    write("splash_icon.xml", f'<animated-vector {NS} {AAPT}>{drawable}{mark}{case}{back_anim}{lid_anim}</animated-vector>')
 
 
 if __name__ == "__main__":
