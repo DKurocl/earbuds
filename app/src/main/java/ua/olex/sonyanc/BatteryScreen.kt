@@ -34,14 +34,12 @@ import java.util.Date
 import kotlin.math.abs
 
 /**
- * Chart colors: a fixed, validated pair (blue earbuds, orange case) rather than the wallpaper
- * scheme, whose primary/tertiary can sit too close to tell apart. Checked with the dataviz
- * validator in both modes (CVD ΔE ≥ 24, normal ΔE ≥ 31, ≥ 3:1 on the card). The case line is
- * also dashed, so identity never rests on color alone.
+ * Chart colors from the wallpaper, as Android's own Battery page draws its usage: the earbuds in
+ * primary, the case in tertiary. The case line is also dashed, so identity never rests on color.
  */
 private object ChartColors {
-    val buds @Composable get() = if (isSystemInDarkTheme()) Color(0xFF3987E5) else Color(0xFF2A78D6)
-    val case @Composable get() = if (isSystemInDarkTheme()) Color(0xFFD95926) else Color(0xFFEB6834)
+    val buds @Composable get() = MaterialTheme.colorScheme.primary
+    val case @Composable get() = MaterialTheme.colorScheme.tertiary
 }
 
 /** The Battery page: a week of real readings and what a full charge lasts for the owner. */
