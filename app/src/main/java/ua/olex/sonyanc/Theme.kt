@@ -109,10 +109,12 @@ fun AppTheme(dynamic: Boolean = true, content: @Composable () -> Unit) {
 
 /** Page and card surfaces, as in Android settings: cards sit one step above the page. */
 object Surfaces {
+    // As Music: the page is the plain surface and rows sit on it in the tinted container, in both
+    // themes, so the two apps read as one family.
     val page: Color
         @Composable @ReadOnlyComposable
-        get() = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainer
+        get() = MaterialTheme.colorScheme.surface
     val card: Color
         @Composable @ReadOnlyComposable
-        get() = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLowest
+        get() = MaterialTheme.colorScheme.surfaceContainerHigh
 }

@@ -89,6 +89,8 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
     )
 }
 
+private val KEY_GLYPHS = mapOf(Key.CHAT to Glyph.CHAT, Key.SIDETONE to Glyph.HEADPHONES, Key.GESTURES to Glyph.HAPTICS, Key.GUIDANCE to Glyph.INFO)
+
 private fun rowId(key: Key, index: Int) = "${key.name}$index"
 
 private val SETTINGS_ORDER = listOf(
@@ -133,8 +135,8 @@ fun EarbudSettingsContent(
         ListGroup("Sound") {
             item { FeatureSwitch(it, Feature.DSEE, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
             item { KeySwitch(it, Key.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), writing == null, update, notes[rowId(Key.CHAT, 0)]) }
-            item { ChoiceRow(it, null, "Conversation sensitivity", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
-            item { ChoiceRow(it, null, "Resume after conversation", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
+            item { ChoiceRow(it, Glyph.CHAT, "Conversation sensitivity", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
+            item { ChoiceRow(it, Glyph.TIMER, "Resume after conversation", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), writing == null, note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
             item { KeySwitch(it, Key.SIDETONE, "Hear my voice in calls", "Lets you hear yourself while talking", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update, notes[rowId(Key.SIDETONE, 0)]) }
         }
         ListGroup("Controls") {
@@ -142,23 +144,23 @@ fun EarbudSettingsContent(
                 // The whole panel: Sony's app turns all touch controls off with this, as the
                 // per-earbud functions always keep Playback on one side.
                 val panel = values[Key.PANEL]
-                SwitchRow(it, null, "Touch controls", "Turn off to ignore every tap on the earbuds", panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), writing == null, note = notes[rowId(Key.PANEL, 1)]) { on ->
+                SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Turn off to ignore every tap on the earbuds", panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), writing == null, note = notes[rowId(Key.PANEL, 1)]) { on ->
                     panel?.let { v -> update(Key.PANEL, 1, AdvancedSettings.panelCode(v, on)) }
                 }
             }
-            item { ChoiceRow(it, null, "Left touch control", choices(Key.TOUCH, 1), code(Key.TOUCH, 1), busy(Key.TOUCH), writing == null, note = notes[rowId(Key.TOUCH, 1)]) { c -> update(Key.TOUCH, 1, c) } }
-            item { ChoiceRow(it, null, "Right touch control", choices(Key.TOUCH, 2), code(Key.TOUCH, 2), busy(Key.TOUCH), writing == null, note = notes[rowId(Key.TOUCH, 2)]) { c -> update(Key.TOUCH, 2, c) } }
-            item { ChoiceRow(it, null, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null, note = notes[rowId(Key.CYCLE, 4)]) { c -> update(Key.CYCLE, 4, c) } }
+            item { ChoiceRow(it, Glyph.EARBUDS, "Left touch control", choices(Key.TOUCH, 1), code(Key.TOUCH, 1), busy(Key.TOUCH), writing == null, note = notes[rowId(Key.TOUCH, 1)]) { c -> update(Key.TOUCH, 1, c) } }
+            item { ChoiceRow(it, Glyph.EARBUDS, "Right touch control", choices(Key.TOUCH, 2), code(Key.TOUCH, 2), busy(Key.TOUCH), writing == null, note = notes[rowId(Key.TOUCH, 2)]) { c -> update(Key.TOUCH, 2, c) } }
+            item { ChoiceRow(it, Glyph.QUIET, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4), busy(Key.CYCLE), writing == null, note = notes[rowId(Key.CYCLE, 4)]) { c -> update(Key.CYCLE, 4, c) } }
             item { KeySwitch(it, Key.GESTURES, "Head gestures", "Nod or shake your head to answer calls", code(Key.GESTURES, 0), busy(Key.GESTURES), writing == null, update, notes[rowId(Key.GESTURES, 0)]) }
         }
         ListGroup("Playback & connection") {
             item { FeatureSwitch(it, Feature.AUTO_PAUSE, "Pauses playback when you take an earbud out", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }
-            item { ChoiceRow(it, null, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null, note = notes[rowId(Key.POWER, 0)]) { c -> update(Key.POWER, 0, c) } }
-            item { ChoiceRow(it, null, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null, note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
+            item { ChoiceRow(it, Glyph.POWER, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null, note = notes[rowId(Key.POWER, 0)]) { c -> update(Key.POWER, 0, c) } }
+            item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), writing == null, note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
         }
         ListGroup("Voice prompts") {
             item { KeySwitch(it, Key.GUIDANCE, "Voice guidance", "Spoken prompts for battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), writing == null, update, notes[rowId(Key.GUIDANCE, 0)]) }
-            item { ChoiceRow(it, null, "Voice guidance volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), writing == null, note = notes[rowId(Key.GUIDANCE_VOLUME, 0)]) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
+            item { ChoiceRow(it, Glyph.INFO, "Voice guidance volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), writing == null, note = notes[rowId(Key.GUIDANCE_VOLUME, 0)]) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
         }
     }
 }
@@ -169,7 +171,7 @@ private fun KeySwitch(
     shape: ListItemShapes, key: Key, title: String, summary: String,
     code: Int?, busy: Boolean, enabled: Boolean, onUpdate: (Key, Int, Int) -> Unit, note: RowNote? = null,
 ) {
-    SwitchRow(shape, null, title, summary, code?.let { it == 0 }, busy, enabled, note) { on -> onUpdate(key, 0, if (on) 0 else 1) }
+    SwitchRow(shape, KEY_GLYPHS[key], title, summary, code?.let { it == 0 }, busy, enabled, note) { on -> onUpdate(key, 0, if (on) 0 else 1) }
 }
 
 @Composable
@@ -177,5 +179,5 @@ private fun FeatureSwitch(
     shape: ListItemShapes, feature: Feature, summary: String,
     features: Map<Feature, Boolean>, loading: Set<Feature>, onBasic: (Feature, Boolean) -> Unit, note: RowNote? = null,
 ) {
-    SwitchRow(shape, null, feature.title, summary, features[feature], feature in loading, loading.isEmpty(), note) { onBasic(feature, it) }
+    SwitchRow(shape, if (feature == Feature.DSEE) Glyph.TUNE else Glyph.EARBUDS, feature.title, summary, features[feature], feature in loading, loading.isEmpty(), note) { onBasic(feature, it) }
 }
