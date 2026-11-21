@@ -75,14 +75,14 @@ internal object EarbudSettingsLink {
         for (wire in wires) {
             val target = AdvancedSettings.patch(key, current, index, code, wire) ?: return@withLock false
             addLog("→ ${key.title}: $current → $target")
-            var now = state(exchange(1200, connect = false, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
+            var now = state(exchange(1200, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
                 conn.send(key.set(target, subtype), key.type) && conn.send(get, key.type)
             })
             // Some settings (touch controls) are applied a moment after the earbuds answer: look again.
             for (look in 1..3) {
                 if (AdvancedSettings.equivalent(key, now, target)) break
                 delay(250)
-                now = state(exchange(1000, connect = false, accepts = { type, p -> isAdvancedReply(key, type, p) }) { conn.send(get, key.type) }) ?: now
+                now = state(exchange(1000, accepts = { type, p -> isAdvancedReply(key, type, p) }) { conn.send(get, key.type) }) ?: now
             }
             addLog("← ${key.title}: $now")
             if (AdvancedSettings.equivalent(key, now, target)) {
@@ -122,7 +122,7 @@ internal object EarbudSettingsLink {
     }
 
     private suspend fun writeFeatureLocked(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean = featureLocks.getOrPut(feature) { Mutex() }.withLock {
-        val reply = exchange(1400, connect = false, accepts = { type, p -> isFeatureReply(feature, type, p) }) {
+        val reply = exchange(1400, accepts = { type, p -> isFeatureReply(feature, type, p) }) {
             feature in _features.value && conn.send(feature.set(value)) && conn.send(feature.get)
         }
         reply != null && DeviceSettingsProtocol.parse(reply)?.second == value
@@ -142,7 +142,7 @@ internal object EarbudSettingsLink {
 
     private suspend fun writeEqualizerLocked(preset: Int?, bands: List<Int>?): Boolean = equalizerLock.withLock {
         val payload = if (bands != null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
-        val actual = exchange(1400, connect = false, accepts = ::isEqualizerReply) {
+        val actual = exchange(1400, accepts = ::isEqualizerReply) {
             _equalizer.value != null && conn.send(payload) && conn.send(EqualizerProtocol.get)
         }?.let(EqualizerProtocol::parse) ?: return@withLock false
         if (bands != null) actual.preset == 0xA0 && actual.bands == bands else actual.preset == preset
