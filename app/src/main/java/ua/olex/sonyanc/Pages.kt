@@ -178,7 +178,8 @@ fun AppSettingsContent(
         ListGroup("Automatic") {
             item {
                 SwitchRow(it, Glyph.WALK, "Ambient while walking",
-                    "Ambient when you start walking, noise cancelling when you stop", activityMode, onChange = onActivityMode)
+                    if (liveLink == false) "Needs Stay in sync on: the app listens for steps only while the earbuds are connected"
+                    else "Ambient when you start walking, noise cancelling when you stop", activityMode, onChange = onActivityMode)
             }
             item {
                 ChoiceRow(it, Glyph.BEDTIME, "When Music's sleep timer ends", AfterSleep.entries.map { a -> a.ordinal to a.label }, afterSleep.ordinal) { i ->
