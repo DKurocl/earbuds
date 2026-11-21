@@ -58,8 +58,15 @@ internal object EarbudSettingsLink {
         null
     }
 
-    suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
-        val current = _advanced.value[key] ?: return@withLock false
+    suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int): Boolean {
+        // The link may have dropped since the page was shown (it then forgets the live values and
+        // the page shows the remembered ones): reconnect and read the setting before changing it.
+        if (key !in _advanced.value) readAdvanced(key)
+        return writeAdvancedLocked(key, index, code)
+    }
+
+    private suspend fun writeAdvancedLocked(key: AdvancedSettings.Key, index: Int, code: Int): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
+        val current = _advanced.value[key] ?: run { addLog("✗ ${key.title}: no live value to change"); return@withLock false }
         val subtype = advancedInquiries[key] ?: key.subtype
         val get = byteArrayOf(key.getCode.toByte(), subtype.toByte())
         fun state(reply: ByteArray?) = reply?.let { AdvancedSettings.parse(key.type.toInt(), it)?.second }
@@ -109,7 +116,12 @@ internal object EarbudSettingsLink {
             ?.let { DeviceSettingsProtocol.parse(it)?.second }
     }
 
-    suspend fun writeFeature(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean = featureLocks.getOrPut(feature) { Mutex() }.withLock {
+    suspend fun writeFeature(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean {
+        if (feature !in _features.value) readFeature(feature) // reconnects after a dropped link
+        return writeFeatureLocked(feature, value)
+    }
+
+    private suspend fun writeFeatureLocked(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean = featureLocks.getOrPut(feature) { Mutex() }.withLock {
         val reply = exchange(1400, connect = false, accepts = { type, p -> isFeatureReply(feature, type, p) }) {
             feature in _features.value && conn.send(feature.set(value)) && conn.send(feature.get)
         }
@@ -123,7 +135,12 @@ internal object EarbudSettingsLink {
         exchange(1400, accepts = ::isEqualizerReply) { conn.send(EqualizerProtocol.get) }?.let(EqualizerProtocol::parse)
     }
 
-    suspend fun writeEqualizer(preset: Int? = null, bands: List<Int>? = null): Boolean = equalizerLock.withLock {
+    suspend fun writeEqualizer(preset: Int? = null, bands: List<Int>? = null): Boolean {
+        if (_equalizer.value == null) readEqualizer() // reconnects after a dropped link
+        return writeEqualizerLocked(preset, bands)
+    }
+
+    private suspend fun writeEqualizerLocked(preset: Int?, bands: List<Int>?): Boolean = equalizerLock.withLock {
         val payload = if (bands != null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
         val actual = exchange(1400, connect = false, accepts = ::isEqualizerReply) {
             _equalizer.value != null && conn.send(payload) && conn.send(EqualizerProtocol.get)
