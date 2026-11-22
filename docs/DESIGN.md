@@ -240,4 +240,4 @@ stays whenever the case's level is known, so nothing moves while a change is on 
 
 Earbud settings are grouped by what they are about: Sound, Conversation, Touch and gestures, Calls,
 Wearing, Spoken prompts. Each row has its own Material Symbol in one style (the same light circle in
-the wallpaper's primary); rows the connected earbuds never answer are left out.
+the wallpaper's primary); rows the connected earbuds never answer are left out. Commits are signed (Verified on GitHub).
