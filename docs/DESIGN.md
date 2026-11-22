@@ -235,3 +235,9 @@ sides, a rounder base, the seam at 44 %); the splash reads its hinge and light f
 
 Home's listening tiles follow the mode the earbuds are in, not one just tapped, and the case tile
 stays whenever the case's level is known, so nothing moves while a change is on its way.
+
+## Settings in groups (1.16)
+
+Earbud settings are grouped by what they are about: Sound, Conversation, Touch and gestures, Calls,
+Wearing, Spoken prompts. Each row has its own Material Symbol in one style (the same light circle in
+the wallpaper's primary); rows the connected earbuds never answer are left out.
