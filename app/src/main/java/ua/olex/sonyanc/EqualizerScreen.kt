@@ -28,39 +28,86 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
 @Composable
 fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val eq by Headphones.equalizer.collectAsState()
     val scope = rememberCoroutineScope()
+    // Only the read gates the controls; a write keeps everything as it is (no dimming, no
+    // spinner), shows the choice at once and settles when the earbuds answer.
     var busy by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
     var refused by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<EqualizerProtocol.State?>(null) }
     suspend fun load() {
         busy = true
         try { failed = Headphones.readEqualizer() == null } finally { busy = false }
     }
     LaunchedEffect(resumeTick) { load() }
     fun write(preset: Int? = null, bands: List<Int>? = null) {
+        val base = eq ?: return
+        val shown = if (bands != null) EqualizerProtocol.State(CUSTOM, bands) else base.copy(preset = preset ?: base.preset)
+        pending = shown
         scope.launch {
-            busy = true; refused = false
-            try { refused = !Headphones.writeEqualizer(preset, bands) } finally { busy = false }
+            refused = false
+            refused = !Headphones.writeEqualizer(preset, bands)
+            if (pending == shown) pending = null
         }
+    }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val state = eq ?: return@rememberLauncherForActivityResult
+        uri?.let { runCatching { ctx.contentResolver.openOutputStream(it, "wt")?.use { o -> o.write(EqualizerFile.write(state).toByteArray()) } } }
+            ?.let { toast(ctx, if (it.isSuccess) "Sound exported" else "Couldn't save the file") }
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val text = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
+        val bands = text?.let(EqualizerFile::read)
+        if (bands == null) toast(ctx, "This file isn't an Earbuds sound") else write(bands = bands)
     }
     // The last known sound shows at once while the earbuds are asked again; controls stay
     // disabled until the live answer arrives (busy), so nothing is ever written from the cache.
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     val cached = remember { Prefs.cachedEqualizer(ctx) }
     EqualizerContent(
-        eq ?: cached.takeIf { busy }, busy, failed && eq == null, onBack,
+        pending ?: eq ?: cached.takeIf { busy }, busy, failed && eq == null, onBack,
         onRetry = { scope.launch { load() } },
         onPreset = { write(preset = it) },
         onBands = { write(bands = it) },
         refused = refused,
+        onExport = { exporter.launch("Earbuds sound.json") },
+        onImport = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
     )
+}
+
+private fun toast(ctx: android.content.Context, text: String) = android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_SHORT).show()
+
+/**
+ * A sound saved as a small JSON file: the five bands and Clear Bass, -10..10 each. Importing
+ * always writes it as Custom, so any preset someone tuned travels as its exact curve.
+ */
+internal object EqualizerFile {
+    private const val FORMAT = "earbuds-sound"
+    fun write(state: EqualizerProtocol.State): String {
+        val o = org.json.JSONObject().put("format", FORMAT).put("schema", 1)
+            .put("preset", EqualizerProtocol.presets[state.preset] ?: "Custom")
+        if (state.bands.size == 6) o.put("clearBass", state.bands[0]).put("bands", org.json.JSONArray(state.bands.drop(1)))
+        return o.toString(2)
+    }
+    fun read(text: String): List<Int>? = runCatching {
+        val o = org.json.JSONObject(text)
+        if (o.optString("format") != FORMAT) return null
+        val a = o.getJSONArray("bands")
+        if (a.length() != 5) return null
+        val bands = listOf(o.optInt("clearBass", 0)) + List(5) { a.getInt(it) }
+        bands.takeIf { b -> b.all { it in -10..10 } }
+    }.getOrNull()
 }
 
 /** The five bands' centres, as Sony's app labels them. */
@@ -80,9 +127,27 @@ private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 fun EqualizerContent(
     state: EqualizerProtocol.State?, busy: Boolean, unavailable: Boolean, onBack: () -> Unit = {},
     onRetry: () -> Unit = {}, onPreset: (Int) -> Unit = {}, onBands: (List<Int>) -> Unit = {}, refused: Boolean = false,
+    onExport: () -> Unit = {}, onImport: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
-    PageScaffold("Equalizer", onBack, actions = { if (busy) LoadingIndicator(Modifier.padding(end = 12.dp).size(32.dp)) }) {
+    PageScaffold("Equalizer", onBack, actions = {
+        if (busy) LoadingIndicator(Modifier.padding(end = 4.dp).size(32.dp))
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "More options" }) {
+                // more_vert, drawn: three dots (the app's symbol subset has no overflow icon).
+                val dot = cs.onSurfaceVariant
+                Canvas(Modifier.size(24.dp)) {
+                    val r = 2.dp.toPx()
+                    for (y in listOf(6f, 12f, 18f)) drawCircle(dot, r, Offset(size.width / 2, y.dp.toPx()))
+                }
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(16.dp)) {
+                DropdownMenuItem(text = { Text("Export sound") }, enabled = state?.bands?.size == 6, onClick = { menu = false; onExport() })
+                DropdownMenuItem(text = { Text("Import sound") }, enabled = !busy && state != null, onClick = { menu = false; onImport() })
+            }
+        }
+    }) {
         when {
             state == null && unavailable -> SoundCard {
                 Text("Equalizer unavailable", style = MaterialTheme.typography.titleMediumEmphasized)
@@ -107,11 +172,20 @@ fun EqualizerContent(
                             modifier = Modifier.semantics { contentDescription = "Equalizer" })
                     }
                     if (refused) Text("The earbuds didn't take this change", style = MaterialTheme.typography.bodyMedium, color = cs.error)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        EqualizerProtocol.presets.filterKeys { it != OFF }.forEach { (code, name) ->
-                            PresetChip(name, state.preset == code, editable) { onPreset(code) }
+                    // Twelve choices as four rows of three connected buttons (M3E button groups):
+                    // the chosen one turns into a full pill, the others keep their joined shapes.
+                    val flat = state.preset == CUSTOM && bands.size == 6 && bands.drop(1).all { it == 0 }
+                    val choices = EqualizerProtocol.presets.filterKeys { it != OFF }.map { (code, name) ->
+                        Triple(name, state.preset == code && !(code == CUSTOM && flat)) { onPreset(code) }
+                    } + Triple("Flat", flat) { onBands(listOf(bands.getOrElse(0) { 0 }) + List(5) { 0 }) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        choices.chunked(3).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                                row.forEachIndexed { i, (name, selected, pick) ->
+                                    PresetButton(name, selected, editable, i, row.size, Modifier.weight(1f), pick)
+                                }
+                            }
                         }
-                        PresetChip("Flat", state.preset == CUSTOM && bands.drop(1).all { it == 0 }, editable) { onBands(listOf(bands[0]) + List(5) { 0 }) }
                     }
                     if (bands.size == 6) {
                         var held by remember { mutableStateOf<Int?>(null) }
@@ -175,20 +249,24 @@ private fun SoundCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-/** Music's filter chip: tonal, no outline, a pill that squares its corners a little when chosen. */
+/** One preset in a connected row: joined corners at rest, a pill when chosen, with Material's springs. */
 @Composable
-private fun PresetChip(name: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun PresetButton(name: String, selected: Boolean, enabled: Boolean, index: Int, count: Int, modifier: Modifier, onClick: () -> Unit) {
+    val shapes = when (index) {
+        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+        count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+    }
     val cs = MaterialTheme.colorScheme
-    val corner by animateDpAsState(if (selected) 12.dp else 20.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "chip corner")
-    FilterChip(
-        selected = selected, onClick = onClick, enabled = enabled, label = { Text(name, maxLines = 1) },
-        shape = RoundedCornerShape(corner), border = null,
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = cs.surfaceContainerHighest, labelColor = cs.onSurfaceVariant,
-            selectedContainerColor = cs.secondaryContainer, selectedLabelColor = cs.onSecondaryContainer,
-        ),
-        modifier = Modifier.semantics { role = Role.RadioButton },
-    )
+    ToggleButton(
+        checked = selected, onCheckedChange = { if (!selected) onClick() }, enabled = enabled, shapes = shapes,
+        colors = ToggleButtonDefaults.toggleButtonColors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurfaceVariant),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = modifier.heightIn(min = 48.dp).semantics { role = Role.RadioButton; this.selected = selected },
+    ) {
+        Text(name, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = MaterialTheme.typography.labelLarge.fontSize, stepSize = 0.5.sp))
+    }
 }
 
 /**

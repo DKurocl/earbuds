@@ -22,9 +22,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Three controls only: ANC, Ambient, Off. A tap reconnects on demand; no persistent service or
- * notification. Each launcher size gets an exact layout from [WidgetLayout.modes]: a row with
- * labels under icons, a wide row with labels beside icons, icons only, or a column for tall slots.
+ * Three controls only: ANC, Ambient, Off, as a three-position switch (a knob on a pill track).
+ * A tap on a position reconnects on demand and sets it; the rest of the widget opens the app.
+ * No persistent service or notification. Large slots get the dashboard.
  */
 class ModeWidget : AppWidgetProvider() {
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) = render(ctx,mgr,ids)
@@ -115,19 +115,59 @@ class ModeWidget : AppWidgetProvider() {
             SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)})?.let {
             return dashboard(ctx,it,current,pending,interactive,linked,battery)
         }
-            val spec=WidgetLayout.modes(width,height,
-                label=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)},line=Widgets.lineHeight(ctx,14f))
-            val layout=when(spec.variant) {
-                WidgetLayout.ModeVariant.ROW -> R.layout.widget_modes
-                WidgetLayout.ModeVariant.INLINE -> R.layout.widget_modes_inline
-                WidgetLayout.ModeVariant.COLUMN -> R.layout.widget_modes_column
+            return switch(ctx,width,height,current,pending,linked==false,interactive)
+        }
+
+        /** A knob position: the mode, its slot, knob and icon, and its name under the track. */
+        private data class Stop(val mode:SonyProtocol.Mode,val id:Int,val knob:Int,val glyph:Int,val name:Int,val icon:Int,val bold:Int)
+        private val stops=listOf(
+            Stop(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_knob,R.id.w_anc_glyph,R.id.w_anc_name,R.drawable.w_icon_anc,R.drawable.w_icon_anc_bold),
+            Stop(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_knob,R.id.w_amb_glyph,R.id.w_amb_name,R.drawable.w_icon_ambient,R.drawable.w_icon_ambient_bold),
+            Stop(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_knob,R.id.w_off_glyph,R.id.w_off_name,R.drawable.w_icon_off,R.drawable.w_icon_off_bold),
+        )
+
+        /**
+         * The three-position switch: a pill track with the knob on the chosen mode (the pending
+         * choice wins). A position sets its mode; the rest of the widget opens the app. Names sit
+         * under the track when the slot is tall enough.
+         */
+        private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
+                           away:Boolean,interactive:Boolean):RemoteViews {
+            val v=RemoteViews(ctx.packageName,R.layout.widget_switch)
+            val room=height-16f
+            val names=room>=56f+24f
+            val track=minOf(64f,maxOf(40f,if(names) room-24f else room))
+            v.setViewLayoutHeight(R.id.w_track,track,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewVisibility(R.id.w_names,if(names) View.VISIBLE else View.GONE)
+            val knob=track-8f
+            val chosen=pending ?: current
+            val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            if(interactive) {
+                val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                val openApp=PendingIntent.getActivity(ctx,101,open,flags)
+                v.setOnClickPendingIntent(android.R.id.background,openApp)
+                v.setOnClickPendingIntent(R.id.w_group,openApp)
             }
-            val v=RemoteViews(ctx.packageName,layout)
-            // Earbuds in the case: the buttons keep their colors (a tap connects them); only the
-            // spoken description says they are away.
-            val away=linked==false
-            v.setViewLayoutHeight(R.id.w_group,spec.group,TypedValue.COMPLEX_UNIT_DIP)
-            bindTiles(ctx,v,current,pending,away,spec.labels,spec.icon,interactive)
+            for(stop in stops) {
+                val on=stop.mode==chosen
+                val applying=stop.mode==pending
+                v.setViewLayoutWidth(stop.knob,knob,TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(stop.knob,knob,TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewVisibility(stop.knob,if(on) View.VISIBLE else View.GONE)
+                v.setImageViewResource(stop.glyph,if(on) stop.bold else stop.icon)
+                v.setInt(stop.glyph,"setColorFilter",ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
+                v.setTextColor(stop.name,ctx.getColor(if(on) R.color.w_off_text else R.color.w_sub_text))
+                v.setTextViewText(stop.name,stop.mode.short+if(applying) "…" else "")
+                v.setContentDescription(stop.id,stop.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
+                if(interactive) {
+                    val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
+                        PendingIntent.getActivity(ctx,stop.mode.ordinal,Intent(ctx,MainActivity::class.java).putExtra("hush.mode",stop.mode.name),flags)
+                    } else {
+                        PendingIntent.getBroadcast(ctx,stop.mode.ordinal,Intent(ctx,ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE,stop.mode.name),flags)
+                    }
+                    v.setOnClickPendingIntent(stop.id,action)
+                }
+            }
             return v
         }
 

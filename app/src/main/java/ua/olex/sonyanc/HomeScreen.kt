@@ -475,7 +475,10 @@ private fun ModeButton(
         // The chosen mode's icon thickens with a small spring pop; a press does the same at once.
         else HushIcon(mode.glyph, Modifier.size(24.dp), LocalContentColor.current, bold = selected || pressed)
         Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
-        Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, autoSize = fitText(MaterialTheme.typography.titleMedium))
+        // Fixed size: the button group squeezes its neighbours while one is pressed, and a text
+        // that fits itself to the width would shrink and grow with every press.
+        Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Visible)
     }
 }
 
