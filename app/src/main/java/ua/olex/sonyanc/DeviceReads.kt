@@ -26,6 +26,7 @@ internal object DeviceReads {
     internal val batteryPushed get() = pushedBatteryParts.containsAll(buds)
     private val buds = setOf(0, 1)
     private val allParts = setOf(0, 1, 2)
+    private var qualityCheckedFor: Long? = null
 
     internal fun batteryNotification(parts: Set<Int>) {
         pushedBatteryParts = pushedBatteryParts + parts
@@ -54,12 +55,12 @@ internal object DeviceReads {
         if (!usage.foreground || infoJob?.isActive == true) return
         infoJob = scope.launch {
             delay(400)
-            var codecDue = 0L
-            var batteryDue = 0L
+            val initial = _state.value
+            var codecDue = if (initial.codecLive) now() + 30_000L else 0L
+            var batteryDue = if (initial.liveBatteryParts.containsAll(allParts)) now() + 60_000L else 0L
             var batteryRetry = 8_000L
             var equalizerAsked = false
             var chatAsked = false
-            var qualityKept = false
             val generation = conn.generation
             while (usage.foreground && conn.connected && conn.generation == generation) {
                 _state.first { it.pending == null || !it.connected }
@@ -73,7 +74,10 @@ internal object DeviceReads {
                 if (EarbudSettingsLink._equalizer.value == null && !equalizerAsked) { equalizerAsked = true; EarbudSettingsLink.readEqualizer(Priority.BACKGROUND) }
                 // Speak-to-Chat once per connection, for its toggle in the dock.
                 if (AdvancedSettings.Key.CHAT !in EarbudSettingsLink._advanced.value && !chatAsked) { chatAsked = true; EarbudSettingsLink.readAdvanced(AdvancedSettings.Key.CHAT, Priority.BACKGROUND) }
-                if (!qualityKept) { qualityKept = true; EarbudSettingsLink.keepQuality() }
+                if (qualityCheckedFor != generation) {
+                    qualityCheckedFor = generation
+                    EarbudSettingsLink.keepQuality()
+                }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= batteryDue) {
                     queryBattery(onlyForeground = true)

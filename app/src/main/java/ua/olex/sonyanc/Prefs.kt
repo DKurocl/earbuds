@@ -78,7 +78,7 @@ object Prefs {
         .putLong("battery_at", at).apply()
 
     /** A different pair must not inherit this pair's measurements or settings. */
-    fun replaceDevice(ctx: Context, address: String, name: String?) {
+    @Synchronized fun replaceDevice(ctx: Context, address: String, name: String?) {
         val editor = p(ctx).edit().putString("device", address).putString("device_name", name)
         listOf(
             "mode", "voice", "level", "codec", "battery_at", "linked", "last_seen",
@@ -151,7 +151,7 @@ object Prefs {
     fun tileTwoWay(ctx: Context) = p(ctx).getBoolean("tile_two_way", false)
     fun setTileTwoWay(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("tile_two_way", value).apply()
 
-    // ---- last values read from the earbuds, shown (read-only) while a page reads them again ----
+    // ---- last values read from the earbuds, preserved across control connections ----
     fun cachedAdvanced(ctx: Context): Map<AdvancedSettings.Key, List<Int>> =
         p(ctx).getString("cache_advanced", null).orEmpty().split(';').mapNotNull { row ->
             val (k, v) = row.split(':').takeIf { it.size == 2 } ?: return@mapNotNull null
@@ -159,15 +159,27 @@ object Prefs {
             val values = v.split(',').map { it.toIntOrNull() ?: return@mapNotNull null }
             if (key.valid(values)) key to values else null
         }.toMap()
-    fun cacheAdvanced(ctx: Context, all: Map<AdvancedSettings.Key, List<Int>>) = p(ctx).edit()
-        .putString("cache_advanced", all.entries.joinToString(";") { (k, v) -> "${k.name}:${v.joinToString(",")}" }).apply()
+    internal fun cachedAdvancedChanges(ctx: Context) = changes(ctx, setOf("cache_advanced")) { cachedAdvanced(ctx) }
+
+    @Synchronized fun cacheAdvanced(ctx: Context, key: AdvancedSettings.Key, value: List<Int>) {
+        val all = cachedAdvanced(ctx) + (key to value)
+        p(ctx).edit()
+            .putString("cache_advanced", all.entries.joinToString(";") { (k, v) -> "${k.name}:${v.joinToString(",")}" })
+            .apply()
+    }
     fun cachedFeatures(ctx: Context): Map<DeviceSettingsProtocol.Feature, Boolean> =
         p(ctx).getString("cache_features", null).orEmpty().split(';').mapNotNull { row ->
             val (k, v) = row.split(':').takeIf { it.size == 2 } ?: return@mapNotNull null
             DeviceSettingsProtocol.Feature.entries.firstOrNull { it.name == k }?.let { it to (v == "1") }
         }.toMap()
-    fun cacheFeatures(ctx: Context, all: Map<DeviceSettingsProtocol.Feature, Boolean>) = p(ctx).edit()
-        .putString("cache_features", all.entries.joinToString(";") { (k, v) -> "${k.name}:${if (v) 1 else 0}" }).apply()
+    internal fun cachedFeatureChanges(ctx: Context) = changes(ctx, setOf("cache_features")) { cachedFeatures(ctx) }
+
+    @Synchronized fun cacheFeature(ctx: Context, feature: DeviceSettingsProtocol.Feature, value: Boolean) {
+        val all = cachedFeatures(ctx) + (feature to value)
+        p(ctx).edit()
+            .putString("cache_features", all.entries.joinToString(";") { (k, v) -> "${k.name}:${if (v) 1 else 0}" })
+            .apply()
+    }
     fun cachedEqualizer(ctx: Context): EqualizerProtocol.State? = p(ctx).getString("cache_eq", null)?.let { raw ->
         val parts = raw.split('|')
         val preset = parts.getOrNull(0)?.toIntOrNull()?.takeIf { it in EqualizerProtocol.presets } ?: return null

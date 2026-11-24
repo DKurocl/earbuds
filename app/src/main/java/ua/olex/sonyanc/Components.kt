@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -108,6 +109,16 @@ fun SectionTitle(text: String) {
 @Composable
 private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surfaces.card)
 
+private val linkGlyphs = setOf(
+    Glyph.BLUETOOTH, Glyph.LINK, Glyph.EARBUDS, Glyph.INFO, Glyph.WIDGET, Glyph.FIND, Glyph.COPY,
+    Glyph.SWIPE_LEFT, Glyph.SWIPE_RIGHT, Glyph.FACE,
+)
+private val routineGlyphs = setOf(
+    Glyph.HOME, Glyph.LOCATION, Glyph.TIMER, Glyph.BATTERY, Glyph.POWER, Glyph.UPCOMING, Glyph.BATTERY_LOW,
+    Glyph.BATTERY_CHARGING, Glyph.BEDTIME, Glyph.WALK, Glyph.INSIGHTS, Glyph.CHAT, Glyph.VOICE_SETTINGS,
+    Glyph.AUTOPLAY, Glyph.MIC, Glyph.CAMPAIGN, Glyph.VOLUME,
+)
+
 /**
  * A row's icon in a light circle coloured by what it is about, as Android's own Settings (and
  * Music): sound, power, connection, the app. The "fixed" tones of the wallpaper's palette read the
@@ -115,13 +126,15 @@ private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surf
  */
 private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> Unit)? = glyph?.let { g -> {
     val cs = MaterialTheme.colorScheme
-    // One style for every row: the same light circle and dark symbol (the wallpaper's primary in its
-    // fixed tone, the same in light and dark); the symbol alone tells the settings apart. A
-    // destructive row takes the error colour.
-    val (circle, onCircle) = if (danger) cs.errorContainer to cs.onErrorContainer else cs.primaryFixedDim to cs.onPrimaryFixed
+    val (container, glyphColor, shape) = when {
+        danger -> Triple(cs.errorContainer, cs.onErrorContainer, RoundedCornerShape(12.dp))
+        g in linkGlyphs -> Triple(cs.secondaryFixed, cs.onSecondaryFixed, RoundedCornerShape(13.dp))
+        g in routineGlyphs -> Triple(cs.tertiaryFixedDim, cs.onTertiaryFixed, RoundedCornerShape(16.dp))
+        else -> Triple(cs.primaryFixedDim, cs.onPrimaryFixed, CircleShape)
+    }
 
-    Surface(shape = androidx.compose.foundation.shape.CircleShape, color = circle, contentColor = onCircle, modifier = Modifier.size(40.dp)) {
-        androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) { HushIcon(g, Modifier.size(22.dp), onCircle) }
+    Surface(shape = shape, color = container, contentColor = glyphColor, modifier = Modifier.size(40.dp)) {
+        Box(contentAlignment = Alignment.Center) { HushIcon(g, Modifier.size(22.dp), glyphColor) }
     }
 } }
 

@@ -3,11 +3,20 @@ package ua.olex.sonyanc
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Only one request owns the wire, including the time spent waiting for its read-back. */
 internal class CommandScheduler {
-    enum class Priority { CONTROL, NORMAL, BACKGROUND }
+    enum class Priority(val label: String) { CONTROL("Controls"), NORMAL("Reads"), BACKGROUND("Background") }
+    data class Timing(val queueMs: Long, val wireMs: Long)
+
+    private val _timings = MutableStateFlow<Map<Priority, List<Timing>>>(emptyMap())
+    val timings = _timings.asStateFlow()
+
+    fun clearTimings() { _timings.value = emptyMap() }
 
     private class Turn(val priority: Priority) {
         val ready = CompletableDeferred<Unit>()
@@ -25,6 +34,7 @@ internal class CommandScheduler {
     // A command already on the wire holds its turn through read-back. Priority only reorders waiting turns.
     suspend fun <T> run(priority: Priority = Priority.NORMAL, command: suspend () -> T): T {
         val turn = Turn(priority)
+        val queuedAt = System.nanoTime()
         synchronized(queue) {
             if (active == null) {
                 active = turn
@@ -36,7 +46,11 @@ internal class CommandScheduler {
         try {
             turn.ready.await()
             currentCoroutineContext().ensureActive()
-            return command()
+            val startedAt = System.nanoTime()
+            val result = command()
+            val sample = Timing((startedAt - queuedAt) / 1_000_000L, (System.nanoTime() - startedAt) / 1_000_000L)
+            _timings.update { it + (priority to (it[priority].orEmpty().takeLast(63) + sample)) }
+            return result
         } finally {
             synchronized(queue) {
                 if (active == turn) {

@@ -176,12 +176,31 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     var profileBusy by mutableStateOf(false); private set
 
     internal fun saveProfile(slot: Int) {
+        if (profileBusy) return
         val state = Headphones.state.value
         val mode = state.nc?.takeIf { state.ncConfirmed && state.pending == null }
             ?: return show("Wait for your earbuds to confirm their current mode.")
-        val eq = Headphones.equalizer.value?.takeUnless { it.preset == 0xA0 && it.bands.size != 6 }
-        Prefs.savePersonalProfile(ctx, slot, PersonalProfile(mode, eq))
-        show("Profile $slot saved.")
+        profileBusy = true
+        viewModelScope.launch {
+            try {
+                val generation = Headphones.conn.generation
+                val eq = Headphones.equalizer.value?.takeUnless { it.preset == 0xA0 && it.bands.size != 6 }
+                val features = buildMap {
+                    for (feature in PersonalProfile.supportedFeatures) {
+                        val value = Headphones.features.value[feature] ?: Headphones.readFeature(feature)
+                        if (value != null) put(feature, value)
+                    }
+                }
+                if (generation != Headphones.conn.generation) {
+                    show("Earbuds disconnected before the profile could be saved.")
+                    return@launch
+                }
+                Prefs.savePersonalProfile(ctx, slot, PersonalProfile(mode, eq, features))
+                show("Profile $slot saved.")
+            } finally {
+                profileBusy = false
+            }
+        }
     }
 
     internal fun applyProfile(slot: Int, profile: PersonalProfile) {
@@ -208,7 +227,12 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                     eq.preset == 0xA0 -> Headphones.writeEqualizer(bands = eq.bands)
                     else -> Headphones.writeEqualizer(preset = eq.preset)
                 }
-                show(if (eqApplied) "Profile $slot applied." else "Noise control applied. Equalizer change could not be confirmed.")
+                val unavailable = mutableListOf<String>()
+                if (!eqApplied) unavailable += "Equalizer"
+                for ((feature, value) in profile.features) {
+                    if (!Headphones.writeFeature(feature, value)) unavailable += feature.title
+                }
+                show(if (unavailable.isEmpty()) "Profile $slot applied." else "Could not verify ${unavailable.joinToString()}.")
             } finally {
                 profileBusy = false
             }
@@ -235,6 +259,11 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         onConnect = Prefs.onConnect(ctx)
         weekendMode = Prefs.weekendMode(ctx)
         ambientMinutes = Prefs.ambientMinutes(ctx)
+        displayName = Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5"
+        caseReminder = Prefs.caseReminder(ctx)
+        afterSleep = Prefs.afterSleep(ctx)
+        hapticTakes = Haptics.Cue.entries.associateWith { Prefs.hapticTake(ctx, it.name) }
+        Widgets.refreshAll(ctx)
         show("Settings restored.")
     }
 

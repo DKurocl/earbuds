@@ -1,5 +1,9 @@
 package ua.olex.sonyanc
 
+import org.junit.Assert.assertEquals
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import android.graphics.Bitmap
@@ -67,9 +71,38 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = false), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {}, onProfiles = {},
             speakToChat = true,
         )
+    }
+
+    @Test fun ambientControlsStayPutWhenTheControlLinkReconnects() {
+        val status = mutableStateOf(Headphones.Status.CONNECTED)
+        val batteryParts = mutableStateOf(setOf(0, 1, 2))
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                HushScreen(
+                    status = status.value, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, level = 20),
+                    pending = null, fresh = status.value == Headphones.Status.CONNECTED, error = null,
+                    battery = SonyProtocol.Battery(28, 28, 91), batteryParts = batteryParts.value,
+                    batterySeenAt = NOW, linked = true, granted = true, hasDevice = true,
+                    onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                )
+            }
+        }
+        val find = compose.onNodeWithText("Find").getBoundsInRoot()
+        val ambient = compose.onNodeWithText("Ambient level").getBoundsInRoot()
+        compose.runOnIdle {
+            status.value = Headphones.Status.CONNECTING
+            batteryParts.value = emptySet()
+        }
+        assertEquals(find, compose.onNodeWithText("Find").getBoundsInRoot())
+        assertEquals(ambient, compose.onNodeWithText("Ambient level").getBoundsInRoot())
+        compose.runOnIdle {
+            status.value = Headphones.Status.CONNECTED
+            batteryParts.value = setOf(0, 1, 2)
+        }
+        assertEquals(ambient, compose.onNodeWithText("Ambient level").getBoundsInRoot())
     }
 
     /** Predictive back posed mid-gesture: the battery page shrinks away, Home waits underneath. */
@@ -188,7 +221,8 @@ class ScreenshotTest {
                 val start = NOW - day * 24 * 60 * min - (24 - startH) * 60 * min
                 var level = 100
                 for (m in 0..hours * 60 step 15) {
-                    out += BatterySample(start + m * min, level.coerceAtLeast(5), false, SonyProtocol.Mode.ANC, session, case)
+                    out += BatterySample(start + m * min, level.coerceAtLeast(5), false, SonyProtocol.Mode.ANC, session, case,
+                        left = (level + 6).coerceIn(5, 100), right = level.coerceAtLeast(5))
                     level -= 4
                 }
                 case = (case - 9).coerceAtLeast(12)
@@ -206,20 +240,22 @@ class ScreenshotTest {
     @Test fun appSettings() = shoot("page-app") {
         AppSettingsContent(
             listOf(PairedDevice("00:11", "WF-1000XM5")), "00:11", "WF-1000XM5", dynamicColor = true, haptics = true,
-            canAddTile = true, canPinWidget = true, version = "2.0.0",
+            canAddTile = true, canPinWidget = true, version = "2.1.0",
             weekendMode = OnConnect.AMBIENT, onProfiles = {}, onBackup = {},
         )
     }
 
     @Test fun diagnostics() = shoot("page-diagnostics") {
         DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"),
-            result = "Control link ready · Noise control confirmed · LDAC · 3/3 battery levels live", onCheck = {})
+            result = "Control link ready · Noise control confirmed · LDAC · 3/3 battery levels live", onCheck = {},
+            timings = mapOf(CommandScheduler.Priority.CONTROL to listOf(CommandScheduler.Timing(22, 104))))
     }
 
     @Test fun profiles() = shoot("page-profiles") {
         PersonalProfilesContent(
             mapOf(1 to PersonalProfile(SonyProtocol.NcState(SonyProtocol.Mode.ANC),
-                EqualizerProtocol.State(0xA0, listOf(1, 2, 0, 0, -1, 0)))),
+                EqualizerProtocol.State(0xA0, listOf(1, 2, 0, 0, -1, 0)),
+                mapOf(DeviceSettingsProtocol.Feature.DSEE to true, DeviceSettingsProtocol.Feature.AUTO_PAUSE to false))),
             DeviceState(ncConfirmed = true), false, {}, {}, { _, _ -> },
         )
     }

@@ -1,5 +1,25 @@
 # Verification
 
+## 2.1 on the Pixel 10 Pro XL
+
+Use a physical Pixel 10 Pro XL with Smooth Display enabled and its WF-1000XM5 paired. Record the
+app build, Android version, Sony firmware, transparency or noise-control mode, and codec with the
+measurements. Emulator results are useful for UI regressions, with device measurements recorded
+separately.
+
+| Check | How to run | Record |
+|---|---|---|
+| Startup | Run `StartupBenchmark#coldLaunch` and `StartupBenchmark#warmLaunch` from the benchmark module on the Pixel. | Median and range of initial display time, with 10 iterations for each launch mode. |
+| Transitions | Run `StartupBenchmark#settingsTransitions`. Check the active refresh rate during the transition using Android's refresh-rate overlay or the Perfetto timeline. | Actual refresh rate, p95 frame overrun, and the trace for any visible hitch. |
+| Background use | Start from a saved battery reading. Use the phone normally for 24 hours, including repeated app switches, time with the earbuds in the case, and at least one listening session. Leave Stay in sync in its usual configuration. | Starting and ending phone and earbud levels, Android's per-app usage, listening time, and whether the control link was idle after closing. |
+| Home screen | Place the 322 × 105 dp Earbuds widget beside the music player. Tap each noise-control icon and both side edges. Repeat after disconnecting the buds. | Screenshot of the two widgets together, confirmed mode, vibration and app opening. |
+| Gemini and Android | Invoke ANC, Ambient and battery queries in Gemini. Check Quick Settings, launcher shortcuts, notifications, Stay in sync and Android's app-functions listing. | Which surfaces confirmed the same device mode and which commands Gemini routed. |
+| WF-1000XM5 | Switch ANC, Ambient and Off rapidly. Try voice focus, level, EQ, both profiles, DSEE and wearing detection. Put the buds away and reopen Earbud settings. | Read-back outcomes, measured Bluetooth queue and wire timing, and whether the settings stay visible across app switches. |
+
+Macrobenchmark tests are under `benchmark/src/main`. With a single Android device connected, run
+`bash gradlew :benchmark:connectedBenchmarkAndroidTest` from the repository root. Use a release-
+equivalent build and compare results recorded on the same device and OS.
+
 ## 1.4 on the Pixel (deferred by the owner)
 
 Everything below builds, passes the JVM, lint, golden and emulator checks in CI, but needs the

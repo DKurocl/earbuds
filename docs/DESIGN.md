@@ -270,3 +270,24 @@ predictive back. Capture `adb shell dumpsys gfxinfo ua.olex.sonyanc framestats`.
 At 120 Hz the frame interval is about 8.33 ms. Use the reported frame deadlines and jank
 counts to evaluate the gestures. Take a second capture with the charging wave idle to distinguish
 its intentional lower frame-rate request from interaction performance.
+
+
+## 2.1 visual review
+
+The review uses [Pixel's Material 3 Expressive update](https://blog.google/intl/en-in/products/hardware/material-3-expressive-updates-in-the-latest-pixel-drop/) and [Phone by Google on the Pixel 10](https://blog.google/products-and-platforms/devices/pixel/calling-updates-pixel-10/).
+Android Settings keeps list backgrounds quiet and distinguishes categories through icon containers.
+Earbuds uses that hierarchy, with wallpaper tones and three silhouettes for sound, connections,
+and routines. Error actions use the error role.
+
+| Surface | What the renders cover |
+|---|---|
+| Home and setup | ANC, Ambient, disconnected and permission states, light theme, large text, active pill, battery rings and the two header actions. |
+| Earbud settings, App settings and Device info | Section hierarchy, icon tones, connected list corners, subtitles at increased text size, cached rows and destructive actions. |
+| Equalizer and Vibrations | Presets, sliders, selected shapes and labels. |
+| Battery | Independent left and right series, case series, empty and light states, axis labels and listening estimates. |
+| Profiles, Backup and Diagnostics | A saved profile's contents, restore and export actions, measured command timings and the connection log. |
+| Connected sheet, launcher and lock screen widgets | Widget geometry, battery and mode states, tap feedback, sheet actions and the 322 × 105 dp launcher slot. |
+| Motion | Page and tile entry, predictive back at intermediate positions, cancelled and committed gestures, and widget mode changes. |
+
+The 322 × 105 dp slot is rendered at the launcher dimensions. The paired player layout, actual
+refresh rate and Sony connection behavior are recorded on the Pixel using [the device checks](VERIFICATION.md).

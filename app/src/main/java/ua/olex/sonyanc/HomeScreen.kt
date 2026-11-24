@@ -76,6 +76,7 @@ fun HushScreen(
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, ambientUntil: Long? = null, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
     linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true, codecLive: Boolean = true,
+    onProfiles: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val state = pending ?: nc
@@ -93,6 +94,9 @@ fun HushScreen(
             Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
+            if (onProfiles != null) IconButton(onClick = onProfiles,
+                modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Personal profiles" },
+            ) { HushIcon(Glyph.TUNE, color = cs.onSurfaceVariant) }
             IconButton(onClick = onSettings, modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
@@ -123,14 +127,15 @@ fun HushScreen(
                 !bluetoothOn -> "Bluetooth is off"
                 !hasDevice -> "No earbuds selected"
                 !paired -> "Earbuds are no longer paired"
-                ready -> "Connected" + (codec?.takeIf { codecLive && it.isKnown }?.let { " · ${it.label}" } ?: "")
+                ready || (linked == true && status != Headphones.Status.FAILED) -> "Connected" + (codec?.takeIf { codecLive && it.isKnown }?.let { " · ${it.label}" } ?: "")
                 linked == false -> lastSeen?.let {
                     "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 } ?: "Earbuds disconnected"
                 connecting -> statusText(status)
                 else -> error ?: statusText(status)
             }
-            Box(Modifier.introFade()) { Header(deviceName, connectionLabel, connecting || (ready && batteryRefreshing)) }
+            val showConnectionProgress = (connecting && linked != true) || (ready && batteryRefreshing && battery == null)
+            Box(Modifier.introFade()) { Header(deviceName, connectionLabel, showConnectionProgress) }
 
             when {
                 !granted -> SetupCard("Allow Bluetooth access", "Earbuds talks to your WF-1000XM5 directly. Nothing leaves your phone.", "Allow", Glyph.BLUETOOTH, onPermission)
@@ -138,11 +143,17 @@ fun HushScreen(
                 !hasDevice || !paired -> SetupCard("Choose your earbuds", "Pair your WF-1000XM5 in Android Bluetooth settings, then pick it here.", "Choose earbuds", Glyph.EARBUDS, onPick)
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery, confirmed = nc?.mode.takeIf { pending == null })
+                        Batteries(
+                            battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery,
+                            confirmed = nc?.mode.takeIf { pending == null }, dimCached = linked != true,
+                        )
                         Box(Modifier.introFade()) {
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
-                            ListeningTime(battery, nc?.mode, live = batteryParts.isNotEmpty(), seenAt = batterySeenAt, onClick = onBatteryDetails)
+                            ListeningTime(
+                                battery, nc?.mode, live = batteryParts.isNotEmpty(),
+                                seenAt = batterySeenAt.takeUnless { linked == true }, onClick = onBatteryDetails,
+                            )
                         }
                     }
 
@@ -150,14 +161,16 @@ fun HushScreen(
                         // Only what is used day to day. The control link opens and closes by itself (no
                         // Disconnect); Android's Bluetooth settings are one level down in Device info.
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
-                        if (!ready && linked != false) BigAction(Glyph.REFRESH, if (connecting) "Connecting…" else "Connect",
-                            enabled = !connecting, onClick = onConnect)
+                        if (linked != false && (status == Headphones.Status.FAILED ||
+                                (status == Headphones.Status.DISCONNECTED && linked == null))) {
+                            BigAction(Glyph.REFRESH, "Connect", onClick = onConnect)
+                        }
                     }
 
                     // What the chosen mode offers, in the page as a card (as Pixel Buds settings do),
                     // never floating: Ambient's level and voice focus, or Speak-to-Chat and
                     // "Ambient for a moment" with noise cancelling.
-                    if (ready) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
+                    if (canControl && (ready || nc != null)) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
 
                     Box(Modifier.introFade()) { ListGroup("More controls") {
                         // Battery opens from the listening-time tiles above; no second entry here.
@@ -197,7 +210,10 @@ private fun Header(name: String, status: String, busy: Boolean) {
 }
 
 @Composable
-internal fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit, confirmed: Mode? = null) {
+internal fun Batteries(
+    b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit,
+    confirmed: Mode? = null, dimCached: Boolean = true,
+) {
     // The owner's earbuds as Android shows a device in its details: the product render
     // (docs/icon/device_pictures.py).
     val budL = painterResource(R.drawable.device_bud_left)
@@ -224,13 +240,13 @@ internal fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, 
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, { swell[0].value }) { BudArt(budL) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, dimCached, { swell[0].value }) { BudArt(budL) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-            BatteryRing("Case", b.case, b.caseCharging, 2 in live, { swell[2].value }) {
+            BatteryRing("Case", b.case, b.caseCharging, 2 in live, dimCached, { swell[2].value }) {
                 Image(painterResource(R.drawable.device_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, { swell[1].value }) { BudArt(budR) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, dimCached, { swell[1].value }) { BudArt(budR) } }
     }
 }
 
@@ -240,7 +256,10 @@ internal fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, 
  * outline, so the chip reads as cut out of the ring rather than stacked on it.
  */
 @Composable
-private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boolean, swell: () -> Float = { 1f }, art: @Composable () -> Unit) {
+private fun BatteryRing(
+    label: String, value: Int?, charging: Boolean, live: Boolean, dimCached: Boolean,
+    swell: () -> Float = { 1f }, art: @Composable () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val normal = batteryIndicator
     val (ringColor, chipContent) = when {
@@ -248,7 +267,7 @@ private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boo
         value <= 20 && !charging -> cs.error to cs.onError
         else -> normal
     }
-    val color = if (live || value == null) ringColor else ringColor.copy(alpha = .55f)
+    val color = if (live || !dimCached || value == null) ringColor else ringColor.copy(alpha = .55f)
     val track = cs.surfaceContainerHighest
     val disc = cs.surfaceContainerHigh
     val page = Surfaces.page

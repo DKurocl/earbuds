@@ -73,6 +73,16 @@ class BatteryLifeTest {
         assertEquals(listOf(withCase), BatteryLog.decode(BatteryLog.encode(listOf(withCase))))
     }
 
+    @Test fun preservesEachEarbudEvenWhenTheLowerLevelIsUnchanged() {
+        val older = BatteryLog.decode("60000,80,0,ANC,1,40").single()
+        assertNull(older.left)
+        assertNull(older.right)
+        val first = sample(2, 80).copy(left = 80, right = 90)
+        val second = sample(3, 80).copy(left = 80, right = 87)
+        val updated = BatteryLog.add(listOf(older, first), second)
+        assertEquals(listOf(older, first, second), BatteryLog.decode(BatteryLog.encode(updated)))
+    }
+
     @Test fun historyKeepsAboutAWeek() {
         val day = 24 * 60L
         var log = emptyList<BatterySample>()

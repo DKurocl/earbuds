@@ -37,6 +37,7 @@ import kotlin.math.abs
  */
 private object ChartColors {
     val buds @Composable get() = MaterialTheme.colorScheme.primary
+    val right @Composable get() = MaterialTheme.colorScheme.secondary
     val case @Composable get() = MaterialTheme.colorScheme.tertiary
 }
 
@@ -54,20 +55,28 @@ fun BatteryScreen(onBack: () -> Unit) {
 fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}, health: List<WeekHealth> = emptyList(), device: DeviceState? = null) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Battery", onBack) {
+        val week = log.filter { now - it.at in 0..7 * 24 * 60 * 60_000L }
+        val separate = week.any { it.left != null || it.right != null }
         Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Last 7 days", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    Legend(ChartColors.buds, "Earbuds", dashed = false)
-                    Spacer(Modifier.width(12.dp))
+                    if (!separate) {
+                        Legend(ChartColors.buds, "Earbuds", dashed = false)
+                        Spacer(Modifier.width(12.dp))
+                        Legend(ChartColors.case, "Case", dashed = true)
+                    }
+                }
+                if (separate) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Legend(ChartColors.buds, "Left", dashed = false)
+                    Legend(ChartColors.right, "Right", dashed = true)
                     Legend(ChartColors.case, "Case", dashed = true)
                 }
-                val week = log.filter { now - it.at in 0..7 * 24 * 60 * 60_000L }
                 if (week.size < 2) {
                     Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
                         Text("Readings appear here as you use the earbuds.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     }
-                } else WeekChart(week, now)
+                } else WeekChart(week, now, separate)
             }
         }
         // The week in the ears: a quiet summary, no reminder.
@@ -130,10 +139,11 @@ private fun DrainRow(shape: ListItemShapes, glyph: Glyph, title: String, log: Li
 
 /** One week: earbuds (solid) and case (dashed) over a 0 to 100 % axis; drag or tap to read a moment. */
 @Composable
-private fun WeekChart(samples: List<BatterySample>, now: Long) {
+private fun WeekChart(samples: List<BatterySample>, now: Long, separate: Boolean) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     val buds = ChartColors.buds
+    val rightColor = ChartColors.right
     val caseColor = ChartColors.case
     val grid = cs.outlineVariant.copy(alpha = .5f)
     val card = Surfaces.card
@@ -147,11 +157,16 @@ private fun WeekChart(samples: List<BatterySample>, now: Long) {
         val t = start + ((x - left) / (width - left)).coerceIn(0f, 1f) * (now - start)
         return samples.minByOrNull { abs(it.at - t) }
     }
+    fun levels(sample: BatterySample): String {
+        val budsLevel = if (sample.left == null && sample.right == null) listOf("Earbuds ${sample.level} %")
+            else listOfNotNull(sample.left?.let { "Left $it %" }, sample.right?.let { "Right $it %" })
+        return (budsLevel + listOfNotNull(sample.case?.let { "Case $it %" })).joinToString(" · ")
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // The reading under the finger; the latest one otherwise.
         val shown = picked ?: samples.last()
         Text(
-            "${dayName(shown.at)} ${timeFormat.format(Date(shown.at))} · Earbuds ${shown.level} %" + (shown.case?.let { " · Case $it %" } ?: ""),
+            "${dayName(shown.at)} ${timeFormat.format(Date(shown.at))} · ${levels(shown)}",
             style = MaterialTheme.typography.labelLarge, color = cs.onSurface,
         )
         Canvas(
@@ -163,8 +178,7 @@ private fun WeekChart(samples: List<BatterySample>, now: Long) {
                 }
                 .pointerInput(samples) { detectTapGestures { picked = nearest(it.x, size.width.toFloat(), 32.dp.toPx()) } }
                 .semantics {
-                    contentDescription = "Battery over the last 7 days. Latest: earbuds ${samples.last().level} percent" +
-                        (samples.last().case?.let { ", case $it percent" } ?: "")
+                    contentDescription = "Battery over the last 7 days. Latest: ${levels(samples.last())}"
                 },
         ) {
             val left = 32.dp.toPx()
@@ -193,7 +207,7 @@ private fun WeekChart(samples: List<BatterySample>, now: Long) {
                 var prev: BatterySample? = null
                 for (s in samples) {
                     val v = value(s)
-                    if (v == null) { prev = null; continue }
+                    if (v == null) continue
                     val p = prev
                     val gap = if (perSession) 3 * 60 * 60_000L else 36 * 60 * 60_000L
                     if (p == null || (perSession && p.session != s.session) || s.at - p.at > gap) path.moveTo(x(s.at), y(v))
@@ -204,13 +218,26 @@ private fun WeekChart(samples: List<BatterySample>, now: Long) {
                     pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())) else null))
             }
             series({ it.case }, caseColor, dashed = true, perSession = false)
-            series({ it.level }, buds, dashed = false, perSession = true)
+            if (separate) {
+                series({ it.left }, buds, dashed = false, perSession = true)
+                series({ it.right }, rightColor, dashed = true, perSession = true)
+            } else {
+                series({ it.level }, buds, dashed = false, perSession = true)
+            }
             // Crosshair on the picked reading, or a dot on the latest one.
             val mark = picked ?: samples.last()
             if (picked != null) drawLine(ink.copy(alpha = .6f), Offset(x(mark.at), top), Offset(x(mark.at), bottom), 1.dp.toPx())
             mark.case?.let { drawCircle(caseColor, 4.dp.toPx(), Offset(x(mark.at), y(it))) }
-            drawCircle(card, 6.dp.toPx(), Offset(x(mark.at), y(mark.level)))
-            drawCircle(buds, 4.dp.toPx(), Offset(x(mark.at), y(mark.level)))
+            fun markEarbud(value: Int, color: Color) {
+                drawCircle(card, 6.dp.toPx(), Offset(x(mark.at), y(value)))
+                drawCircle(color, 4.dp.toPx(), Offset(x(mark.at), y(value)))
+            }
+            if (separate) {
+                mark.left?.let { markEarbud(it, buds) }
+                mark.right?.let { markEarbud(it, rightColor) }
+            } else {
+                markEarbud(mark.level, buds)
+            }
         }
     }
 }

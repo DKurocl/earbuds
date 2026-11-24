@@ -223,9 +223,10 @@ fun AppSettingsContent(
 // ---- Diagnostics -------------------------------------------------------------------------
 
 @Composable
-fun DiagnosticsContent(
+internal fun DiagnosticsContent(
     log: List<String>, onBack: () -> Unit = {}, onCopy: () -> Unit = {}, onClear: () -> Unit = {},
     checking: Boolean = false, result: String? = null, onCheck: (() -> Unit)? = null,
+    timings: Map<CommandScheduler.Priority, List<CommandScheduler.Timing>> = emptyMap(),
 ) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Diagnostics", onBack, actions = {
@@ -237,6 +238,19 @@ fun DiagnosticsContent(
                 NavRow(it, Glyph.BLUETOOTH, if (checking) "Checking connection…" else "Run connection check",
                     result ?: "Control link, noise control, codec and battery",
                     enabled = !checking, onClick = onCheck)
+            }
+        }
+        if (timings.isNotEmpty()) ListGroup("Bluetooth command timing") {
+            for (priority in CommandScheduler.Priority.entries) {
+                val samples = timings[priority].orEmpty()
+                if (samples.isEmpty()) continue
+                val wire = samples.map { it.wireMs }.sorted()
+                val queue = samples.map { it.queueMs }.sorted()
+                val p95 = (samples.size * 95 + 99) / 100 - 1
+                item {
+                    InfoRow(it, Glyph.TIMER, priority.label,
+                        "Queue p95 ${queue[p95]} ms · Wire p95 ${wire[p95]} ms · ${samples.size} samples")
+                }
             }
         }
         Text(

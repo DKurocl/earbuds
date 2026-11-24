@@ -129,12 +129,41 @@ object Headphones {
     suspend fun writeEqualizer(preset: Int? = null, bands: List<Int>? = null) = EarbudSettingsLink.writeEqualizer(preset, bands)
 
     // ---- connection ownership -----------------------------------------------------------
-    @Synchronized fun hold(foreground: Boolean = true) { usage.acquire(foreground) }
+    private var closeAfterSwipe: Job? = null
+
+    @Synchronized fun hold(foreground: Boolean = true) {
+        closeAfterSwipe?.cancel()
+        closeAfterSwipe = null
+        usage.acquire(foreground)
+    }
 
     @Synchronized fun release(foreground: Boolean = true) {
         usage.release(foreground)
         if (!usage.foreground) DeviceReads.stopInfoLoop()
-        if (!usage.active) { ModeControl.cancelModes(); conn.close() }
+        if (usage.active) return
+        if (foreground && conn.connected) {
+            closeAfterSwipe?.cancel()
+            closeAfterSwipe = scope.launch {
+                delay(2500)
+                finishSwipeGrace(currentCoroutineContext().job)
+            }
+        } else {
+            closeIfUnused()
+        }
+    }
+
+    @Synchronized private fun finishSwipeGrace(job: Job) {
+        if (closeAfterSwipe != job) return
+        closeAfterSwipe = null
+        closeIfUnused()
+    }
+
+    @Synchronized private fun closeIfUnused() {
+        if (usage.active) return
+        closeAfterSwipe?.cancel()
+        closeAfterSwipe = null
+        ModeControl.cancelModes()
+        conn.close()
     }
 
     // ---- staying connected while the earbuds are present (LiveLink) ---------------------
@@ -148,8 +177,13 @@ object Headphones {
         usage.stay(on)
         stayJob?.cancel()
         stayJob = null
-        if (on) stayJob = scope.launch { keepLinked() }
-        else if (!usage.active) { ModeControl.cancelModes(); conn.close() }
+        if (on) {
+            closeAfterSwipe?.cancel()
+            closeAfterSwipe = null
+            stayJob = scope.launch { keepLinked() }
+        } else {
+            closeIfUnused()
+        }
         ActivityMode.update(app) // "Ambient while walking" listens only while the earbuds are here
     }
 
@@ -243,8 +277,9 @@ object Headphones {
 
     private suspend fun connectAndSync(priority: CommandScheduler.Priority): Boolean = commands.run(priority) {
         if (!ensureConnectedLocked()) return@run false
-        // Skip the initial read if a mode command is already waiting.
-        if (_state.value.pending == null) ModeControl.readBackLocked()
+        // A quick return reuses the existing confirmed state and restarts foreground reads.
+        val snapshot = _state.value
+        if (snapshot.pending == null && !snapshot.ncConfirmed) ModeControl.readBackLocked()
         DeviceReads.startInfoLoop()
         conn.connected
     }
@@ -299,6 +334,7 @@ object Headphones {
         ModeControl.cancelModes()
         conn.close()
         Prefs.replaceDevice(app, address, name)
+        commands.clearTimings()
         _state.value = DeviceState()
         EarbudSettingsLink.panelRefused.value = false
         Widgets.refreshAll(app)
@@ -328,7 +364,8 @@ object Headphones {
         if (type == CMD) AdvancedSettings.firmware(p)?.let { fw -> _state.update { it.copy(firmware = fw) }; return }
         AdvancedSettings.parse(type, p)?.let { (key, value) ->
             EarbudSettingsLink.advancedInquiries[key] = p[1].toInt() and 255
-            Prefs.cacheAdvanced(app, EarbudSettingsLink._advanced.updateAndGet { it + (key to value) })
+            EarbudSettingsLink._advanced.update { it + (key to value) }
+            Prefs.cacheAdvanced(app, key, value)
             return
         }
         if (type != CMD) return
@@ -338,7 +375,11 @@ object Headphones {
             Prefs.saveCodec(app, codec.code)
             return
         }
-        DeviceSettingsProtocol.parse(p)?.let { (feature, value) -> Prefs.cacheFeatures(app, EarbudSettingsLink._features.updateAndGet { it + (feature to value) }); return }
+        DeviceSettingsProtocol.parse(p)?.let { (feature, value) ->
+            EarbudSettingsLink._features.update { it + (feature to value) }
+            Prefs.cacheFeature(app, feature, value)
+            return
+        }
         EqualizerProtocol.parse(p)?.let { EarbudSettingsLink._equalizer.value = it; Prefs.cacheEqualizer(app, it); return }
         SonyProtocol.parseNc(p)?.let { ModeControl.setNc(it); return }
         val live = SonyProtocol.liveBatteryParts(p)
@@ -354,7 +395,10 @@ object Headphones {
                     Prefs.saveBattery(app, b, now)
                     // Feed the owner's real drain model with the emptier earbud.
                     listOfNotNull(b.left, b.right).minOrNull()?.let { level ->
-                        Prefs.addBatterySample(app, BatterySample(now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app), b.case))
+                        Prefs.addBatterySample(app, BatterySample(
+                            now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app), b.case,
+                            b.left.takeIf { 0 in live }, b.right.takeIf { 1 in live },
+                        ))
                     }
                     Widgets.refreshAll(app)
                     LowBattery.onReading(app, b, updated.nc?.mode)

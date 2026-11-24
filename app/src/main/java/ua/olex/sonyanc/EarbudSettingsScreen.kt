@@ -8,21 +8,34 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ua.olex.sonyanc.AdvancedSettings.Key
 import ua.olex.sonyanc.DeviceSettingsProtocol.Feature
 
-/** Reads every setting on entry (and on return to the app), then writes one change at a time. */
+/** Shows the remembered settings immediately and reads any values missing on this device. */
 @Composable
-fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, resumeTick: Int = 0) {
+fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}) {
+    val ctx = LocalContext.current
     val values by Headphones.advanced.collectAsState()
     val features by Headphones.features.collectAsState()
+    val device by Headphones.state.collectAsState()
+    val cachedValues by remember(ctx) { Prefs.cachedAdvancedChanges(ctx) }
+        .collectAsState(remember(ctx) { Prefs.cachedAdvanced(ctx) })
+    val cachedFeatures by remember(ctx) { Prefs.cachedFeatureChanges(ctx) }
+        .collectAsState(remember(ctx) { Prefs.cachedFeatures(ctx) })
+    val shownValues = cachedValues + values
+    val shownFeatures = cachedFeatures + features
     val scope = rememberCoroutineScope()
-    var loading by remember { mutableStateOf(Key.entries.filter { it !in Headphones.advanced.value }.toSet()) }
-    var featureLoading by remember { mutableStateOf(Feature.entries.filter { it !in Headphones.features.value }.toSet()) }
+    var loading by remember { mutableStateOf(emptySet<Key>()) }
+    var featureLoading by remember { mutableStateOf(emptySet<Feature>()) }
+    var scannedGeneration by remember { mutableStateOf<Long?>(null) }
+    val scanLock = remember { Mutex() }
     var writing by remember { mutableStateOf<Key?>(null) }
     // What a change did, shown in the row it happened to (and in the other touch row when that one
     // changed by itself), never in a bar over the page. Each note fades after a few seconds.
@@ -32,36 +45,36 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, res
         scope.launch { kotlinx.coroutines.delay(5000); if (notes[id] == note) notes = notes - id }
     }
 
-    suspend fun load(force: Boolean = false) {
-        val keys = SETTINGS_ORDER.filter { force || it !in Headphones.advanced.value }
-        val basic = Feature.entries.filter { force || it !in Headphones.features.value }
+    suspend fun load(force: Boolean = false) = scanLock.withLock {
+        if (force && !Headphones.connectAndSync()) return@withLock
+        val generation = Headphones.conn.generation
+        if (!force && scannedGeneration == generation) return@withLock
+        val knownKeys = Prefs.cachedAdvanced(ctx).keys + Headphones.advanced.value.keys
+        val knownFeatures = Prefs.cachedFeatures(ctx).keys + Headphones.features.value.keys
+        val keys = SETTINGS_ORDER.filter { force || it !in knownKeys }
+        val basic = Feature.entries.filter { force || it !in knownFeatures }
         loading = keys.toSet()
         featureLoading = basic.toSet()
         try {
-            if (!Headphones.connectAndSync()) return
-            for (feature in basic) try { Headphones.readFeature(feature) } finally { featureLoading = featureLoading - feature }
+            for (feature in basic) {
+                if (!Headphones.state.value.connected) break
+                try { Headphones.readFeature(feature) } finally { featureLoading = featureLoading - feature }
+            }
             for (key in keys) {
                 if (!Headphones.state.value.connected) break
                 try { Headphones.readAdvanced(key) } finally { loading = loading - key }
             }
+            if (Headphones.state.value.connected && Headphones.conn.generation == generation) scannedGeneration = generation
         } finally {
             loading = emptySet()
             featureLoading = emptySet()
         }
     }
-    LaunchedEffect(resumeTick) { load() }
+    LaunchedEffect(device.connected) { if (device.connected) load() }
 
-    // The last known values show at once and stay (also when the earbuds are away); live answers
-    // replace them. Rows ignore taps while their setting is being read, but never change shape.
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    val cachedValues = remember { Prefs.cachedAdvanced(ctx) }
-    val cachedFeatures = remember { Prefs.cachedFeatures(ctx) }
-    val shownValues = cachedValues + values
-    val shownFeatures = cachedFeatures + features
     val panelRefused by EarbudSettingsLink.panelRefused.collectAsState()
-    val device by Headphones.state.collectAsState()
     EarbudSettingsContent(
-        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused, hideMissing = device.connected && loading.isEmpty(),
+        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused, hideMissing = scannedGeneration != null && (shownValues.isNotEmpty() || shownFeatures.isNotEmpty()),
         onRefresh = { scope.launch { load(force = true) } },
         onUpdate = { key, index, code ->
             scope.launch {

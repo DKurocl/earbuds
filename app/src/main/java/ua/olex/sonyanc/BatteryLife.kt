@@ -57,7 +57,10 @@ object BatteryLife {
  * One battery reading: the emptier earbud ([level]) and the case, with what the earbuds were doing.
  * [session] changes on every connect (out of the case).
  */
-data class BatterySample(val at: Long, val level: Int, val charging: Boolean, val mode: Mode?, val session: Int, val case: Int? = null)
+data class BatterySample(
+    val at: Long, val level: Int, val charging: Boolean, val mode: Mode?, val session: Int,
+    val case: Int? = null, val left: Int? = null, val right: Int? = null,
+)
 
 /** The owner's measured drain for one mode bucket: percent per minute, from [minutes] of real use. */
 data class Drain(val rate: Double, val minutes: Double)
@@ -77,24 +80,25 @@ object BatteryLog {
     private const val MIN_DROP = 5
 
     fun encode(samples: List<BatterySample>): String = samples.joinToString(";") {
-        "${it.at},${it.level},${if (it.charging) 1 else 0},${it.mode?.name ?: "-"},${it.session},${it.case ?: "-"}"
+        "${it.at},${it.level},${if (it.charging) 1 else 0},${it.mode?.name ?: "-"},${it.session},${it.case ?: "-"},${it.left ?: "-"},${it.right ?: "-"}"
     }
 
     fun decode(text: String?): List<BatterySample> = text.orEmpty().split(';').mapNotNull { row ->
         val p = row.split(',')
-        if (p.size != 5 && p.size != 6) return@mapNotNull null // 5 fields before the case was recorded
+        if (p.size !in listOf(5, 6, 8)) return@mapNotNull null
+        fun marker(index: Int) = p.getOrNull(index)?.toIntOrNull()?.takeIf { it in 1..100 }
         val at = p[0].toLongOrNull() ?: return@mapNotNull null
         val level = p[1].toIntOrNull()?.takeIf { it in 1..100 } ?: return@mapNotNull null
         val session = p[4].toIntOrNull() ?: return@mapNotNull null
         BatterySample(at, level, p[2] == "1", Mode.entries.firstOrNull { it.name == p[3] }, session,
-            p.getOrNull(5)?.toIntOrNull()?.takeIf { it in 1..100 })
+            marker(5), marker(6), marker(7))
     }
 
     /** Appends a reading; repeats of the same level within ten minutes add nothing. */
     fun add(samples: List<BatterySample>, s: BatterySample): List<BatterySample> {
         val last = samples.lastOrNull()
         if (last != null && last.session == s.session && last.level == s.level && last.case == s.case &&
-            last.charging == s.charging && s.at - last.at < 10 * 60_000L) return samples
+            last.left == s.left && last.right == s.right && last.charging == s.charging && s.at - last.at < 10 * 60_000L) return samples
         return (samples.filter { s.at - it.at <= KEEP_MS } + s).takeLast(MAX)
     }
 

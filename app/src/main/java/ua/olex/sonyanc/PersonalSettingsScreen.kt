@@ -31,7 +31,8 @@ internal fun PersonalProfilesContent(
             val profile = profiles[slot]
             ListGroup("Profile $slot") {
                 if (profile != null) {
-                    val parts = listOfNotNull(profile.noise.mode.label, profile.equalizer?.let { EqualizerProtocol.presets[it.preset] })
+                    val parts = listOfNotNull(profile.noise.mode.label, profile.equalizer?.let { EqualizerProtocol.presets[it.preset] }) +
+                        profile.features.map { (feature, enabled) -> "${feature.title} ${if (enabled) "on" else "off"}" }
                     item {
                         NavRow(it, Glyph.TUNE, if (busy) "Applying…" else "Apply profile",
                             parts.joinToString(" · "), enabled = !busy, onClick = { onApply(slot, profile) })
@@ -51,7 +52,7 @@ internal fun PersonalProfilesContent(
 internal fun BackupContent(onBack: () -> Unit, export: () -> Unit, restore: () -> Unit) {
     PageScaffold("Backup & restore", onBack) {
         ListGroup {
-            item { NavRow(it, Glyph.COPY, "Export settings", "Save profiles and preferences to a JSON file", onClick = export) }
+            item { NavRow(it, Glyph.COPY, "Export settings", "Save profiles, routines, and vibration choices to a JSON file", onClick = export) }
             item { NavRow(it, Glyph.REFRESH, "Restore settings", "Choose an Earbuds backup file", onClick = restore) }
         }
     }

@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // A started screen owns the control link; leaving the app releases it at once.
+    // A started screen owns the control link; a quick swipe away can reuse an open socket.
     override fun onStart() {
         super.onStart()
         ConnectedSheet.appVisible = true
@@ -123,6 +123,8 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
     }
     val equalizer by Headphones.equalizer.collectAsStateWithLifecycle()
     val advanced by Headphones.advanced.collectAsStateWithLifecycle()
+    val cachedAdvanced by remember(ctx) { Prefs.cachedAdvancedChanges(ctx) }
+        .collectAsStateWithLifecycle(remember(ctx) { Prefs.cachedAdvanced(ctx) })
     var restoreUri by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
     val exportBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { model.exportSettings(it) }
@@ -237,7 +239,8 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
                         batterySeenAt = device.batterySeenAt,
                         onFind = ::findHub, onBatteryDetails = { open(Page.BATTERY) },
-                        speakToChat = advanced[AdvancedSettings.Key.CHAT]?.firstOrNull()?.let { it == 0 }?.takeIf { device.connected },
+                        speakToChat = (advanced[AdvancedSettings.Key.CHAT] ?: cachedAdvanced[AdvancedSettings.Key.CHAT])
+                            ?.firstOrNull()?.let { it == 0 }?.takeIf { linked != false },
                         onSpeakToChat = { model.setSpeakToChat(it) },
                         ambientMinutes = model.ambientMinutes, ambientUntil = model.ambientUntil,
                         onAmbientFor = {
@@ -246,10 +249,11 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         },
                         onStayInAmbient = model::stayInAmbient,
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && linked == false },
+                        onProfiles = { open(Page.PROFILES) }.takeIf { model.saved != null },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
                     Page.BATTERY -> BatteryScreen(::back)
-                    Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) }, startTick)
+                    Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) })
                     Page.DEVICE -> {
                         LaunchedEffect(startTick) { model.readDeviceInfo() }
                         val quality = advanced[AdvancedSettings.Key.QUALITY]?.firstOrNull()
@@ -325,9 +329,10 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                     Page.VIBRATIONS -> VibrationsContent(model.hapticTakes, remember { Haptics.shaped(ctx) }, onBack = ::back, onTry = model::tryHaptic)
                     Page.DIAGNOSTICS -> {
                         val log by Headphones.log.collectAsStateWithLifecycle()
+                        val timings by Headphones.commands.timings.collectAsStateWithLifecycle()
                         val clipboard = LocalClipboard.current
                         DiagnosticsContent(
-                            log, onBack = ::back,
+                            log, onBack = ::back, timings = timings,
                             checking = model.diagnosticRunning, result = model.diagnosticResult, onCheck = model::runDiagnostics,
                             onCopy = {
                                 scope.launch {
@@ -335,7 +340,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                                     // Android confirms clipboard copies itself.
                                 }
                             },
-                            onClear = { Headphones.clearLog() },
+                            onClear = { Headphones.clearLog(); Headphones.commands.clearTimings() },
                         )
                     }
                 }

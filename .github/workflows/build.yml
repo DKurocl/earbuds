@@ -142,7 +142,7 @@ jobs:
         with:
           gradle-version: 9.9.1
       - name: Render and compare with goldens
-        run: gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' --tests '*WidgetAnimationTest*' -Pscreenshots=true --no-daemon
+        run: gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' --tests '*WidgetAnimationTest*' --tests '*PortableSettingsTest*' -Pscreenshots=true --no-daemon
       - uses: actions/upload-artifact@v4
         if: always()
         with:
