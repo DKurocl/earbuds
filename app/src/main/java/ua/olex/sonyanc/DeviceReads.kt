@@ -2,33 +2,44 @@ package ua.olex.sonyanc
 
 import android.os.SystemClock
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 import ua.olex.sonyanc.Headphones.CMD
-import ua.olex.sonyanc.Headphones.Waiter
 import ua.olex.sonyanc.Headphones.addLog
-import ua.olex.sonyanc.Headphones.app
 import ua.olex.sonyanc.Headphones.conn
-import ua.olex.sonyanc.Headphones.ensureConnectedLocked
 import ua.olex.sonyanc.Headphones.exchange
-import ua.olex.sonyanc.Headphones.lock
 import ua.olex.sonyanc.Headphones.scope
 import ua.olex.sonyanc.Headphones.usage
-import ua.olex.sonyanc.Headphones.waiters
 import ua.olex.sonyanc.Headphones._state
 import ua.olex.sonyanc.ModeControl.awaitModeIdle
 
 /** Codec and battery: read once per screen, then the earbuds' own notifications keep them current. */
 internal object DeviceReads {
     // ---- background reads while a screen is open ------------------------------------
-    internal var infoJob: Job? = null
+    @Volatile internal var infoJob: Job? = null
+        private set
     /** Set when the earbuds push changes on their own; polling then becomes a slow fallback. */
     @Volatile internal var codecPushed = false
-    @Volatile internal var batteryPushed = false
+    @Volatile private var pushedBatteryParts = emptySet<Int>()
+    internal val batteryPushed get() = pushedBatteryParts.containsAll(buds)
+    private val buds = setOf(0, 1)
+    private val allParts = setOf(0, 1, 2)
+
+    internal fun batteryNotification(parts: Set<Int>) {
+        pushedBatteryParts = pushedBatteryParts + parts
+    }
+
+    @Synchronized internal fun stopInfoLoop() {
+        infoJob?.cancel()
+        infoJob = null
+    }
+
+    internal fun invalidate() {
+        codecPushed = false
+        pushedBatteryParts = emptySet()
+        stopInfoLoop()
+    }
     private val batteryLock = Mutex()
     private val codecLock = Mutex()
 
@@ -48,11 +59,12 @@ internal object DeviceReads {
             var equalizerAsked = false
             var chatAsked = false
             var qualityKept = false
-            while (usage.foreground && conn.connected) {
+            val generation = conn.generation
+            while (usage.foreground && conn.connected && conn.generation == generation) {
                 _state.first { it.pending == null || !it.connected }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= codecDue) {
-                    queryCodec()
+                    queryCodec(onlyForeground = true)
                     codecDue = now() + if (codecPushed) 120_000L else 30_000L
                 }
                 if (!usage.foreground || !conn.connected) break
@@ -63,11 +75,11 @@ internal object DeviceReads {
                 if (!qualityKept) { qualityKept = true; EarbudSettingsLink.keepQuality() }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= batteryDue) {
-                    queryBattery()
-                    val complete = _state.value.liveBatteryParts.containsAll(setOf(0, 1, 2))
+                    queryBattery(onlyForeground = true)
+                    val complete = _state.value.liveBatteryParts.containsAll(allParts)
                     batteryRetry = if (complete) 8_000L else (batteryRetry * 2).coerceAtMost(60_000L)
                     batteryDue = now() + when {
-                        batteryPushed -> 180_000L
+                        pushedBatteryParts.containsAll(allParts) -> 180_000L
                         complete -> 60_000L
                         else -> batteryRetry
                     }
@@ -80,13 +92,15 @@ internal object DeviceReads {
 
     internal fun now() = SystemClock.elapsedRealtime()
 
-    suspend fun queryCodec(): CodecProtocol.State? = codecLock.withLock {
+    suspend fun queryCodec(onlyForeground: Boolean = false): CodecProtocol.State? = codecLock.withLock {
         _state.update { it.copy(codecRefreshing = true) }
         try {
             if (!awaitModeIdle()) return@withLock null
-            exchange(900, connect = false, accepts = { type, p -> type == CMD && CodecProtocol.parse(p) != null }) {
-                conn.send(CodecProtocol.get)
-            }?.let(CodecProtocol::parse)
+            val generation = conn.generation
+            exchange(900, connect = false,
+                readyToRead = { canRead(generation, onlyForeground) },
+                accepts = { type, p -> type == CMD && p.firstOrNull() == 0x13.toByte() && CodecProtocol.parse(p) != null },
+            ) { conn.send(CodecProtocol.get) }?.let(CodecProtocol::parse)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -99,29 +113,52 @@ internal object DeviceReads {
     internal fun batteryFamily(p: ByteArray) =
         if (SonyProtocol.parseBattery(p, SonyProtocol.Battery()) == null) null else if (p[1].toInt() == 0x0A) 2 else 1
 
-    /** When a battery read last got an answer: callers that line up behind it reuse it. */
-    @Volatile private var lastBatteryRead = 0L
+    /** Coalesce overlapping battery reads on one connection using a monotonic clock. */
+    private var lastBatteryRead: Pair<Long, Long>? = null
+    private var preferredBudsInquiry = SonyProtocol.BATTERY_GETS.first()
+    private var inquiryGeneration = -1L
 
-    suspend fun queryBattery() = batteryLock.withLock {
-        // On connect several parts ask at once (the connect sync, Stay in sync, the screen): the
-        // ones that waited behind a read that just answered take its result instead of asking again.
-        if (System.currentTimeMillis() - lastBatteryRead < 3_000L) return@withLock
+    private fun canRead(generation: Long, onlyForeground: Boolean): Boolean =
+        conn.generation == generation && (!onlyForeground || usage.foreground) && _state.value.pending == null
+
+    suspend fun queryBattery(onlyForeground: Boolean = false) = batteryLock.withLock {
+        val generation = conn.generation
+        if (lastBatteryRead?.let { (link, at) -> link == generation && now() - at < 3_000L } == true) return@withLock
         _state.update { it.copy(batteryRefreshing = true) }
-        var received = false
         try {
-            // 01 and 09 are both documented Sony V2 dual-battery inquiry formats; 0A is the case.
-            for (q in SonyProtocol.BATTERY_GETS) {
-                val family = if (q[1].toInt() == 0x0A) 2 else 1
-                if (family == 1 && received && _state.value.liveBatteryParts.containsAll(setOf(0, 1))) continue
-                if (!awaitModeIdle()) continue
-                val reply = exchange(900, connect = false, accepts = { type, p -> type == CMD && batteryFamily(p) == family }) {
-                    conn.send(q)
-                }
-                if (reply != null && SonyProtocol.liveBatteryParts(reply).isNotEmpty()) received = true
-                yield()
+            if (!awaitModeIdle() || !canRead(generation, onlyForeground)) return@withLock
+            if (inquiryGeneration != generation) {
+                preferredBudsInquiry = SonyProtocol.BATTERY_GETS.first()
+                inquiryGeneration = generation
             }
-            if (!received) addLog("Battery: no decoded reply; requested 22 01 / 22 09 / 22 0A")
-            else lastBatteryRead = System.currentTimeMillis()
+            val caseInquiry = SonyProtocol.BATTERY_GETS.last()
+            val alternative = SonyProtocol.BATTERY_GETS.first { it != preferredBudsInquiry && it != caseInquiry }
+            var gotBuds = false
+            var received = false
+            for (inquiry in listOf(preferredBudsInquiry, alternative, caseInquiry)) {
+                val isCase = inquiry == caseInquiry
+                if (!isCase && gotBuds) continue
+                if (!canRead(generation, onlyForeground)) break
+                // Notifications still update the cache. Only a reply to this inquiry satisfies the GET.
+                val reply = exchange(900, connect = false,
+                    readyToRead = { canRead(generation, onlyForeground) },
+                    accepts = { type, p ->
+                        type == CMD && p.firstOrNull() == 0x23.toByte() && p.getOrNull(1) == inquiry[1] &&
+                            batteryFamily(p) != null
+                    },
+                ) { conn.send(inquiry) }
+                if (reply == null || SonyProtocol.liveBatteryParts(reply).isEmpty()) continue
+                received = true
+                if (!isCase && SonyProtocol.liveBatteryParts(reply).containsAll(buds)) {
+                    gotBuds = true
+                    preferredBudsInquiry = inquiry
+                }
+            }
+            if (received) {
+                lastBatteryRead = generation to now()
+            } else if (canRead(generation, onlyForeground)) {
+                addLog("Battery: no decoded reply")
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -44,9 +44,20 @@ class SonyConnection(
     @Volatile private var connecting:BluetoothSocket?=null
     @Volatile private var connectionEpoch=0L
     private val outputLock = Any()
-    @Volatile private var seq = 0
-    @Volatile private var pendingAck: CompletableDeferred<Boolean>? = null
+    private class PendingAck(val sequence: Int) {
+        val result = CompletableDeferred<Boolean>()
+    }
+
+    private var seq = 0
+    private var pendingAck: PendingAck? = null
     val connected get() = socket?.connected == true
+    internal val generation get() = connectionEpoch
+
+    @Synchronized internal fun ifConnected(generation: Long, action: () -> Unit): Boolean {
+        if (connectionEpoch != generation || !connected) return false
+        action()
+        return true
+    }
     private val sendLock=Mutex()
 
     suspend fun connect(device: BluetoothDevice,stillNeeded:()->Boolean={true}): Boolean = withContext(Dispatchers.IO) {
@@ -91,7 +102,11 @@ class SonyConnection(
             } catch (e: Exception) {
                 runCatching { candidate.close() }
                 log("✗ connect: ${e.message?.take(80)}")
-            } finally {if(connecting===candidate) connecting=null}
+            } finally {
+                synchronized(this@SonyConnection) {
+                    if (connecting === candidate) connecting = null
+                }
+            }
         }
         false
     }
@@ -104,32 +119,40 @@ class SonyConnection(
 
     suspend fun send(payload: ByteArray, type:Byte=SonyProtocol.TYPE_COMMAND): Boolean = sendLock.withLock {
         withContext(Dispatchers.IO) {
-            val s=socket ?: return@withContext false
-            val ack=CompletableDeferred<Boolean>()
-            pendingAck=ack
+            val (s, ack) = synchronized(this@SonyConnection) {
+                val stream = socket ?: return@withContext false
+                stream to PendingAck(seq).also { pendingAck = it }
+            }
             // One timer bounds both a blocked write and a missing ACK: closing the stream
             // unblocks the write and completes the ACK with false.
             val watchdog=scope.launch {
                 delay(ackTimeoutMs)
-                if(socket===s && pendingAck===ack && !ack.isCompleted) {log("✗ ACK timeout; closing link");close()}
+                synchronized(this@SonyConnection) {
+                    if (socket === s && pendingAck === ack && !ack.result.isCompleted) {
+                        log("✗ ACK timeout; closing link")
+                        close()
+                    }
+                }
             }
             try {
                 synchronized(outputLock) {
-                    s.output.write(SonyProtocol.frame(type,seq,payload))
+                    s.output.write(SonyProtocol.frame(type,ack.sequence,payload))
                     s.output.flush()
                 }
                 log("→ [%02X] %s".format(type,SonyProtocol.hex(payload)))
-                ack.await()
+                ack.result.await()
             } catch(e:CancellationException) {
-                if(socket===s) close()
+                closeStream(s)
                 throw e
             } catch(e:Exception) {
                 log("✗ send: ${e.message?.take(80)}")
-                if(socket===s) close()
+                closeStream(s)
                 false
             } finally {
                 watchdog.cancel()
-                if(pendingAck===ack) pendingAck=null
+                synchronized(this@SonyConnection) {
+                    if (pendingAck === ack) pendingAck = null
+                }
             }
         }
     }
@@ -158,16 +181,21 @@ class SonyConnection(
                     }
                 }
             } catch (_: Exception) { /* close below wakes a pending send */ }
-            finally { if (socket === s) close() }
+            finally { closeStream(s) }
         }
     }
 
     private fun handle(s: MdrStream, f: SonyProtocol.Frame?) {
         if (socket !== s || f == null || !f.checksumOk || f.seq !in 0..1) return
         if (f.type == SonyProtocol.TYPE_ACK.toInt()) {
-            if (pendingAck!=null && f.payload.isEmpty() && f.seq == 1 - seq) {
-                seq = f.seq
-                pendingAck?.complete(true)
+            synchronized(this) {
+                val ack = pendingAck
+                if (socket === s && ack != null && !ack.result.isCompleted &&
+                    f.payload.isEmpty() && f.seq == 1 - ack.sequence
+                ) {
+                    seq = f.seq
+                    ack.result.complete(true)
+                }
             }
             return
         }
@@ -177,7 +205,13 @@ class SonyConnection(
             s.output.flush()
         }
         log("← [%02X] %s".format(f.type, SonyProtocol.hex(f.payload)))
-        if(socket===s) onPayload(f.type,f.payload)
+        synchronized(this) {
+            if (socket === s) onPayload(f.type, f.payload)
+        }
+    }
+
+    @Synchronized private fun closeStream(stream: MdrStream) {
+        if (socket === stream) close()
     }
 
     @Synchronized fun close(notify: Boolean = true) {
@@ -186,7 +220,7 @@ class SonyConnection(
         runCatching{attempt?.close()}
         val old = socket
         socket = null
-        pendingAck?.complete(false)
+        pendingAck?.result?.complete(false)
         pendingAck = null
         reader?.cancel(); reader = null
         runCatching { old?.close() }

@@ -84,11 +84,11 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
 - Current codec reported directly by Sony V2 (`12 02`, replies `13 02` / notifications `15 02`).
   SBC/AAC/LDAC and other known Sony values are decoded; unknown codes stay unknown.
   No hidden Android APIs, preferred-codec inference, invented bitrate or sample rate.
-  Changes update via notifications and foreground polling; closing the link clears the codec.
+  Changes update via notifications and foreground polling. The last codec stays visible as cached after disconnect.
 - Device selection, reconnect, home-screen widget and launcher ANC/Ambient/Off shortcuts.
   The widget contains only ANC / Ambient / Off: no app name, logo, battery or codec.
-  The widget waits for command delivery rather than optional read-back completion,
-  reconnects once after a stale-socket write failure and can retry from the widget.
+  The widget signals command delivery with haptics and briefly keeps the link open for read-back.
+  It reconnects once after a stale-socket write failure and can retry from the widget.
   Missing pairing/permission opens the app for setup.
 - Wallpaper colors and haptics switches; copyable bounded diagnostics.
 - Minimal home screen without repeated mode captions; interruptible shape/width motion,
@@ -114,13 +114,15 @@ check on the actual WF-1000XM5, especially all six EQ bands and voice focus.
 
 ## Transport
 
-One serialized on-demand RFCOMM connection, secure V2 first, bounded blocking connects
-with a socket-closing watchdog, bounded ACK waits, checksum/length/escape validation,
-and a read-back after NC writes. The link remains available 12 s after leaving the app,
-then closes. There is no foreground service, background notification or Internet permission.
-Optional battery reads yield between requests and defer while a mode request is pending.
-Polling retries unavailable values and handles both V2 dual-battery formats (01/09),
-case format 0A and command frame types 0C/0E. Battery refresh is available on the home screen.
+The secure V2 RFCOMM link serializes commands through read-back. Socket watchdogs bound the
+connect and ACK waits. Device notifications update the cache, and GET replies complete the
+active read. Disconnect clears live values, and selecting another pair clears its predecessor's
+saved values. The link closes when its last screen or action releases it, unless Stay in sync
+is enabled and Android reports the earbuds present.
+
+Optional battery reads defer while a mode request is pending. Within a connection, polling
+reuses the V2 dual-battery format (01 or 09) that reported both earbuds. Case readings use
+format 0A. Battery refresh is available on the home screen.
 The widget labels its highlight as last known state because it has no persistent connection.
 
 ## Protocol evidence

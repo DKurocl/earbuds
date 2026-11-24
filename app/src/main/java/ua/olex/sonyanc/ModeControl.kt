@@ -3,21 +3,14 @@ package ua.olex.sonyanc
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import ua.olex.sonyanc.Headphones.CMD
-import ua.olex.sonyanc.Headphones.Waiter
 import ua.olex.sonyanc.Headphones.addLog
 import ua.olex.sonyanc.Headphones.app
+import ua.olex.sonyanc.Headphones.commands
 import ua.olex.sonyanc.Headphones.conn
 import ua.olex.sonyanc.Headphones.ensureConnectedLocked
-import ua.olex.sonyanc.Headphones.exchange
-import ua.olex.sonyanc.Headphones.lock
 import ua.olex.sonyanc.Headphones.scope
-import ua.olex.sonyanc.Headphones.usage
-import ua.olex.sonyanc.Headphones.waiters
 import ua.olex.sonyanc.Headphones._state
 
 /**
@@ -78,51 +71,55 @@ internal object ModeControl {
         return request.delivered
     }
 
-    private suspend fun apply(state: SonyProtocol.NcState, id: Long, onDelivered: (Boolean) -> Unit): Boolean = lock.withLock {
-        if (!ensureConnectedLocked() || modeVersion.get() != id) { onDelivered(false); return@withLock false }
-        _state.value.let { if (it.ncConfirmed && it.nc == state) { onDelivered(true); return@withLock true } }
+    private fun SonyProtocol.NcState.matches(target: SonyProtocol.NcState): Boolean =
+        mode == target.mode && (mode != SonyProtocol.Mode.AMBIENT ||
+            voice == target.voice && level == target.level.coerceIn(0, 20))
+
+    private suspend fun apply(state: SonyProtocol.NcState, id: Long, onDelivered: (Boolean) -> Unit) = commands.run {
+        if (modeVersion.get() != id || !ensureConnectedLocked() || modeVersion.get() != id) {
+            onDelivered(false)
+            return@run
+        }
+        val current = _state.value
+        if (current.ncConfirmed && current.nc?.matches(state) == true) {
+            onDelivered(true)
+            return@run
+        }
+
         var ok = conn.send(SonyProtocol.ncSet(state))
         // A cached socket can look connected after the earbuds have dropped it.
-        // Reconnect once for the latest choice; never replay a superseded choice.
-        if (!ok && modeVersion.get() == id && ensureConnectedLocked() && modeVersion.get() == id) ok = conn.send(SonyProtocol.ncSet(state))
+        if (!ok && modeVersion.get() == id && ensureConnectedLocked() && modeVersion.get() == id) {
+            ok = conn.send(SonyProtocol.ncSet(state))
+        }
+        onDelivered(ok)
+        if (modeVersion.get() != id) return@run
         if (!ok) {
-            onDelivered(false)
             _state.update { it.copy(error = "The earbuds did not confirm the command. Try again.") }
-            return@withLock false
+            return@run
         }
         addLog("Mode: asked for ${state.mode.label}")
-        setNc(state, confirmed = false)
-        onDelivered(true) // Widget lifetime depends on delivery, not on the optional read-back.
-        if (modeVersion.get() != id) return@withLock true
-        // Read back while still holding the wire, so the next command waits for the device.
-        var reported = readBack()
-        if (reported != null && reported.mode != state.mode && modeVersion.get() == id) {
-            // The earbuds answered with another mode: a stale reply or a refusal. Ask once more,
-            // then believe them (their report already updated the screen through decode).
-            addLog("Mode: earbuds answered ${reported.mode.label}; asking again")
+
+        var reported = readBackLocked()
+        if (reported != null && !reported.matches(state) && modeVersion.get() == id) {
+            // Some firmware answers before it applies a setting. Read again without replaying SET.
             delay(250)
-            if (modeVersion.get() == id && conn.send(SonyProtocol.ncSet(state))) reported = readBack()
-            if (reported != null && reported.mode != state.mode && modeVersion.get() == id) {
-                addLog("✗ Mode: earbuds stayed in ${reported.mode.label}")
-                _state.update { it.copy(error = "The earbuds stayed in ${reported.mode.label}. Another app may be controlling them.") }
-            }
+            if (modeVersion.get() == id && conn.connected) reported = readBackLocked()
         }
-        true
-    }
-
-    /** Asks the earbuds for their noise control and waits briefly for the answer. */
-    private suspend fun readBack(): SonyProtocol.NcState? {
-        val waiter = Waiter { type, p -> type == CMD && SonyProtocol.parseNc(p) != null }
-        waiters += waiter
-        try {
-            return if (conn.send(SonyProtocol.NC_GET)) withTimeoutOrNull(900) { waiter.reply.await() }?.let(SonyProtocol::parseNc) else null
-        } finally {
-            waiters -= waiter
+        if (modeVersion.get() != id) return@run
+        if (reported?.matches(state) != true && !(_state.value.ncConfirmed && _state.value.nc?.matches(state) == true)) {
+            addLog("✗ Mode: read-back did not confirm ${state.mode.label}")
+            _state.update { it.copy(error = "Could not verify the requested noise control settings.") }
         }
     }
 
-    internal fun setNc(state: SonyProtocol.NcState, confirmed: Boolean) {
-        _state.update { it.copy(nc = state, ncConfirmed = confirmed) }
+    /** A push notification updates state but cannot complete an explicit GET. */
+    internal suspend fun readBackLocked(): SonyProtocol.NcState? =
+        commands.readLocked(900, accepts = { type, payload ->
+            type == CMD && payload.firstOrNull() == 0x67.toByte() && SonyProtocol.parseNc(payload) != null
+        }) { conn.send(SonyProtocol.NC_GET) }?.let(SonyProtocol::parseNc)
+
+    internal fun setNc(state: SonyProtocol.NcState) {
+        _state.update { it.copy(nc = state, ncConfirmed = true) }
         Prefs.saveNc(app, state)
         ModeWidget.refreshAll(app)
     }

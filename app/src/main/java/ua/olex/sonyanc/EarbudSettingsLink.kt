@@ -1,23 +1,15 @@
 package ua.olex.sonyanc
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 import ua.olex.sonyanc.Headphones.CMD
-import ua.olex.sonyanc.Headphones.Waiter
 import ua.olex.sonyanc.Headphones.addLog
 import ua.olex.sonyanc.Headphones.app
 import ua.olex.sonyanc.Headphones.conn
-import ua.olex.sonyanc.Headphones.ensureConnectedLocked
 import ua.olex.sonyanc.Headphones.exchange
-import ua.olex.sonyanc.Headphones.lock
-import ua.olex.sonyanc.Headphones.scope
-import ua.olex.sonyanc.Headphones.usage
-import ua.olex.sonyanc.Headphones.waiters
 import ua.olex.sonyanc.Headphones._state
 
 /** The earbuds' own settings (Speak-to-Chat, quality, equalizer, …): read, write, confirm. */
@@ -66,6 +58,7 @@ internal object EarbudSettingsLink {
     }
 
     private suspend fun writeAdvancedLocked(key: AdvancedSettings.Key, index: Int, code: Int): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
+        val generation = conn.generation
         val current = _advanced.value[key] ?: run { addLog("✗ ${key.title}: no live value to change"); return@withLock false }
         val subtype = advancedInquiries[key] ?: key.subtype
         val get = byteArrayOf(key.getCode.toByte(), subtype.toByte())
@@ -75,18 +68,24 @@ internal object EarbudSettingsLink {
         for (wire in wires) {
             val target = AdvancedSettings.patch(key, current, index, code, wire) ?: return@withLock false
             addLog("→ ${key.title}: $current → $target")
-            var now = state(exchange(1200, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
-                conn.send(key.set(target, subtype), key.type) && conn.send(get, key.type)
-            })
+            var now = state(exchange(1200, connect = false,
+                readyToRead = { conn.generation == generation },
+                accepts = { type, p -> isAdvancedReply(key, type, p) },
+                prepare = { conn.send(key.set(target, subtype), key.type) },
+            ) { conn.send(get, key.type) })
             // Some settings (touch controls) are applied a moment after the earbuds answer: look again.
             for (look in 1..3) {
                 if (AdvancedSettings.equivalent(key, now, target)) break
                 delay(250)
-                now = state(exchange(1000, accepts = { type, p -> isAdvancedReply(key, type, p) }) { conn.send(get, key.type) }) ?: now
+                if (conn.generation != generation) return@withLock false
+                now = state(exchange(1000, connect = false,
+                    readyToRead = { conn.generation == generation },
+                    accepts = { type, p -> isAdvancedReply(key, type, p) },
+                ) { conn.send(get, key.type) }) ?: now
             }
             addLog("← ${key.title}: $now")
             if (AdvancedSettings.equivalent(key, now, target)) {
-                now?.let { v -> _advanced.update { it + (key to v) } }
+                if (conn.generation != generation) return@withLock false
                 // The owner's choice of quality is kept by Earbuds too (see keepQuality).
                 if (key == AdvancedSettings.Key.QUALITY && index == 0 && !Prefs.qualityByPlace(app)) Prefs.setPreferQuality(app, code == 0)
                 return@withLock true
@@ -101,12 +100,22 @@ internal object EarbudSettingsLink {
             val other = 1 - current[0]
             val target = listOf(other, AdvancedSettings.panelCode(listOf(other, 0), on))
             addLog("→ ${key.title}: $current → $target (other encoding)")
-            conn.send(key.set(target, subtype), key.type)
-            delay(250)
-            val now = state(exchange(1000, accepts = { type, p -> isAdvancedReply(key, type, p) }) { conn.send(get, key.type) })
+            val now = state(exchange(1000, connect = false,
+                readyToRead = { conn.generation == generation },
+                accepts = { type, p -> isAdvancedReply(key, type, p) },
+                prepare = {
+                    val sent = conn.send(key.set(target, subtype), key.type)
+                    if (sent) delay(250)
+                    sent
+                },
+            ) { conn.send(get, key.type) })
             addLog("← ${key.title}: $now")
-            if (now != null && AdvancedSettings.panelOn(now) == on) { _advanced.update { it + (key to now) }; return@withLock true }
-            if (now != null) { panelRefused.value = true; Prefs.setPanelRefused(app, true) }
+            if (conn.generation != generation) return@withLock false
+            if (now != null && AdvancedSettings.panelOn(now) == on) return@withLock true
+            if (now != null) conn.ifConnected(generation) {
+                panelRefused.value = true
+                Prefs.setPanelRefused(app, true)
+            }
         }
         false
     }
@@ -147,9 +156,12 @@ internal object EarbudSettingsLink {
     }
 
     private suspend fun writeFeatureLocked(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean = featureLocks.getOrPut(feature) { Mutex() }.withLock {
-        val reply = exchange(1400, accepts = { type, p -> isFeatureReply(feature, type, p) }) {
-            feature in _features.value && conn.send(feature.set(value)) && conn.send(feature.get)
-        }
+        val generation = conn.generation
+        val reply = exchange(1400, connect = false,
+            readyToRead = { conn.generation == generation },
+            accepts = { type, p -> isFeatureReply(feature, type, p) },
+            prepare = { feature in _features.value && conn.send(feature.set(value)) },
+        ) { conn.send(feature.get) }
         reply != null && DeviceSettingsProtocol.parse(reply)?.second == value
     }
 
@@ -167,9 +179,12 @@ internal object EarbudSettingsLink {
 
     private suspend fun writeEqualizerLocked(preset: Int?, bands: List<Int>?): Boolean = equalizerLock.withLock {
         val payload = if (bands != null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
-        val actual = exchange(1400, accepts = ::isEqualizerReply) {
-            _equalizer.value != null && conn.send(payload) && conn.send(EqualizerProtocol.get)
-        }?.let(EqualizerProtocol::parse) ?: return@withLock false
+        val generation = conn.generation
+        val actual = exchange(1400, connect = false,
+            readyToRead = { conn.generation == generation },
+            accepts = ::isEqualizerReply,
+            prepare = { _equalizer.value != null && conn.send(payload) },
+        ) { conn.send(EqualizerProtocol.get) }?.let(EqualizerProtocol::parse) ?: return@withLock false
         if (bands != null) actual.preset == 0xA0 && actual.bands == bands else actual.preset == preset
     }
 }

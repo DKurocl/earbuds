@@ -82,6 +82,31 @@ class SonyConnectionTest {
             withTimeout(2000){job.cancelAndJoin()};assertFalse(c.connected)
         } finally {c.close();scope.cancel()}
     }
+    @Test fun closingAnOldStreamCannotCancelTheReplacement() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val connection = session(scope)
+        try {
+            val old = Stream(autoAck = false)
+            connection.attach(old)
+            val pending = async { connection.send(byteArrayOf(0x66, 0x17)) }
+            withTimeout(1000) { while (old.commands.isEmpty()) delay(1) }
+
+            val replacement = Stream(autoAck = false)
+            connection.attach(replacement)
+            assertFalse(pending.await())
+            val current = async { connection.send(byteArrayOf(0x12, 2)) }
+            withTimeout(1000) { while (replacement.commands.isEmpty()) delay(1) }
+            old.feed(SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1, byteArrayOf()))
+            assertFalse(current.isCompleted)
+            replacement.feed(SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1, byteArrayOf()))
+            assertTrue(current.await())
+            assertTrue(connection.connected)
+        } finally {
+            connection.close()
+            scope.cancel()
+        }
+    }
+
     @Test fun fragmentedCommandTablesAndEscapesReachTheDecoder()= runBlocking {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
         val seen=CopyOnWriteArrayList<Pair<Int,String>>()

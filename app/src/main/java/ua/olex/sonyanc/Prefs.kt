@@ -73,7 +73,16 @@ object Prefs {
         .putBoolean("charging_left", b.leftCharging).putBoolean("charging_right", b.rightCharging).putBoolean("charging_case", b.caseCharging)
         .putLong("battery_at", at).apply()
 
-    fun clearBattery(ctx: Context) = p(ctx).edit().remove("battery_at").remove("linked").remove("last_seen").apply()
+    /** A different pair must not inherit this pair's measurements or settings. */
+    fun replaceDevice(ctx: Context, address: String, name: String?) {
+        val editor = p(ctx).edit().putString("device", address).putString("device_name", name)
+        listOf(
+            "mode", "voice", "level", "codec", "battery_at", "linked", "last_seen",
+            "cache_advanced", "cache_features", "cache_eq", "panel_refused",
+            "battery_log", "battery_health", "buds_reminded_session",
+        ).forEach { editor.remove(it) }
+        editor.apply()
+    }
 
     // ---- Android's Bluetooth link, from ACL broadcasts (see ConnectionReceiver) ----
     /** True/false once a broadcast or a working control link said so; null while unknown. */

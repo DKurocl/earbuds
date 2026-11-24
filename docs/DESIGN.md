@@ -181,11 +181,13 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
   USAGE_TOUCH in the app (follows the touch intensity setting) and the touch-feedback switch.
   Three takes per cue; App settings › Vibrations plays them and keeps the one chosen.
 - **Structure**: `AppModel` (ViewModel) owns settings and actions; `App()` only wires pages and
-  what needs an Activity. `Headphones` is the link (socket, reply matching, leases); noise
-  control is `ModeControl`, codec and battery reads `DeviceReads`, earbud settings
-  `EarbudSettingsLink`. The codec is remembered across links like the battery.
-- **Mode read-back**: when the earbuds answer with another mode, Earbuds asks once more and then
-  says which mode they stayed in; the log names each step.
+  what needs an Activity. `Headphones` owns the link and its leases. `CommandScheduler`
+  serializes commands through read-back. Noise control is `ModeControl`, codec and battery
+  reads are `DeviceReads`, and earbud settings are `EarbudSettingsLink`. The codec is
+  remembered across links like the battery.
+- **Mode read-back**: an ACK confirms delivery, and a device report confirms the mode. If the
+  first GET returns a different setting, Earbuds reads again without sending another SET.
+  In Ambient, the report must also match voice focus and level.
 - **Sound quality**: "Prefer sound quality" is remembered; if the earbuds report Stable connection
   again, Earbuds sets it back once per connection. When the earbuds allow LDAC but Android uses
   another codec, Device info points to Android's HD audio switch.
