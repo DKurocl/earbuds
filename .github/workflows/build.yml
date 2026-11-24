@@ -6,7 +6,7 @@ permissions:
   contents: read
 concurrency:
   group: earbuds-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !contains(github.event.head_commit.message, '[review-evidence]') }}
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -107,7 +107,7 @@ jobs:
         run: |
           {
             printf 'Commit `%s`. [Build and verification](%s).\n\n' "$COMMIT" "$RUN_URL"
-            if [[ "$COMMIT_MESSAGE" == "Release Earbuds 2.0.0" ]]; then
+            if [[ "$COMMIT_MESSAGE" == "Release Earbuds 2.0.0"* ]]; then
               printf '[Review guide](https://github.com/%s/blob/%s/docs/review/README.md) · [Release notes](https://github.com/%s/blob/%s/docs/review/RELEASE_NOTES.md)\n\n' "$GITHUB_REPOSITORY" "$COMMIT" "$GITHUB_REPOSITORY" "$COMMIT"
             fi
             printf '%s\n' 'Obtainium can install the signed APK over the previous release.'

@@ -35,6 +35,7 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.systemProperty("screenshots", providers.gradleProperty("screenshots").orNull ?: "")
+            if (screenshots) it.systemProperty("user.timezone", "UTC")
             it.systemProperty("screenshotDir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
             // Renders are compared with the committed goldens; -PrecordGoldens=true rewrites them.
             it.systemProperty("goldenDir", file("src/screenshotTest/goldens").absolutePath)
