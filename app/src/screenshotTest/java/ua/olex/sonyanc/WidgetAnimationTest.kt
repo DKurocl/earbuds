@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -78,6 +79,27 @@ class WidgetAnimationTest {
             val running = field(v.stateListAnimator, "mRunningAnimator") as? android.animation.ValueAnimator ?: continue
             running.currentPlayTime = (at - running.startDelay).coerceIn(0, running.duration)
         }
+    }
+
+    @Test fun playerSlotOpensFromBothSideEdgesAndKeepsTheCenterForModes() {
+        val ctx = org.robolectric.RuntimeEnvironment.getApplication()
+        val host = FrameLayout(ctx)
+        val current = SonyProtocol.Mode.ANC
+        fun views(pending: SonyProtocol.Mode? = null) =
+            ModeWidget.viewsFor(ctx, 322f, 105f, current, pending = pending, linked = true)
+
+        val root = views().apply(ctx, host)
+        assertTrue(root.findViewById<View>(R.id.w_open_left).hasOnClickListeners())
+        assertTrue(root.findViewById<View>(R.id.w_open_right).hasOnClickListeners())
+        assertFalse(root.hasOnClickListeners())
+        val modes = ids.map { root.findViewById<View>(it) }
+        assertTrue(modes.all { it.hasOnClickListeners() })
+        assertEquals(listOf(false, true, true), modes.map { it.isEnabled })
+
+        views(SonyProtocol.Mode.AMBIENT).reapply(ctx, root)
+        assertEquals(listOf(true, false, true), modes.map { it.isEnabled })
+        views().reapply(ctx, root)
+        assertEquals(listOf(false, true, true), modes.map { it.isEnabled })
     }
 
     @Test fun onlyARealModeChangeAnimates() {

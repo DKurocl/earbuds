@@ -2,6 +2,7 @@
     <string name="app_name">Earbuds</string>
     <string name="widget_desc">WF-1000XM5 noise control: ANC, Ambient and Off</string>
     <string name="widget_modes_label">Noise control</string>
+    <string name="widget_open_app">Open Earbuds</string>
     <string name="widget_battery_label">Earbuds battery</string>
     <string name="widget_battery_desc">Left, case and right battery of your WF-1000XM5</string>
     <string name="shortcut_anc">ANC</string>

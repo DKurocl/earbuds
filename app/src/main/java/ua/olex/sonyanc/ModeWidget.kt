@@ -91,7 +91,7 @@ class ModeWidget : AppWidgetProvider() {
                 listOf(R.id.w_off_label_off,R.id.w_off_label_on)),
         )
         /** Used before the launcher reports sizes: the system picks the best fit. */
-        private val FALLBACK=listOf(SizeF(180f,64f),SizeF(300f,64f),SizeF(340f,100f),SizeF(420f,100f),SizeF(180f,220f),SizeF(420f,220f))
+        private val FALLBACK=listOf(SizeF(180f,64f),SizeF(300f,64f),SizeF(322f,105f),SizeF(340f,100f),SizeF(420f,100f),SizeF(180f,220f),SizeF(420f,220f))
 
         private fun showFailure(ctx:Context) {
             val text=if(Prefs.linked(ctx)==false) "Earbuds aren't connected to this phone." else "Couldn't reach the earbuds. Tap a mode to retry."
@@ -126,6 +126,9 @@ class ModeWidget : AppWidgetProvider() {
             SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)})?.let {
             return dashboard(ctx,it,current,pending,interactive,linked,battery)
         }
+            if (width in 310f..334f && height in 98f..112f) {
+                return playerSlot(ctx, current, pending, linked == false, interactive)
+            }
             return switch(ctx,width,height,current,pending,linked==false,interactive)
         }
 
@@ -136,6 +139,50 @@ class ModeWidget : AppWidgetProvider() {
             Segment(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_icon,R.id.w_amb_label,listOf(R.id.w_amb_label_off,R.id.w_amb_label_on)),
             Segment(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_icon,R.id.w_off_label,listOf(R.id.w_off_label_off,R.id.w_off_label_on)),
         )
+
+        /** The single-row home-screen slot beside the owner's media widget. */
+        private fun playerSlot(ctx: Context, current: SonyProtocol.Mode?, pending: SonyProtocol.Mode?,
+                               away: Boolean, interactive: Boolean): RemoteViews {
+            val views = RemoteViews(ctx.packageName, R.layout.widget_player_slot)
+            if (interactive) {
+                val open = openApp(ctx)
+                views.setOnClickPendingIntent(R.id.w_open_left, open)
+                views.setOnClickPendingIntent(R.id.w_open_right, open)
+                views.setContentDescription(R.id.w_open_left, ctx.getString(R.string.widget_open_app))
+            }
+            for (segment in segments) bindMode(ctx, views, segment, current, pending, away, interactive)
+            return views
+        }
+
+        private val intentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+
+        private fun openApp(ctx: Context): PendingIntent {
+            val intent = Intent(ctx, MainActivity::class.java)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            return PendingIntent.getActivity(ctx, 101, intent, intentFlags)
+        }
+
+        private fun bindMode(ctx: Context, views: RemoteViews, segment: Segment, current: SonyProtocol.Mode?,
+                             pending: SonyProtocol.Mode?, away: Boolean, interactive: Boolean) {
+            val mode = segment.mode
+            val chosen = mode == (pending ?: current)
+            val status = when {
+                mode == pending -> ", applying"
+                chosen -> ", selected"
+                else -> ""
+            }
+            views.setBoolean(segment.id, "setEnabled", !chosen)
+            views.setContentDescription(segment.id, mode.label + status + if (away) ", earbuds not connected" else "")
+            if (!interactive) return
+            val action = if (Prefs.deviceAddress(ctx) == null || !Headphones.hasPermission(ctx)) {
+                val setup = Intent(ctx, MainActivity::class.java).putExtra("hush.mode", mode.name)
+                PendingIntent.getActivity(ctx, mode.ordinal, setup, intentFlags)
+            } else {
+                val set = Intent(ctx, ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE, mode.name)
+                PendingIntent.getBroadcast(ctx, mode.ordinal, set, intentFlags)
+            }
+            views.setOnClickPendingIntent(segment.id, action)
+        }
 
         /**
          * Material 3 Expressive's connected button group (docs/widget/connected.py): three tonal
@@ -158,29 +205,13 @@ class ModeWidget : AppWidgetProvider() {
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
             val labels=if(stacked) slot>=widest+16f else slot>=iconSize+6f+widest+20f
             v.setViewLayoutHeight(R.id.w_group,bar,TypedValue.COMPLEX_UNIT_DIP)
-            val chosen=pending ?: current
-            val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            if(interactive) {
-                val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                v.setOnClickPendingIntent(android.R.id.background,PendingIntent.getActivity(ctx,101,open,flags))
-            }
-            for(seg in segments) {
-                val on=seg.mode==chosen
-                val applying=seg.mode==pending
-                v.setBoolean(seg.id,"setEnabled",!on)
-                v.setViewLayoutWidth(seg.icon,iconSize,TypedValue.COMPLEX_UNIT_DIP)
-                v.setViewLayoutHeight(seg.icon,iconSize,TypedValue.COMPLEX_UNIT_DIP)
-                for(t in seg.texts) v.setTextViewText(t,seg.mode.short)
-                v.setViewVisibility(seg.label,if(labels) View.VISIBLE else View.GONE)
-                v.setContentDescription(seg.id,seg.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
-                if(interactive) {
-                    val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
-                        PendingIntent.getActivity(ctx,seg.mode.ordinal,Intent(ctx,MainActivity::class.java).putExtra("hush.mode",seg.mode.name),flags)
-                    } else {
-                        PendingIntent.getBroadcast(ctx,seg.mode.ordinal,Intent(ctx,ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE,seg.mode.name),flags)
-                    }
-                    v.setOnClickPendingIntent(seg.id,action)
-                }
+            if (interactive) v.setOnClickPendingIntent(android.R.id.background, openApp(ctx))
+            for (seg in segments) {
+                v.setViewLayoutWidth(seg.icon, iconSize, TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(seg.icon, iconSize, TypedValue.COMPLEX_UNIT_DIP)
+                for (text in seg.texts) v.setTextViewText(text, seg.mode.short)
+                v.setViewVisibility(seg.label, if (labels) View.VISIBLE else View.GONE)
+                bindMode(ctx, v, seg, current, pending, away, interactive)
             }
             return v
         }

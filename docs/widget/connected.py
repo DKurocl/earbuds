@@ -134,11 +134,58 @@ def layout(stacked):
 """)
 
 
+def player_slot_mode(key, icon, text):
+    return f"""        <FrameLayout android:id="@+id/w_{key}"
+            android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+            android:clickable="true" android:focusable="true">
+            <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+                android:layout_marginHorizontal="2dp" android:layout_marginVertical="5dp"
+                android:src="@drawable/w_player_pill"
+                android:scaleType="fitXY" android:duplicateParentState="true"
+                android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
+                android:importantForAccessibility="no" />
+            <ImageView android:layout_width="24dp" android:layout_height="24dp"
+                android:layout_gravity="center" android:src="@drawable/{icon}" android:tint="@color/w_bar_text"
+                android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
+                android:importantForAccessibility="no" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_gravity="center" android:gravity="center" android:orientation="vertical"
+                android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
+                android:alpha="0" android:importantForAccessibility="noHideDescendants">
+                <ImageView android:layout_width="22dp" android:layout_height="22dp"
+                    android:src="@drawable/{icon}_bold" android:tint="@color/w_bar_on_text" />
+                <TextView android:id="@+id/w_{key}_label_on" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="2dp"
+                    android:paddingHorizontal="5dp" android:gravity="center" android:singleLine="true"
+                    android:ellipsize="end" android:includeFontPadding="false" android:textSize="12sp"
+                    android:fontFamily="google-sans-text-medium" android:textColor="@color/w_bar_on_text"
+                    android:text="@string/{text}" />
+            </LinearLayout>
+        </FrameLayout>
+"""
+
+
+def player_slot_layout():
+    return HEADER + """<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false"
+    android:background="@drawable/w_bar_bg">
+    <FrameLayout android:id="@+id/w_open_left" android:layout_width="48dp" android:layout_height="match_parent" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="58dp" android:layout_weight="1"
+        android:orientation="horizontal" android:baselineAligned="false">
+""" + "".join(player_slot_mode(*mode) for mode in MODES) + """    </LinearLayout>
+    <FrameLayout android:id="@+id/w_open_right" android:layout_width="48dp" android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
+</LinearLayout>
+"""
+
+
 def main():
     for name, xml in drawables().items():
         (RES / f"drawable/{name}.xml").write_text(xml)
     (RES / "layout/widget_group.xml").write_text(layout(False))
     (RES / "layout/widget_group_tall.xml").write_text(layout(True))
+    (RES / "layout/widget_player_slot.xml").write_text(player_slot_layout())
 
 
 if __name__ == "__main__":

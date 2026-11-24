@@ -178,7 +178,7 @@ object Widgets {
         val now = System.currentTimeMillis()
         val homeModes = runCatching {
             mgr.setWidgetPreview(modes, home,
-                ModeWidget.viewsFor(ctx, 340f, 96f, SonyProtocol.Mode.ANC, interactive = false, linked = true, showDashboard = false))
+                ModeWidget.viewsFor(ctx, 322f, 105f, SonyProtocol.Mode.ANC, interactive = false, linked = true, showDashboard = false))
         }.getOrDefault(false)
         val lockModes = runCatching {
             mgr.setWidgetPreview(modes, AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD,
