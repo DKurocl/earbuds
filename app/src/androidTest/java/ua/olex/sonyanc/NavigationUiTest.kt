@@ -11,11 +11,9 @@ import org.junit.Assert.assertEquals
 
 class NavigationUiTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
-    @Test fun productionGearOpensEarbudSettingsInOneTap() {
+    @Test fun productionGearOpensAppSettingsInOneTap() {
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onAllNodesWithText("Earbud settings").onLast().assertIsDisplayed()
-        compose.onNodeWithText("DSEE").assertIsDisplayed()
-        compose.onNodeWithText("Device controls").assertDoesNotExist()
+        compose.onNodeWithText("Name").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }
@@ -28,7 +26,7 @@ class NavigationUiTest {
 
     @Test fun cancelledBackSwipePutsThePageBack() {
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("DSEE").assertIsDisplayed()
+        compose.onNodeWithText("Name").assertIsDisplayed()
         val before = compose.onNodeWithContentDescription("Back").getBoundsInRoot()
         swipeBack(0.6f)
         compose.waitForIdle()
@@ -39,17 +37,17 @@ class NavigationUiTest {
         val after = compose.onNodeWithContentDescription("Back").getBoundsInRoot()
         assertEquals(before.left.value, after.left.value, 0.5f)
         assertEquals(before.top.value, after.top.value, 0.5f)
-        compose.onNodeWithText("DSEE").assertIsDisplayed()
+        compose.onNodeWithText("Name").assertIsDisplayed()
     }
 
     @Test fun finishedBackSwipeReturnsHome() {
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("DSEE").assertIsDisplayed()
+        compose.onNodeWithText("Name").assertIsDisplayed()
         swipeBack(0.5f)
         compose.waitForIdle()
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
-        compose.onNodeWithText("DSEE").assertDoesNotExist()
+        compose.onNodeWithText("Name").assertDoesNotExist()
         compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }
 
