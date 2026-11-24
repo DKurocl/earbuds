@@ -242,6 +242,9 @@ internal fun Batteries(
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, dimCached, { swell[0].value }) { BudArt(budL) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
+            // The mode's own shape behind the case: cookie for ANC, flower for Ambient, none for
+            // Off; it morphs and recolors when the earbuds confirm a change (ModeShape.kt).
+            ModeHalo(confirmed ?: seen[0], Modifier.size(RING_BOX * 1.16f).offset(y = -RING_BOX * 0.08f))
             BatteryRing("Case", b.case, b.caseCharging, 2 in live, dimCached, { swell[2].value }) {
                 Image(painterResource(R.drawable.device_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
@@ -490,7 +493,13 @@ private fun ModeButton(
         enabled = enabled,
         // Toolbar items: no container at rest, a full pill when chosen, squarer under the finger.
         shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = RoundedCornerShape(16.dp), checkedShape = CircleShape),
-        colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
+        // The chosen mode wears its own color, as the widget and Home's shape do: ANC primary,
+        // Ambient tertiary, Off secondary.
+        colors = ToggleButtonDefaults.colors(
+            containerColor = Color.Transparent, contentColor = cs.onSurface,
+            checkedContainerColor = when (mode) { Mode.ANC -> cs.primary; Mode.AMBIENT -> cs.tertiary; else -> cs.secondary },
+            checkedContentColor = when (mode) { Mode.ANC -> cs.onPrimary; Mode.AMBIENT -> cs.onTertiary; else -> cs.onSecondary },
+        ),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
         modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)

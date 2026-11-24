@@ -7,33 +7,37 @@
     android:background="@drawable/w_bar_bg" android:paddingHorizontal="20dp" android:paddingVertical="6dp">
     <LinearLayout android:id="@+id/w_group"
         android:layout_width="match_parent" android:layout_height="48dp" android:layout_gravity="center"
-        android:orientation="horizontal" android:baselineAligned="false">
+        android:orientation="horizontal" android:baselineAligned="false" android:clipChildren="false">
         <FrameLayout android:id="@+id/w_anc"
             android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
-            android:clickable="true" android:focusable="true">
+            android:clickable="true" android:focusable="true" android:clipChildren="false">
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal" android:duplicateParentState="true">
                 <ImageView android:layout_width="wrap_content" android:layout_height="match_parent" android:adjustViewBounds="true"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_outer_l" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_anc_l" />
                 <ImageView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_mid" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_anc_mid" />
                 <ImageView android:layout_width="wrap_content" android:layout_height="match_parent" android:adjustViewBounds="true"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_inner_r" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_anc_r" />
             </LinearLayout>
             <LinearLayout android:id="@+id/w_anc_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_gravity="center" android:gravity="center" android:orientation="vertical"
-                android:duplicateParentState="true">
+                android:duplicateParentState="true" android:clipChildren="false">
                 <FrameLayout android:id="@+id/w_anc_icon" android:layout_width="24dp" android:layout_height="24dp"
-                    android:duplicateParentState="true">
+                    android:duplicateParentState="true" android:clipChildren="false">
+                    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+                        android:scaleX="1.45" android:scaleY="1.45" android:alpha="0"
+                        android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
+                        android:importantForAccessibility="no" android:src="@drawable/w_shape_anc" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
                         android:importantForAccessibility="no" android:src="@drawable/w_icon_anc" android:tint="@color/w_bar_text" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_anc_bold" android:tint="@color/w_bar_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_anc_bold" android:tint="@color/w_anc_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_anc_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" android:duplicateParentState="true">
@@ -44,36 +48,40 @@
                     <TextView android:id="@+id/w_anc_label_on" android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:fontFamily="google-sans-text-medium" android:textSize="14sp" android:includeFontPadding="false"
                         android:singleLine="true" android:importantForAccessibility="no" android:duplicateParentState="true"
-                        android:stateListAnimator="@animator/w_while_chosen" android:alpha="0" android:textColor="@color/w_bar_on_text" android:text="@string/shortcut_anc" />
+                        android:stateListAnimator="@animator/w_while_chosen" android:alpha="0" android:textColor="@color/w_anc_on_text" android:text="@string/shortcut_anc" />
                 </FrameLayout>
             </LinearLayout>
         </FrameLayout>
         <FrameLayout android:id="@+id/w_amb"
             android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp"
-            android:clickable="true" android:focusable="true">
+            android:clickable="true" android:focusable="true" android:clipChildren="false">
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal" android:duplicateParentState="true">
                 <ImageView android:layout_width="wrap_content" android:layout_height="match_parent" android:adjustViewBounds="true"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_inner_l" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_amb_l" />
                 <ImageView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_mid" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_amb_mid" />
                 <ImageView android:layout_width="wrap_content" android:layout_height="match_parent" android:adjustViewBounds="true"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_inner_r" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_amb_r" />
             </LinearLayout>
             <LinearLayout android:id="@+id/w_amb_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_gravity="center" android:gravity="center" android:orientation="vertical"
-                android:duplicateParentState="true">
+                android:duplicateParentState="true" android:clipChildren="false">
                 <FrameLayout android:id="@+id/w_amb_icon" android:layout_width="24dp" android:layout_height="24dp"
-                    android:duplicateParentState="true">
+                    android:duplicateParentState="true" android:clipChildren="false">
+                    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+                        android:scaleX="1.45" android:scaleY="1.45" android:alpha="0"
+                        android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
+                        android:importantForAccessibility="no" android:src="@drawable/w_shape_amb" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
                         android:importantForAccessibility="no" android:src="@drawable/w_icon_ambient" android:tint="@color/w_bar_text" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_ambient_bold" android:tint="@color/w_bar_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_ambient_bold" android:tint="@color/w_amb_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_amb_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" android:duplicateParentState="true">
@@ -84,36 +92,40 @@
                     <TextView android:id="@+id/w_amb_label_on" android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:fontFamily="google-sans-text-medium" android:textSize="14sp" android:includeFontPadding="false"
                         android:singleLine="true" android:importantForAccessibility="no" android:duplicateParentState="true"
-                        android:stateListAnimator="@animator/w_while_chosen" android:alpha="0" android:textColor="@color/w_bar_on_text" android:text="@string/shortcut_ambient" />
+                        android:stateListAnimator="@animator/w_while_chosen" android:alpha="0" android:textColor="@color/w_amb_on_text" android:text="@string/shortcut_ambient" />
                 </FrameLayout>
             </LinearLayout>
         </FrameLayout>
         <FrameLayout android:id="@+id/w_off"
             android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp"
-            android:clickable="true" android:focusable="true">
+            android:clickable="true" android:focusable="true" android:clipChildren="false">
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal" android:duplicateParentState="true">
                 <ImageView android:layout_width="wrap_content" android:layout_height="match_parent" android:adjustViewBounds="true"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_inner_l" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_off_l" />
                 <ImageView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_mid" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_off_mid" />
                 <ImageView android:layout_width="wrap_content" android:layout_height="match_parent" android:adjustViewBounds="true"
                     android:scaleType="fitXY" android:duplicateParentState="true"
-                    android:importantForAccessibility="no" android:src="@drawable/w_cs_outer_r" />
+                    android:importantForAccessibility="no" android:src="@drawable/w_cs_off_r" />
             </LinearLayout>
             <LinearLayout android:id="@+id/w_off_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_gravity="center" android:gravity="center" android:orientation="vertical"
-                android:duplicateParentState="true">
+                android:duplicateParentState="true" android:clipChildren="false">
                 <FrameLayout android:id="@+id/w_off_icon" android:layout_width="24dp" android:layout_height="24dp"
-                    android:duplicateParentState="true">
+                    android:duplicateParentState="true" android:clipChildren="false">
+                    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+                        android:scaleX="1.45" android:scaleY="1.45" android:alpha="0"
+                        android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
+                        android:importantForAccessibility="no" android:src="@drawable/w_shape_off" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
                         android:importantForAccessibility="no" android:src="@drawable/w_icon_off" android:tint="@color/w_bar_text" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/w_icon_off_bold" android:tint="@color/w_bar_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/w_icon_off_bold" android:tint="@color/w_off_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_off_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginTop="4dp" android:duplicateParentState="true">
@@ -124,7 +136,7 @@
                     <TextView android:id="@+id/w_off_label_on" android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:fontFamily="google-sans-text-medium" android:textSize="14sp" android:includeFontPadding="false"
                         android:singleLine="true" android:importantForAccessibility="no" android:duplicateParentState="true"
-                        android:stateListAnimator="@animator/w_while_chosen" android:alpha="0" android:textColor="@color/w_bar_on_text" android:text="@string/shortcut_off" />
+                        android:stateListAnimator="@animator/w_while_chosen" android:alpha="0" android:textColor="@color/w_off_on_text" android:text="@string/shortcut_off" />
                 </FrameLayout>
             </LinearLayout>
         </FrameLayout>

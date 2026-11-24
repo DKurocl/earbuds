@@ -4,7 +4,8 @@
 
 Three tonal segments joined by 2 dp gaps: the group's outer corners are fully round, the inner
 ones small. The chosen mode's segment morphs into a full pill (all four corners round) while its
-color turns from the tonal container to primary, the way a connected button group shows its
+color turns from the tonal container to the mode's own color (ANC primary, Ambient tertiary, Off
+secondary, as in the app) and the mode's shape (ModeShape.kt) fades in behind its icon, the way a connected button group shows its
 selection; the old one morphs back. Icon and label exist twice (rest and chosen colors, regular
 and bold icon) and cross-fade in step through res/animator/w_while_*.xml.
 
@@ -51,8 +52,8 @@ def avd(p0, p1, c0, c1, vp, size):
             f'</aapt:attr></target></animated-vector>')
 
 
-def selector(off, on, vp=(W, H), size=("12dp", "24dp")):
-    c0, c1 = "@color/w_seg", "@color/w_bar_on"
+def selector(off, on, vp=(W, H), size=("12dp", "24dp"), mode="anc"):
+    c0, c1 = "@color/w_seg", f"@color/w_{mode}_on"
     return (HEADER + '<animated-selector xmlns:android="http://schemas.android.com/apk/res/android" '
             'xmlns:aapt="http://schemas.android.com/aapt" android:constantSize="true">\n'
             f'  <item android:id="@+id/w_cs_on" android:state_enabled="false"><aapt:attr name="android:drawable">{vector(on, c1, vp, size)}</aapt:attr></item>\n'
@@ -62,15 +63,33 @@ def selector(off, on, vp=(W, H), size=("12dp", "24dp")):
             '</animated-selector>\n')
 
 
+def shape_path(lobes, depth, r=10.0, c=12.0, n=144):
+    """The mode's shape, as Home draws it: a circle with [lobes] soft scallops [depth] deep."""
+    import math
+    pts = []
+    for i in range(n):
+        t = 2 * math.pi * i / n
+        rr = r * (1 + depth * math.cos(lobes * t))
+        pts.append((c + rr * math.sin(t), c - rr * math.cos(t)))
+    return "M" + " L".join(f"{f(x)},{f(y)}" for x, y in pts) + " Z"
+
+
+SHAPES = {"anc": (9, 0.07), "amb": (6, 0.11), "off": (1, 0.0)}  # same numbers as ModeShape.kt
+
+
 def drawables():
     rect = "M0,0 L10,0 L10,10 L0,10 Z"
-    return {
-        "w_cs_outer_l": selector(cap("l", ROUND), cap("l", ROUND)),
-        "w_cs_outer_r": selector(cap("r", ROUND), cap("r", ROUND)),
-        "w_cs_inner_l": selector(cap("l", INNER), cap("l", ROUND)),
-        "w_cs_inner_r": selector(cap("r", INNER), cap("r", ROUND)),
-        "w_cs_mid": selector(rect, rect, vp=(10, 10), size=("8dp", "8dp")),
-    }
+    out = {}
+    for i, key in enumerate(["anc", "amb", "off"]):
+        lr, rr = (ROUND if i == 0 else INNER), (ROUND if i == 2 else INNER)
+        out[f"w_cs_{key}_l"] = selector(cap("l", lr), cap("l", ROUND), mode=key)
+        out[f"w_cs_{key}_r"] = selector(cap("r", rr), cap("r", ROUND), mode=key)
+        out[f"w_cs_{key}_mid"] = selector(rect, rect, vp=(10, 10), size=("8dp", "8dp"), mode=key)
+        lobes, depth = SHAPES[key]
+        out[f"w_shape_{key}"] = (HEADER + '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" '
+            'android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">'
+            f'<path android:fillColor="@color/w_{key}_on_text" android:fillAlpha="0.2" android:pathData="{shape_path(lobes, depth)}"/></vector>\n')
+    return out
 
 
 MODES = [("anc", "w_icon_anc", "shortcut_anc"), ("amb", "w_icon_ambient", "shortcut_ambient"), ("off", "w_icon_off", "shortcut_off")]
@@ -78,8 +97,7 @@ MODES = [("anc", "w_icon_anc", "shortcut_anc"), ("amb", "w_icon_ambient", "short
 
 def segment(i, stacked):
     key, icon, text = MODES[i]
-    left = "w_cs_outer_l" if i == 0 else "w_cs_inner_l"
-    right = "w_cs_outer_r" if i == 2 else "w_cs_inner_r"
+    left, mid, right = f"w_cs_{key}_l", f"w_cs_{key}_mid", f"w_cs_{key}_r"
     gap = ' android:layout_marginStart="2dp"' if i else ""
     orient = "vertical" if stacked else "horizontal"
     label_gap = 'android:layout_marginTop="4dp"' if stacked else 'android:layout_marginStart="6dp"'
@@ -95,25 +113,29 @@ def segment(i, stacked):
                 f'                        android:stateListAnimator="@animator/{anim}"{alpha} android:textColor="@color/{color}" android:text="@string/{text}" />\n')
     return f"""        <FrameLayout android:id="@+id/w_{key}"
             android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"{gap}
-            android:clickable="true" android:focusable="true">
+            android:clickable="true" android:focusable="true" android:clipChildren="false">
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal" android:duplicateParentState="true">
-{img(left, "wrap_content")}{img("w_cs_mid", "0dp")}{img(right, "wrap_content")}            </LinearLayout>
+{img(left, "wrap_content")}{img(mid, "0dp")}{img(right, "wrap_content")}            </LinearLayout>
             <LinearLayout android:id="@+id/w_{key}_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_gravity="center" android:gravity="center" android:orientation="{orient}"
-                android:duplicateParentState="true">
+                android:duplicateParentState="true" android:clipChildren="false">
                 <FrameLayout android:id="@+id/w_{key}_icon" android:layout_width="24dp" android:layout_height="24dp"
-                    android:duplicateParentState="true">
+                    android:duplicateParentState="true" android:clipChildren="false">
+                    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+                        android:scaleX="1.45" android:scaleY="1.45" android:alpha="0"
+                        android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
+                        android:importantForAccessibility="no" android:src="@drawable/w_shape_{key}" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_not_chosen"
                         android:importantForAccessibility="no" android:src="@drawable/{icon}" android:tint="@color/w_bar_text" />
                     <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
                         android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
-                        android:importantForAccessibility="no" android:src="@drawable/{icon}_bold" android:tint="@color/w_bar_on_text" />
+                        android:importantForAccessibility="no" android:src="@drawable/{icon}_bold" android:tint="@color/w_{key}_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_{key}_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     {label_gap} android:duplicateParentState="true">
-{label("off", "w_bar_text", "w_while_not_chosen", "")}{label("on", "w_bar_on_text", "w_while_chosen", ' android:alpha="0"')}                </FrameLayout>
+{label("off", "w_bar_text", "w_while_not_chosen", "")}{label("on", f"w_{key}_on_text", "w_while_chosen", ' android:alpha="0"')}                </FrameLayout>
             </LinearLayout>
         </FrameLayout>
 """
@@ -128,7 +150,7 @@ def layout(stacked):
     android:background="@drawable/w_bar_bg" android:paddingHorizontal="20dp" android:paddingVertical="6dp">
     <LinearLayout android:id="@+id/w_group"
         android:layout_width="match_parent" android:layout_height="48dp" android:layout_gravity="center"
-        android:orientation="horizontal" android:baselineAligned="false">
+        android:orientation="horizontal" android:baselineAligned="false" android:clipChildren="false">
 """ + "".join(segment(i, stacked) for i in range(3)) + """    </LinearLayout>
 </FrameLayout>
 """)
@@ -153,7 +175,7 @@ def player_slot_mode(key, icon, text):
                 android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
                 android:alpha="0" android:importantForAccessibility="noHideDescendants">
                 <ImageView android:layout_width="22dp" android:layout_height="22dp"
-                    android:src="@drawable/{icon}_bold" android:tint="@color/w_bar_on_text" />
+                    android:src="@drawable/{icon}_bold" android:tint="@color/w_{key}_on_text" />
                 <TextView android:id="@+id/w_{key}_label_on" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:layout_marginTop="2dp"
                     android:paddingHorizontal="5dp" android:gravity="center" android:singleLine="true"
