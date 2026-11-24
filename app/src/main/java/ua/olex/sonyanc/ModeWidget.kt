@@ -137,10 +137,14 @@ class ModeWidget : AppWidgetProvider() {
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
             val slot=(width-40f-4f)/3f
-            val bar=minOf(140f,height-12f,slot).coerceAtLeast(32f)
-            val stacked=bar>=84f
+            // Tuned for the owner's slot (322 x 105 dp, beside the media player): a 60 dp group with
+            // the label under the icon, about 22 dp of bar above and below as the player has, and
+            // segments half again as wide as tall, so the chosen one is a stadium like the player's
+            // play button, never a circle.
+            val bar=minOf(60f,height-24f,slot/1.5f).coerceAtLeast(32f)
+            val stacked=bar>=56f
             val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_group_tall else R.layout.widget_group)
-            val iconSize=when { bar>=110f -> 32f; bar>=84f -> 28f; else -> 24f }
+            val iconSize=24f
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
             val labels=if(stacked) slot>=widest+16f else slot>=iconSize+6f+widest+20f
             v.setViewLayoutHeight(R.id.w_group,bar,TypedValue.COMPLEX_UNIT_DIP)

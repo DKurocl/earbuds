@@ -82,7 +82,7 @@ def segment(i, stacked):
     right = "w_cs_outer_r" if i == 2 else "w_cs_inner_r"
     gap = ' android:layout_marginStart="2dp"' if i else ""
     orient = "vertical" if stacked else "horizontal"
-    label_gap = 'android:layout_marginTop="6dp"' if stacked else 'android:layout_marginStart="6dp"'
+    label_gap = 'android:layout_marginTop="4dp"' if stacked else 'android:layout_marginStart="6dp"'
     def img(src, w):
         extra = 'android:adjustViewBounds="true"' if w == "wrap_content" else 'android:layout_weight="1"'
         return (f'                <ImageView android:layout_width="{w}" android:layout_height="match_parent" {extra}\n'

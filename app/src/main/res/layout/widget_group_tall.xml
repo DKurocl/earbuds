@@ -36,7 +36,7 @@
                         android:importantForAccessibility="no" android:src="@drawable/w_icon_anc_bold" android:tint="@color/w_bar_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_anc_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp" android:duplicateParentState="true">
+                    android:layout_marginTop="4dp" android:duplicateParentState="true">
                     <TextView android:id="@+id/w_anc_label_off" android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:fontFamily="google-sans-text-medium" android:textSize="14sp" android:includeFontPadding="false"
                         android:singleLine="true" android:importantForAccessibility="no" android:duplicateParentState="true"
@@ -76,7 +76,7 @@
                         android:importantForAccessibility="no" android:src="@drawable/w_icon_ambient_bold" android:tint="@color/w_bar_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_amb_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp" android:duplicateParentState="true">
+                    android:layout_marginTop="4dp" android:duplicateParentState="true">
                     <TextView android:id="@+id/w_amb_label_off" android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:fontFamily="google-sans-text-medium" android:textSize="14sp" android:includeFontPadding="false"
                         android:singleLine="true" android:importantForAccessibility="no" android:duplicateParentState="true"
@@ -116,7 +116,7 @@
                         android:importantForAccessibility="no" android:src="@drawable/w_icon_off_bold" android:tint="@color/w_bar_on_text" />
                 </FrameLayout>
                 <FrameLayout android:id="@+id/w_off_label" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp" android:duplicateParentState="true">
+                    android:layout_marginTop="4dp" android:duplicateParentState="true">
                     <TextView android:id="@+id/w_off_label_off" android:layout_width="wrap_content" android:layout_height="wrap_content"
                         android:fontFamily="google-sans-text-medium" android:textSize="14sp" android:includeFontPadding="false"
                         android:singleLine="true" android:importantForAccessibility="no" android:duplicateParentState="true"

@@ -237,8 +237,9 @@ class ScreenshotTest {
     private fun gallery(name: String, battery: Boolean) = shoot(name) {
         val sizes = if (battery)
             listOf(252 to 104, 164 to 104, 84 to 104, 340 to 208, 252 to 150, 252 to 80)
-        // 297 x 97: four cells on the owner's Pixel 10 Pro XL, as measured on their home screen.
-        else listOf(424 to 96, 340 to 96, 297 to 97, 252 to 96, 164 to 96, 340 to 56, 164 to 208, 300 to 150, 200 to 64)
+        // 322 x 105: the owner's slot beside the media player on their Pixel 10 Pro XL (measured from
+        // their screenshot); 297 x 97: four cells, measured earlier.
+        else listOf(322 to 105, 424 to 96, 340 to 96, 297 to 97, 252 to 96, 164 to 96, 340 to 56, 164 to 208, 300 to 150, 200 to 64)
         Column(
             Modifier.background(Color(0xFF101418)).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -282,7 +283,7 @@ class ScreenshotTest {
         }
     }
 
-    @Config(qualifiers = "w448dp-h1300dp-night-xxhdpi")
+    @Config(qualifiers = "w448dp-h1440dp-night-xxhdpi")
     @Test fun modeWidgets() = gallery("widgets-modes", battery = false)
     @Config(qualifiers = "w448dp-h1100dp-night-xxhdpi")
     @Test fun batteryWidgets() = gallery("widgets-battery", battery = true)
