@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tall variant of widget_switch.xml (label under the icon); keep the two in step.
+     The app's floating mode toolbar as a widget: a bar in surface container high, an earbuds
+     button that opens the app, and the three modes with a pill that slides to the chosen one
+     (a row of spacers around the pill; which are shown places it in a third, and the row's layout
+     transition slides it there). A mode sets it; the earbuds button and the bar's edge open the app. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UselessParent" android:id="@android:id/background"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@drawable/w_bar_bg" android:padding="6dp">
+<LinearLayout android:id="@+id/w_group"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="center"
+    android:orientation="vertical">
+<LinearLayout android:id="@+id/w_head"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:paddingHorizontal="10dp" android:paddingBottom="8dp"
+    android:gravity="center_vertical" android:orientation="horizontal">
+    <!-- The app's own mark (its themed launcher icon), scaled past the adaptive icon's padding. -->
+    <ImageView android:id="@+id/w_head_icon" android:layout_width="20dp" android:layout_height="20dp"
+        android:scaleX="2.6" android:scaleY="2.6"
+        android:src="@drawable/ic_launcher_monochrome" android:tint="@color/w_bar_text" android:importantForAccessibility="no" />
+    <TextView android:id="@+id/w_head_name" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:layout_marginStart="8dp" android:fontFamily="google-sans-text-medium" android:textSize="14sp"
+        android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:textColor="@color/w_bar_text" />
+    <TextView android:id="@+id/w_head_battery" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="8dp" android:fontFamily="google-sans-text" android:textSize="13sp"
+        android:includeFontPadding="false" android:singleLine="true" android:textColor="@color/w_sub_text" />
+</LinearLayout>
+<LinearLayout
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:gravity="center_vertical" android:orientation="horizontal" android:baselineAligned="false">
+    <FrameLayout android:id="@+id/w_open"
+        android:layout_width="48dp" android:layout_height="48dp"
+        android:background="@drawable/w_open_disc" android:clickable="true" android:focusable="true"
+        android:contentDescription="@string/app_name">
+        <ImageView android:layout_width="24dp" android:layout_height="24dp" android:layout_gravity="center"
+            android:scaleX="2.6" android:scaleY="2.6"
+            android:src="@drawable/ic_launcher_monochrome" android:tint="@color/w_open_text" android:importantForAccessibility="no" />
+    </FrameLayout>
+    <FrameLayout android:id="@+id/w_track"
+        android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginStart="6dp">
+        <LinearLayout android:id="@+id/w_knob_row"
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:orientation="horizontal" android:animateLayoutChanges="true">
+                <FrameLayout android:id="@+id/w_sp1" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:importantForAccessibility="no" />
+                <FrameLayout android:id="@+id/w_sp2" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:importantForAccessibility="no" />
+            <FrameLayout android:id="@+id/w_knob_slot"
+                android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
+                <ImageView android:id="@+id/w_knob" android:layout_width="match_parent" android:layout_height="match_parent"
+                    android:src="@drawable/w_knob_pill" android:scaleType="fitXY" android:importantForAccessibility="no" />
+            </FrameLayout>
+                <FrameLayout android:id="@+id/w_sp3" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:importantForAccessibility="no" />
+                <FrameLayout android:id="@+id/w_sp4" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:importantForAccessibility="no" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:orientation="horizontal" android:baselineAligned="false">
+                <FrameLayout android:id="@+id/w_anc"
+                    android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:clickable="true" android:focusable="true">
+                    <LinearLayout android:id="@+id/w_anc_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_gravity="center" android:gravity="center" android:orientation="vertical">
+                        <ImageView android:id="@+id/w_anc_glyph" android:layout_width="20dp" android:layout_height="20dp"
+                            android:src="@drawable/w_icon_anc" android:tint="@color/w_bar_text" android:importantForAccessibility="no" />
+                        <TextView android:id="@+id/w_anc_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp" android:fontFamily="google-sans-text-medium" android:textSize="14sp"
+                            android:includeFontPadding="false" android:singleLine="true" android:textColor="@color/w_bar_text"
+                            android:importantForAccessibility="no" android:text="@string/shortcut_anc" />
+                    </LinearLayout>
+                </FrameLayout>
+                <FrameLayout android:id="@+id/w_amb"
+                    android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:clickable="true" android:focusable="true">
+                    <LinearLayout android:id="@+id/w_amb_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_gravity="center" android:gravity="center" android:orientation="vertical">
+                        <ImageView android:id="@+id/w_amb_glyph" android:layout_width="20dp" android:layout_height="20dp"
+                            android:src="@drawable/w_icon_ambient" android:tint="@color/w_bar_text" android:importantForAccessibility="no" />
+                        <TextView android:id="@+id/w_amb_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp" android:fontFamily="google-sans-text-medium" android:textSize="14sp"
+                            android:includeFontPadding="false" android:singleLine="true" android:textColor="@color/w_bar_text"
+                            android:importantForAccessibility="no" android:text="@string/shortcut_ambient" />
+                    </LinearLayout>
+                </FrameLayout>
+                <FrameLayout android:id="@+id/w_off"
+                    android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:clickable="true" android:focusable="true">
+                    <LinearLayout android:id="@+id/w_off_content" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_gravity="center" android:gravity="center" android:orientation="vertical">
+                        <ImageView android:id="@+id/w_off_glyph" android:layout_width="20dp" android:layout_height="20dp"
+                            android:src="@drawable/w_icon_off" android:tint="@color/w_bar_text" android:importantForAccessibility="no" />
+                        <TextView android:id="@+id/w_off_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp" android:fontFamily="google-sans-text-medium" android:textSize="14sp"
+                            android:includeFontPadding="false" android:singleLine="true" android:textColor="@color/w_bar_text"
+                            android:importantForAccessibility="no" android:text="@string/shortcut_off" />
+                    </LinearLayout>
+                </FrameLayout>
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>
+</LinearLayout>
+</FrameLayout>

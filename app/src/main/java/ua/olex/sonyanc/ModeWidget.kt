@@ -120,11 +120,11 @@ class ModeWidget : AppWidgetProvider() {
         }
 
         /** A knob position: the mode, its slot, knob and icon, and its name under the track. */
-        private data class Stop(val mode:SonyProtocol.Mode,val id:Int,val glyph:Int,val name:Int,val icon:Int,val bold:Int)
+        private data class Stop(val mode:SonyProtocol.Mode,val id:Int,val content:Int,val glyph:Int,val name:Int,val icon:Int,val bold:Int)
         private val stops=listOf(
-            Stop(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_glyph,R.id.w_anc_name,R.drawable.w_icon_anc,R.drawable.w_icon_anc_bold),
-            Stop(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_glyph,R.id.w_amb_name,R.drawable.w_icon_ambient,R.drawable.w_icon_ambient_bold),
-            Stop(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_glyph,R.id.w_off_name,R.drawable.w_icon_off,R.drawable.w_icon_off_bold),
+            Stop(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_content,R.id.w_anc_glyph,R.id.w_anc_name,R.drawable.w_icon_anc,R.drawable.w_icon_anc_bold),
+            Stop(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_content,R.id.w_amb_glyph,R.id.w_amb_name,R.drawable.w_icon_ambient,R.drawable.w_icon_ambient_bold),
+            Stop(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_content,R.id.w_off_glyph,R.id.w_off_name,R.drawable.w_icon_off,R.drawable.w_icon_off_bold),
         )
         /** Spacers shown around the knob for each position: two before it, two after it, one each in the middle. */
         private val spacers=listOf(R.id.w_sp1,R.id.w_sp2,R.id.w_sp3,R.id.w_sp4)
@@ -137,15 +137,18 @@ class ModeWidget : AppWidgetProvider() {
          */
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
-            val v=RemoteViews(ctx.packageName,R.layout.widget_switch)
-            // One row of 48 dp controls, shorter in a short slot. A narrow slot drops the earbuds
-            // button (the bar's edge still opens the app) so the modes keep room.
             // A slot tall enough for a title row gets one, as Google's widgets have: the earbuds'
             // name and charge, and tapping it opens the app. Shorter slots get the earbuds button.
             val head=height>=92f
-            val bar=minOf(48f,maxOf(32f,height-12f-(if(head) 30f else 0f)))
+            // The modes fill the height left: a 48 dp row in a short slot, taller buttons with the
+            // label under a bigger icon in a tall one, so a big widget is never a thin bar in a box.
+            val bar=minOf(140f,maxOf(32f,height-12f-(if(head) 30f else 0f)))
+            val stacked=bar>=84f
+            val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_switch_tall else R.layout.widget_switch)
+            val iconSize=when { bar>=110f -> 32f; bar>=84f -> 28f; else -> 20f }
             val open=!head && width>=220f
             v.setViewVisibility(R.id.w_head,if(head) View.VISIBLE else View.GONE)
+            v.setTextViewTextSize(R.id.w_head_name,TypedValue.COMPLEX_UNIT_SP,if(bar>=84f) 16f else 14f)
             if(head) {
                 val name=Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "Earbuds"
                 val b=Prefs.lastBattery(ctx)?.first
@@ -156,7 +159,8 @@ class ModeWidget : AppWidgetProvider() {
                 v.setTextViewText(R.id.w_head_battery,when { narrowAway -> ""; away -> "Not connected"; buds!=null -> "$buds%"; else -> "" })
             }
             val slot=(width-12f-(if(open) bar+6f else 0f))/3f
-            val labels=slot>=20f+6f+SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}+8f
+            val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
+            val labels=if(stacked) slot>=widest+12f else slot>=iconSize+6f+widest+8f
             v.setViewVisibility(R.id.w_open,if(open) View.VISIBLE else View.GONE)
             v.setViewLayoutWidth(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutHeight(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
@@ -184,6 +188,8 @@ class ModeWidget : AppWidgetProvider() {
                 v.setTextColor(stop.name,ink)
                 v.setTextViewText(stop.name,stop.mode.short+if(applying) "…" else "")
                 v.setViewVisibility(stop.name,if(labels) View.VISIBLE else View.GONE)
+                v.setViewLayoutWidth(stop.glyph,iconSize,TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(stop.glyph,iconSize,TypedValue.COMPLEX_UNIT_DIP)
                 v.setContentDescription(stop.id,stop.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
                     val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
