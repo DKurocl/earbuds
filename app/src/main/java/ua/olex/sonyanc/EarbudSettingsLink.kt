@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import ua.olex.sonyanc.CommandScheduler.Priority
 import ua.olex.sonyanc.Headphones.CMD
 import ua.olex.sonyanc.Headphones.addLog
 import ua.olex.sonyanc.Headphones.app
@@ -38,10 +39,10 @@ internal object EarbudSettingsLink {
     private fun isAdvancedReply(key: AdvancedSettings.Key, type: Int, p: ByteArray) =
         AdvancedSettings.parse(type, p)?.first == key && (p[0].toInt() and 255) == key.getCode + 1
 
-    suspend fun readAdvanced(key: AdvancedSettings.Key): List<Int>? = advancedLocks.getOrPut(key) { Mutex() }.withLock {
+    suspend fun readAdvanced(key: AdvancedSettings.Key, priority: Priority = Priority.NORMAL): List<Int>? = advancedLocks.getOrPut(key) { Mutex() }.withLock {
         val subtypes = if (key == AdvancedSettings.Key.QUALITY) listOf(0, 2) else listOf(key.subtype)
         for (subtype in subtypes) {
-            val reply = exchange(1000, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
+            val reply = exchange(1000, priority = priority, accepts = { type, p -> isAdvancedReply(key, type, p) }) {
                 conn.send(byteArrayOf(key.getCode.toByte(), subtype.toByte()), key.type)
             }
             if (reply != null) return@withLock AdvancedSettings.parse(key.type.toInt(), reply)?.second
@@ -50,14 +51,14 @@ internal object EarbudSettingsLink {
         null
     }
 
-    suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int): Boolean {
+    suspend fun writeAdvancedField(key: AdvancedSettings.Key, index: Int, code: Int, priority: Priority = Priority.CONTROL): Boolean {
         // The link may have dropped since the page was shown (it then forgets the live values and
         // the page shows the remembered ones): reconnect and read the setting before changing it.
-        if (key !in _advanced.value) readAdvanced(key)
-        return writeAdvancedLocked(key, index, code)
+        if (key !in _advanced.value) readAdvanced(key, priority)
+        return writeAdvancedLocked(key, index, code, priority)
     }
 
-    private suspend fun writeAdvancedLocked(key: AdvancedSettings.Key, index: Int, code: Int): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
+    private suspend fun writeAdvancedLocked(key: AdvancedSettings.Key, index: Int, code: Int, priority: Priority): Boolean = advancedLocks.getOrPut(key) { Mutex() }.withLock {
         val generation = conn.generation
         val current = _advanced.value[key] ?: run { addLog("✗ ${key.title}: no live value to change"); return@withLock false }
         val subtype = advancedInquiries[key] ?: key.subtype
@@ -68,7 +69,7 @@ internal object EarbudSettingsLink {
         for (wire in wires) {
             val target = AdvancedSettings.patch(key, current, index, code, wire) ?: return@withLock false
             addLog("→ ${key.title}: $current → $target")
-            var now = state(exchange(1200, connect = false,
+            var now = state(exchange(1200, connect = false, priority = priority,
                 readyToRead = { conn.generation == generation },
                 accepts = { type, p -> isAdvancedReply(key, type, p) },
                 prepare = { conn.send(key.set(target, subtype), key.type) },
@@ -78,7 +79,7 @@ internal object EarbudSettingsLink {
                 if (AdvancedSettings.equivalent(key, now, target)) break
                 delay(250)
                 if (conn.generation != generation) return@withLock false
-                now = state(exchange(1000, connect = false,
+                now = state(exchange(1000, connect = false, priority = priority,
                     readyToRead = { conn.generation == generation },
                     accepts = { type, p -> isAdvancedReply(key, type, p) },
                 ) { conn.send(get, key.type) }) ?: now
@@ -100,7 +101,7 @@ internal object EarbudSettingsLink {
             val other = 1 - current[0]
             val target = listOf(other, AdvancedSettings.panelCode(listOf(other, 0), on))
             addLog("→ ${key.title}: $current → $target (other encoding)")
-            val now = state(exchange(1000, connect = false,
+            val now = state(exchange(1000, connect = false, priority = priority,
                 readyToRead = { conn.generation == generation },
                 accepts = { type, p -> isAdvancedReply(key, type, p) },
                 prepare = {
@@ -136,10 +137,10 @@ internal object EarbudSettingsLink {
             Prefs.preferQuality(app) -> 0
             else -> return
         }
-        val now = readAdvanced(AdvancedSettings.Key.QUALITY)?.firstOrNull() ?: return
+        val now = readAdvanced(AdvancedSettings.Key.QUALITY, Priority.BACKGROUND)?.firstOrNull() ?: return
         if (now == wanted) return
         addLog("Quality: ${if (wanted == 0) "preferring sound quality" else "preferring a stable connection"}${if (Prefs.qualityByPlace(app)) " (by place)" else ""}")
-        if (!writeAdvancedField(AdvancedSettings.Key.QUALITY, 0, wanted)) addLog("✗ Quality: not confirmed")
+        if (!writeAdvancedField(AdvancedSettings.Key.QUALITY, 0, wanted, Priority.BACKGROUND)) addLog("✗ Quality: not confirmed")
     }
 
     private fun isFeatureReply(feature: DeviceSettingsProtocol.Feature, type: Int, p: ByteArray) =
@@ -157,7 +158,7 @@ internal object EarbudSettingsLink {
 
     private suspend fun writeFeatureLocked(feature: DeviceSettingsProtocol.Feature, value: Boolean): Boolean = featureLocks.getOrPut(feature) { Mutex() }.withLock {
         val generation = conn.generation
-        val reply = exchange(1400, connect = false,
+        val reply = exchange(1400, connect = false, priority = Priority.CONTROL,
             readyToRead = { conn.generation == generation },
             accepts = { type, p -> isFeatureReply(feature, type, p) },
             prepare = { feature in _features.value && conn.send(feature.set(value)) },
@@ -168,8 +169,8 @@ internal object EarbudSettingsLink {
     private fun isEqualizerReply(type: Int, p: ByteArray) =
         type == CMD && (p[0].toInt() and 255) == 0x57 && EqualizerProtocol.parse(p) != null
 
-    suspend fun readEqualizer(): EqualizerProtocol.State? = equalizerLock.withLock {
-        exchange(1400, accepts = ::isEqualizerReply) { conn.send(EqualizerProtocol.get) }?.let(EqualizerProtocol::parse)
+    suspend fun readEqualizer(priority: Priority = Priority.NORMAL): EqualizerProtocol.State? = equalizerLock.withLock {
+        exchange(1400, priority = priority, accepts = ::isEqualizerReply) { conn.send(EqualizerProtocol.get) }?.let(EqualizerProtocol::parse)
     }
 
     suspend fun writeEqualizer(preset: Int? = null, bands: List<Int>? = null): Boolean {
@@ -180,7 +181,7 @@ internal object EarbudSettingsLink {
     private suspend fun writeEqualizerLocked(preset: Int?, bands: List<Int>?): Boolean = equalizerLock.withLock {
         val payload = if (bands != null) EqualizerProtocol.custom(bands) else EqualizerProtocol.preset(requireNotNull(preset))
         val generation = conn.generation
-        val actual = exchange(1400, connect = false,
+        val actual = exchange(1400, connect = false, priority = Priority.CONTROL,
             readyToRead = { conn.generation == generation },
             accepts = ::isEqualizerReply,
             prepare = { _equalizer.value != null && conn.send(payload) },

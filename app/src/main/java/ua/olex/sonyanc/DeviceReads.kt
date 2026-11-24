@@ -5,6 +5,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import ua.olex.sonyanc.CommandScheduler.Priority
 import ua.olex.sonyanc.Headphones.CMD
 import ua.olex.sonyanc.Headphones.addLog
 import ua.olex.sonyanc.Headphones.conn
@@ -69,9 +70,9 @@ internal object DeviceReads {
                 }
                 if (!usage.foreground || !conn.connected) break
                 // One equalizer read per connection, so Home can name the current preset.
-                if (EarbudSettingsLink._equalizer.value == null && !equalizerAsked) { equalizerAsked = true; EarbudSettingsLink.readEqualizer() }
+                if (EarbudSettingsLink._equalizer.value == null && !equalizerAsked) { equalizerAsked = true; EarbudSettingsLink.readEqualizer(Priority.BACKGROUND) }
                 // Speak-to-Chat once per connection, for its toggle in the dock.
-                if (AdvancedSettings.Key.CHAT !in EarbudSettingsLink._advanced.value && !chatAsked) { chatAsked = true; EarbudSettingsLink.readAdvanced(AdvancedSettings.Key.CHAT) }
+                if (AdvancedSettings.Key.CHAT !in EarbudSettingsLink._advanced.value && !chatAsked) { chatAsked = true; EarbudSettingsLink.readAdvanced(AdvancedSettings.Key.CHAT, Priority.BACKGROUND) }
                 if (!qualityKept) { qualityKept = true; EarbudSettingsLink.keepQuality() }
                 if (!usage.foreground || !conn.connected) break
                 if (now() >= batteryDue) {
@@ -97,7 +98,7 @@ internal object DeviceReads {
         try {
             if (!awaitModeIdle()) return@withLock null
             val generation = conn.generation
-            exchange(900, connect = false,
+            exchange(900, connect = false, priority = if (onlyForeground) Priority.BACKGROUND else Priority.NORMAL,
                 readyToRead = { canRead(generation, onlyForeground) },
                 accepts = { type, p -> type == CMD && p.firstOrNull() == 0x13.toByte() && CodecProtocol.parse(p) != null },
             ) { conn.send(CodecProtocol.get) }?.let(CodecProtocol::parse)
@@ -121,7 +122,10 @@ internal object DeviceReads {
     private fun canRead(generation: Long, onlyForeground: Boolean): Boolean =
         conn.generation == generation && (!onlyForeground || usage.foreground) && _state.value.pending == null
 
-    suspend fun queryBattery(onlyForeground: Boolean = false) = batteryLock.withLock {
+    suspend fun queryBattery(
+        onlyForeground: Boolean = false,
+        priority: Priority = if (onlyForeground) Priority.BACKGROUND else Priority.NORMAL,
+    ) = batteryLock.withLock {
         val generation = conn.generation
         if (lastBatteryRead?.let { (link, at) -> link == generation && now() - at < 3_000L } == true) return@withLock
         _state.update { it.copy(batteryRefreshing = true) }
@@ -140,7 +144,7 @@ internal object DeviceReads {
                 if (!isCase && gotBuds) continue
                 if (!canRead(generation, onlyForeground)) break
                 // Notifications still update the cache. Only a reply to this inquiry satisfies the GET.
-                val reply = exchange(900, connect = false,
+                val reply = exchange(900, connect = false, priority = priority,
                     readyToRead = { canRead(generation, onlyForeground) },
                     accepts = { type, p ->
                         type == CMD && p.firstOrNull() == 0x23.toByte() && p.getOrNull(1) == inquiry[1] &&

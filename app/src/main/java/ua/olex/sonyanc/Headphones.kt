@@ -57,11 +57,12 @@ object Headphones {
     internal suspend fun exchange(
         timeoutMs: Long,
         connect: Boolean = true,
+        priority: CommandScheduler.Priority = CommandScheduler.Priority.NORMAL,
         readyToRead: () -> Boolean = { true },
         accepts: (type: Int, payload: ByteArray) -> Boolean,
         prepare: suspend () -> Boolean = { true },
         send: suspend () -> Boolean,
-    ): ByteArray? = commands.run {
+    ): ByteArray? = commands.run(priority) {
         if (!readyToRead()) return@run null
         val ready = if (connect) ensureConnectedLocked() else conn.connected
         if (ready && prepare()) commands.readLocked(timeoutMs, accepts, send) else null
@@ -176,7 +177,7 @@ object Headphones {
                     continue
                 }
                 backoff = 2_000L
-                withTimeoutOrNull(3000) { DeviceReads.queryBattery() }
+                withTimeoutOrNull(3000) { DeviceReads.queryBattery(priority = CommandScheduler.Priority.BACKGROUND) }
                 batteryDue = DeviceReads.now() + STAY_BATTERY_MS
             }
             val wait = if (DeviceReads.batteryPushed) Long.MAX_VALUE else (batteryDue - DeviceReads.now()).coerceAtLeast(1_000L)
@@ -238,7 +239,9 @@ object Headphones {
         return false
     }
 
-    suspend fun connectAndSync(): Boolean = commands.run {
+    suspend fun connectAndSync(): Boolean = connectAndSync(CommandScheduler.Priority.NORMAL)
+
+    private suspend fun connectAndSync(priority: CommandScheduler.Priority): Boolean = commands.run(priority) {
         if (!ensureConnectedLocked()) return@run false
         // Skip the initial read if a mode command is already waiting.
         if (_state.value.pending == null) ModeControl.readBackLocked()
@@ -258,7 +261,7 @@ object Headphones {
             for (attempt in 0..1) {
                 // The earbuds can refuse RFCOMM while A2DP/HFP are still being set up.
                 if (attempt > 0) delay(1500)
-                ok = connectAndSync()
+                ok = connectAndSync(CommandScheduler.Priority.BACKGROUND)
                 if (ok || usage.foreground) break
             }
             if (!ok) {
@@ -272,7 +275,7 @@ object Headphones {
                 val base = _state.value.shownNc ?: SonyProtocol.NcState(apply)
                 withTimeoutOrNull(4000) { ModeControl.request(base.copy(mode = apply)).await() }
             }
-            withTimeoutOrNull(3000) { DeviceReads.queryBattery() }
+            withTimeoutOrNull(3000) { DeviceReads.queryBattery(priority = CommandScheduler.Priority.BACKGROUND) }
             return true
         } finally {
             release(foreground = false)
@@ -288,7 +291,7 @@ object Headphones {
     }
 
 
-    suspend fun selectDevice(address: String, name: String?) = commands.run {
+    suspend fun selectDevice(address: String, name: String?) = commands.run(CommandScheduler.Priority.CONTROL) {
         if (address.equals(Prefs.deviceAddress(app), ignoreCase = true)) {
             Prefs.saveDevice(app, address, name)
             return@run
@@ -304,7 +307,7 @@ object Headphones {
 
     suspend fun readFirmware() = commands.run { if (ensureConnectedLocked()) conn.send(byteArrayOf(0x04, 0x02)) else false }
 
-    suspend fun powerOff(): Boolean = commands.run {
+    suspend fun powerOff(): Boolean = commands.run(CommandScheduler.Priority.CONTROL) {
         ModeControl.cancelModes()
         if (!ensureConnectedLocked()) return@run false
         val delivered = conn.send(byteArrayOf(0x24, 0x03, 0x01))

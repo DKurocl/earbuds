@@ -3,10 +3,12 @@ package ua.olex.sonyanc
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
+import ua.olex.sonyanc.CommandScheduler.Priority
 
 class CommandSchedulerTest {
     private val accepts = { type: Int, payload: ByteArray -> type == 0x0C && payload[0] == 0x67.toByte() }
@@ -41,6 +43,42 @@ class CommandSchedulerTest {
             scheduler.received(0x0C, firstReply)
             assertArrayEquals(firstReply, first.await())
             assertArrayEquals(secondReply, second.await())
+        }
+    }
+
+    @Test fun higherPriorityMovesAheadOfQueuedReadsWithoutInterruptingTheWire() = runBlocking {
+        withTimeout(2_000) {
+            val scheduler = CommandScheduler()
+            val order = mutableListOf<String>()
+            val release = CompletableDeferred<Unit>()
+            val active = async(start = CoroutineStart.UNDISPATCHED) {
+                scheduler.run(Priority.BACKGROUND) {
+                    order += "active"
+                    release.await()
+                    order += "active done"
+                }
+            }
+            val background = async(start = CoroutineStart.UNDISPATCHED) {
+                scheduler.run(Priority.BACKGROUND) { order += "background" }
+            }
+            val normal = async(start = CoroutineStart.UNDISPATCHED) {
+                scheduler.run(Priority.NORMAL) { order += "normal" }
+            }
+            val firstControl = async(start = CoroutineStart.UNDISPATCHED) {
+                scheduler.run(Priority.CONTROL) { order += "first control" }
+            }
+            val cancelled = async(start = CoroutineStart.UNDISPATCHED) {
+                scheduler.run(Priority.CONTROL) { fail("Cancelled command reached the wire") }
+            }
+            val secondControl = async(start = CoroutineStart.UNDISPATCHED) {
+                scheduler.run(Priority.CONTROL) { order += "second control" }
+            }
+            cancelled.cancelAndJoin()
+
+            assertEquals(listOf("active"), order)
+            release.complete(Unit)
+            listOf(active, background, normal, firstControl, secondControl).forEach { it.await() }
+            assertEquals(listOf("active", "active done", "first control", "second control", "normal", "background"), order)
         }
     }
 

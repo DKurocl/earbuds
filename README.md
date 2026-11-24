@@ -27,7 +27,7 @@ icons, icons only, or a column; M3E connected-group shapes with soft 28/16 dp co
 modes. Optional battery widget (one ring at 1×1). Both are `home_screen|keyguard`; generated picker
 previews. Taps on widgets and the Quick Settings tile pulse once the earbuds confirm.
 
-**Haptics** — a tick on touch, a per-mode pulse on the earbuds' acknowledgement (ANC thud, Ambient
+**Haptics** — a tick on touch, a per-mode pulse after the earbuds report the requested mode (ANC thud, Ambient
 quick rise, Off tick), a double click on failure.
 
 **Speed** — minSdk 35 / target 36, uncompressed dex, startup profile for the app's code, secure RFCOMM
@@ -92,7 +92,7 @@ which exposes the public expressive APIs, rather than the stable 1.4.0 that remo
   Changes update via notifications and foreground polling. The last codec stays visible as cached after disconnect.
 - Device selection, reconnect, home-screen widget and launcher ANC/Ambient/Off shortcuts.
   The widget contains only ANC / Ambient / Off: no app name, logo, battery or codec.
-  The widget signals command delivery with haptics and briefly keeps the link open for read-back.
+  The widget keeps the link open for read-back and plays the success pulse after a matching reply.
   It reconnects once after a stale-socket write failure and can retry from the widget.
   Missing pairing/permission opens the app for setup.
 - Wallpaper colors and haptics switches; copyable bounded diagnostics.
@@ -119,7 +119,8 @@ check on the actual WF-1000XM5, especially all six EQ bands and voice focus.
 
 ## Transport
 
-The secure V2 RFCOMM link serializes commands through read-back. Socket watchdogs bound the
+The secure V2 RFCOMM link serializes commands through read-back. Waiting mode changes and
+setting writes go ahead of regular reads and background polling. Socket watchdogs bound the
 connect and ACK waits. Device notifications update the cache, and GET replies complete the
 active read. Disconnect clears live values, and selecting another pair clears its predecessor's
 saved values. The link closes when its last screen or action releases it, unless Stay in sync

@@ -188,8 +188,8 @@ row allows; the mode buttons at the bottom (64 dp in the hub, 56 dp in 4×2). `W
   reads are `DeviceReads`, and earbud settings are `EarbudSettingsLink`. The codec is
   remembered across links like the battery.
 - **Mode read-back**: an ACK confirms delivery, and a device report confirms the mode. If the
-  first GET returns a different setting, Earbuds reads again without sending another SET.
-  In Ambient, the report must also match voice focus and level.
+  first GET does not confirm the setting, Earbuds reads again without sending another SET.
+  Only a matching GET reply allows the success pulse. For Ambient it must match voice focus and level.
 - **Sound quality**: "Prefer sound quality" is remembered; if the earbuds report Stable connection
   again, Earbuds sets it back once per connection. When the earbuds allow LDAC but Android uses
   another codec, Device info points to Android's HD audio switch.

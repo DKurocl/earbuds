@@ -51,19 +51,15 @@ class ModeWidget : AppWidgetProvider() {
                 delay(70)
                 if(latestTap.get()!=generation) return@launch
                 val base=Headphones.state.value.shownNc ?: SonyProtocol.NcState(mode)
-                val receipt=Headphones.request(base.copy(mode=mode))
-                var delivered = false
-                withTimeoutOrNull(8500) {
-                    delivered = receipt.await()
-                    if (delivered && latestTap.get() == generation) {
+                val receipt = Headphones.request(base.copy(mode = mode))
+                val confirmed = withTimeoutOrNull(8500) { receipt.await() } == true
+                if (latestTap.get() == generation) {
+                    if (confirmed) {
                         if (Prefs.haptics(ctx)) Haptics.confirm(ctx, mode)
-                        // Keep the short lease until the reported mode can replace the animation.
-                        ModeControl.awaitModeIdle()
+                    } else {
+                        if (Prefs.haptics(ctx)) Haptics.reject(ctx)
+                        showFailure(ctx)
                     }
-                }
-                if (!delivered && latestTap.get() == generation) {
-                    if (Prefs.haptics(ctx)) Haptics.reject(ctx)
-                    showFailure(ctx)
                 }
             } catch(e:Exception) {
                 if(latestTap.get()==generation) showFailure(ctx)
