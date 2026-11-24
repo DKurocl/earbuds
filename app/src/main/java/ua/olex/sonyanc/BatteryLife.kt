@@ -129,7 +129,7 @@ object BatteryLog {
         for ((a, b) in samples.zipWithNext()) {
             val dt = b.at - a.at
             if (a.session != b.session || a.charging || b.charging || dt <= 0 || dt > MAX_GAP) continue
-            if (b.level > a.level || bucket(a.mode) != bucket(mode)) continue
+            if (b.level > a.level || bucket(a.mode) != bucket(mode) || bucket(b.mode) != bucket(mode)) continue
             minutes += dt / 60_000.0
             drop += a.level - b.level
         }

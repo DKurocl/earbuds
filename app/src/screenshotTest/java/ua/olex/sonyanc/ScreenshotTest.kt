@@ -133,7 +133,7 @@ class ScreenshotTest {
             status = Headphones.Status.DISCONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, level = 12), pending = null,
             fresh = false, error = null, battery = SonyProtocol.Battery(15, 100, null, rightCharging = true), granted = true, hasDevice = true,
             batteryParts = setOf(0), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
-            lastSeen = System.currentTimeMillis() - 25 * 60_000L, batterySeenAt = System.currentTimeMillis() - 25 * 60_000L,
+            linked = false, lastSeen = System.currentTimeMillis() - 25 * 60_000L, batterySeenAt = System.currentTimeMillis() - 25 * 60_000L,
         )
     }
 
@@ -206,13 +206,25 @@ class ScreenshotTest {
     @Test fun appSettings() = shoot("page-app") {
         AppSettingsContent(
             listOf(PairedDevice("00:11", "WF-1000XM5")), "00:11", "WF-1000XM5", dynamicColor = true, haptics = true,
-            canAddTile = true, canPinWidget = true, version = "1.2.0",
+            canAddTile = true, canPinWidget = true, version = "2.0.0",
+            weekendMode = OnConnect.AMBIENT, onProfiles = {}, onBackup = {},
         )
     }
 
     @Test fun diagnostics() = shoot("page-diagnostics") {
-        DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"))
+        DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"),
+            result = "Control link ready · Noise control confirmed · LDAC · 3/3 battery levels live", onCheck = {})
     }
+
+    @Test fun profiles() = shoot("page-profiles") {
+        PersonalProfilesContent(
+            mapOf(1 to PersonalProfile(SonyProtocol.NcState(SonyProtocol.Mode.ANC),
+                EqualizerProtocol.State(0xA0, listOf(1, 2, 0, 0, -1, 0)))),
+            DeviceState(ncConfirmed = true), false, {}, {}, { _, _ -> },
+        )
+    }
+
+    @Test fun backup() = shoot("page-backup") { BackupContent({}, {}, {}) }
 
     @Test fun vibrations() = shoot("page-vibrations") {
         VibrationsContent(Haptics.Cue.entries.associateWith { if (it == Haptics.Cue.AMBIENT) 1 else 0 }, shaped = true)

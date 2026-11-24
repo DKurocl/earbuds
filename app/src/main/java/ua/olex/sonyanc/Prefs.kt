@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 object Prefs {
-    private fun p(ctx: Context) = ctx.getSharedPreferences("sonyanc", Context.MODE_PRIVATE)
+    internal fun p(ctx: Context) = ctx.getSharedPreferences("sonyanc", Context.MODE_PRIVATE)
 
     /** First time out each day: "day,weekend,minute;..." (ChargeReminder). */
     fun outTimes(ctx: Context): List<Triple<Int, Boolean, Int>> = p(ctx).getString("out_times", "").orEmpty().split(';').mapNotNull { e ->
@@ -91,13 +91,13 @@ object Prefs {
     // ---- Android's Bluetooth link, from ACL broadcasts (see ConnectionReceiver) ----
     /** True/false once a broadcast or a working control link said so; null while unknown. */
     fun linked(ctx: Context): Boolean? = p(ctx).takeIf { it.contains("linked") }?.getBoolean("linked", false)
-    internal fun linkedChanges(ctx: Context) = changes(ctx, "linked") { linked(ctx) }
-    internal fun timerChanges(ctx: Context) = changes(ctx, "timer_until") { AmbientTimer.until(ctx) }
+    internal fun linkedChanges(ctx: Context) = changes(ctx, setOf("linked")) { linked(ctx) }
+    internal fun timerChanges(ctx: Context) = changes(ctx, setOf("timer_until")) { AmbientTimer.until(ctx) }
 
-    private fun <T> changes(ctx: Context, key: String, value: () -> T) = callbackFlow {
+    private fun <T> changes(ctx: Context, keys: Set<String>, value: () -> T) = callbackFlow {
         val prefs = p(ctx)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changed ->
-            if (changed == key) trySend(value())
+            if (changed in keys) trySend(value())
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         trySend(value())
@@ -108,6 +108,19 @@ object Prefs {
     /** When the earbuds last disconnected from the phone (usually: went back in the case). */
     fun lastSeen(ctx: Context): Long = p(ctx).getLong("last_seen", 0L)
     fun setLastSeen(ctx: Context, at: Long) = p(ctx).edit().putLong("last_seen", at).apply()
+
+    internal fun personalProfiles(ctx: Context) = changes(ctx, setOf("profile_1", "profile_2")) {
+        (1..2).associateWith { slot -> p(ctx).getString("profile_$slot", null)?.let(PersonalProfile::decode) }
+    }
+
+    internal fun savePersonalProfile(ctx: Context, slot: Int, profile: PersonalProfile) =
+        p(ctx).edit().putString("profile_$slot", profile.encode()).apply()
+
+    internal fun weekendMode(ctx: Context) = p(ctx).getString("weekend_mode", null)
+        ?.let { value -> OnConnect.entries.firstOrNull { it.name == value } }
+
+    internal fun setWeekendMode(ctx: Context, mode: OnConnect?) =
+        p(ctx).edit().putString("weekend_mode", mode?.name).apply()
 
     fun onConnect(ctx: Context): OnConnect = OnConnect.from(p(ctx).getString("on_connect", null))
     /** "At home" (Places): null means the same as everywhere. */

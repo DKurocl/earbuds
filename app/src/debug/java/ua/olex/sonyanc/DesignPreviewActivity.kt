@@ -44,9 +44,16 @@ private fun Scene(scene: String) {
         "info" -> DeviceInfoContent("WF-1000XM5", Headphones.Status.CONNECTED, CodecProtocol.State(0x02), "2.0.1", refreshing = false, ldacBlocked = true)
         "app" -> AppSettingsContent(
             listOf(PairedDevice("00:11", "WF-1000XM5")), "00:11", "WF-1000XM5", dynamicColor = true, haptics = true,
-            canAddTile = true, canPinWidget = true, version = "1.0.0",
+            canAddTile = true, canPinWidget = true, version = "2.0.0", weekendMode = OnConnect.AMBIENT, onProfiles = {}, onBackup = {},
         )
-        "diagnostics" -> DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"))
+        "profiles" -> PersonalProfilesContent(
+            mapOf(1 to PersonalProfile(SonyProtocol.NcState(SonyProtocol.Mode.ANC),
+                EqualizerProtocol.State(0xA0, listOf(1, 2, 0, 0, -1, 0)))),
+            DeviceState(ncConfirmed = true), false, {}, {}, { _, _ -> },
+        )
+        "backup" -> BackupContent({}, {}, {})
+        "diagnostics" -> DiagnosticsContent(listOf("✓ WF-1000XM5 · secure V2", "→ [0C] 66 17", "← [0C] 67 17 01 01 00 00 14", "→ [0C] 12 02", "← [0C] 13 02 10"),
+            result = "Control link ready · Noise control confirmed · LDAC · 3/3 battery levels live", onCheck = {})
         "widgets" -> WidgetGallery(battery = false)
         "widgets-battery" -> WidgetGallery(battery = true)
         else -> {

@@ -55,4 +55,14 @@ class AccessibilityUiTest {
     }
 
     @Test fun battery() = check { BatteryContent(emptyList(), System.currentTimeMillis()) }
+    @Test fun profiles() = check {
+        PersonalProfilesContent(
+            mapOf(1 to PersonalProfile(SonyProtocol.NcState(SonyProtocol.Mode.ANC), null)),
+            DeviceState(ncConfirmed = true), false, {}, {}, { _, _ -> },
+        )
+    }
+
+    @Test fun backup() = check { BackupContent({}, {}, {}) }
+
+    @Test fun diagnostics() = check { DiagnosticsContent(emptyList(), onCheck = {}) }
 }

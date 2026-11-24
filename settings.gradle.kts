@@ -5,5 +5,5 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "SonyAnc"
-include(":app")
+include(":app", ":benchmark")
 

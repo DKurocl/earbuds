@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() { ConnectedSheet.appVisible = false; Headphones.release(); super.onStop() }
 }
 
-private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS, BATTERY, VIBRATIONS }
+private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS, BATTERY, VIBRATIONS, PROFILES, BACKUP }
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -123,6 +123,20 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
     }
     val equalizer by Headphones.equalizer.collectAsStateWithLifecycle()
     val advanced by Headphones.advanced.collectAsStateWithLifecycle()
+    var restoreUri by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
+    val exportBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { model.exportSettings(it) }
+    }
+    val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> restoreUri = uri }
+    restoreUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { restoreUri = null },
+            title = { Text("Restore settings?") },
+            text = { Text("This replaces your profiles, appearance and portable routine settings with the values in the file.") },
+            confirmButton = { TextButton(onClick = { restoreUri = null; model.importSettings(uri) }) { Text("Restore") } },
+            dismissButton = { TextButton(onClick = { restoreUri = null }) { Text("Cancel") } },
+        )
+    }
     var renaming by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(model) {
@@ -295,6 +309,18 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         connectSheet = model.connectSheet, onConnectSheet = model::updateConnectSheet,
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                         onVibrations = { open(Page.VIBRATIONS) },
+                        weekendMode = model.weekendMode, onWeekendMode = model::updateWeekendMode,
+                        onProfiles = { open(Page.PROFILES) }, onBackup = { open(Page.BACKUP) },
+                    )
+                    Page.PROFILES -> {
+                        val profiles by remember(ctx) { Prefs.personalProfiles(ctx) }.collectAsStateWithLifecycle(emptyMap())
+                        PersonalProfilesContent(
+                            profiles, device, model.profileBusy, ::back, model::saveProfile, model::applyProfile,
+                        )
+                    }
+                    Page.BACKUP -> BackupContent(
+                        ::back, { exportBackup.launch("Earbuds-settings.json") },
+                        { openBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
                     )
                     Page.VIBRATIONS -> VibrationsContent(model.hapticTakes, remember { Haptics.shaped(ctx) }, onBack = ::back, onTry = model::tryHaptic)
                     Page.DIAGNOSTICS -> {
@@ -302,6 +328,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         val clipboard = LocalClipboard.current
                         DiagnosticsContent(
                             log, onBack = ::back,
+                            checking = model.diagnosticRunning, result = model.diagnosticResult, onCheck = model::runDiagnostics,
                             onCopy = {
                                 scope.launch {
                                     clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Earbuds log", log.joinToString("\n"))))

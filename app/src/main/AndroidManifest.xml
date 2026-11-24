@@ -44,6 +44,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true">
+        <profileable android:shell="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

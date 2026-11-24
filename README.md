@@ -33,6 +33,11 @@ quick rise, Off tick), a double click on failure.
 **Speed** — minSdk 35 / target 36, uncompressed dex, startup profile for the app's code, secure RFCOMM
 only, push-driven reads.
 
+## Review Earbuds 2.0
+
+See the [review guide](docs/review/README.md) for roadmap coverage, CI evidence, and the
+checklist for the physical Pixel and WF‑1000XM5.
+
 ## Updates on the phone (Obtainium)
 
 After the signing key below is set up, every build of `main` is published as a GitHub release. In

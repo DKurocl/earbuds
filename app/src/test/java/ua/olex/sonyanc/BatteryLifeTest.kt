@@ -85,4 +85,9 @@ class BatteryLifeTest {
         val d = BatteryLog.drain(listOf(sample(0, 100), sample(90, 70)), Mode.ANC)!!
         assertEquals(90.0, d.minutes, 1e-9)
     }
+    @Test fun drainIgnoresIntervalsAcrossNoiseControlBuckets() {
+        val log = listOf(sample(0, 100, mode = Mode.ANC), sample(60, 75, mode = Mode.OFF))
+        assertNull(BatteryLog.rate(log, Mode.ANC))
+        assertNull(BatteryLog.rate(log, Mode.OFF))
+    }
 }

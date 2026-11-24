@@ -44,13 +44,14 @@ private object ChartColors {
 @Composable
 fun BatteryScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
-    val log = remember { Prefs.batteryLog(ctx) }
-    val health = remember { Prefs.batteryHealth(ctx) }
-    BatteryContent(log, System.currentTimeMillis(), onBack, health)
+    val device by Headphones.state.collectAsState()
+    val log = remember(device.batterySeenAt) { Prefs.batteryLog(ctx) }
+    val health = remember(device.batterySeenAt) { Prefs.batteryHealth(ctx) }
+    BatteryContent(log, System.currentTimeMillis(), onBack, health, device)
 }
 
 @Composable
-fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}, health: List<WeekHealth> = emptyList()) {
+fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}, health: List<WeekHealth> = emptyList(), device: DeviceState? = null) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Battery", onBack) {
         Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
@@ -75,6 +76,20 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
             item {
                 InfoRow(it, Glyph.INSIGHTS, "${BatteryLife.short(listened.minutes)} in your ears",
                     if (listened.anc >= 1) "${BatteryLife.short(listened.anc)} of it with noise cancelling" else "None of it with noise cancelling")
+            }
+        }
+        val battery = device?.battery
+        if (device != null && battery != null) {
+            val mode = device.nc?.mode
+            val measured = BatteryLog.drain(log, mode)
+            val minutes = BatteryLife.budsMinutes(battery, mode, measured?.rate)
+            if (minutes != null) ListGroup("Listening time left") {
+                item {
+                    val source = if (measured == null) "Sony rated runtime"
+                        else "Based on ${BatteryLife.short(measured.minutes.toInt())} of recorded drain"
+                    val stale = if (device.liveBatteryParts.isEmpty()) " · Last reading" else ""
+                    InfoRow(it, Glyph.BATTERY, BatteryLife.short(minutes), source + stale)
+                }
             }
         }
         HealthCard(BatteryHealth.verdict(health))

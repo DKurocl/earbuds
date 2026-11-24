@@ -52,12 +52,12 @@ object Places {
 
     /** The mode to apply as the earbuds connect: home's at home, otherwise "When earbuds connect". */
     fun modeOnConnect(ctx: Context): SonyProtocol.Mode? {
-        val usual = Prefs.onConnect(ctx).mode
-        val atHome = Prefs.homeMode(ctx) ?: return usual
-        val home = Prefs.home(ctx) ?: return usual
-        if (!hasLocation(ctx) || !hasBackground(ctx)) return usual
-        val here = lastLocation(ctx)?.takeIf { System.currentTimeMillis() - it.time <= FRESH_MS } ?: return usual
-        return if (isHome(home.first, home.second, here.latitude, here.longitude, here.accuracy)) atHome.mode else usual
+        val home = Prefs.homeMode(ctx)
+        if (home != null && atHome(ctx) == true) return home.mode
+        val weekend = Prefs.weekendMode(ctx)
+        val day = java.time.LocalDate.now().dayOfWeek
+        return if (weekend != null && (day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY))
+            weekend.mode else Prefs.onConnect(ctx).mode
     }
 
     @SuppressLint("MissingPermission") // checked by the callers through hasLocation()

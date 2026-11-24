@@ -119,6 +119,8 @@ fun AppSettingsContent(
     afterSleep: AfterSleep = AfterSleep.POWER_OFF, onAfterSleep: (AfterSleep) -> Unit = {},
     chargeReminder: Boolean = false, onChargeReminder: (Boolean) -> Unit = {},
     activityMode: Boolean = false, onActivityMode: (Boolean) -> Unit = {},
+    weekendMode: OnConnect? = null, onWeekendMode: (OnConnect?) -> Unit = {},
+    onProfiles: (() -> Unit)? = null, onBackup: (() -> Unit)? = null,
 ) {
     PageScaffold("App settings", onBack) {
         ListGroup("Earbuds") {
@@ -178,6 +180,11 @@ fun AppSettingsContent(
         }
         ListGroup("Automatic") {
             item {
+                ChoiceRow(it, Glyph.UPCOMING, "Weekend on connect",
+                    listOf(-1 to "Use the usual setting") + OnConnect.entries.map { mode -> mode.ordinal to mode.label },
+                    weekendMode?.ordinal ?: -1) { index -> onWeekendMode(OnConnect.entries.getOrNull(index)) }
+            }
+            item {
                 SwitchRow(it, Glyph.WALK, "Ambient while walking",
                     if (liveLink == false) "Needs Stay in sync on: the app listens for steps only while the earbuds are connected"
                     else "Ambient when you start walking, noise cancelling when you stop", activityMode, onChange = onActivityMode)
@@ -202,6 +209,10 @@ fun AppSettingsContent(
             if (canPinWidget) item { NavRow(it, Glyph.WIDGET, "Add noise control widget", "ANC, Ambient and Off on your home screen", onClick = onPinWidget) }
             if (canPinWidget) item { NavRow(it, Glyph.BATTERY, "Add battery widget", "Left, case and right at a glance", onClick = onPinBatteryWidget) }
         }
+        if (onProfiles != null || onBackup != null) ListGroup("Personal settings") {
+            if (onProfiles != null) item { NavRow(it, Glyph.TUNE, "Personal profiles", "Save and recall noise control and EQ", onClick = onProfiles) }
+            if (onBackup != null) item { NavRow(it, Glyph.COPY, "Backup & restore", "Export or import portable settings", onClick = onBackup) }
+        }
         ListGroup("About") {
             item { NavRow(it, Glyph.BUG, "Diagnostics", "Connection log for troubleshooting", onClick = onDiagnostics) }
             item { InfoRow(it, Glyph.INFO, "Version", version) }
@@ -212,12 +223,22 @@ fun AppSettingsContent(
 // ---- Diagnostics -------------------------------------------------------------------------
 
 @Composable
-fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () -> Unit = {}, onClear: () -> Unit = {}) {
+fun DiagnosticsContent(
+    log: List<String>, onBack: () -> Unit = {}, onCopy: () -> Unit = {}, onClear: () -> Unit = {},
+    checking: Boolean = false, result: String? = null, onCheck: (() -> Unit)? = null,
+) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Diagnostics", onBack, actions = {
         IconButton(onClick = onCopy, enabled = log.isNotEmpty(), modifier = Modifier.semantics { contentDescription = "Copy log" }) { HushIcon(Glyph.COPY) }
         IconButton(onClick = onClear, enabled = log.isNotEmpty(), modifier = Modifier.semantics { contentDescription = "Clear log" }) { HushIcon(Glyph.CLEAR) }
     }) {
+        if (onCheck != null) ListGroup("Connection check") {
+            item {
+                NavRow(it, Glyph.BLUETOOTH, if (checking) "Checking connection…" else "Run connection check",
+                    result ?: "Control link, noise control, codec and battery",
+                    enabled = !checking, onClick = onCheck)
+            }
+        }
         Text(
             "Commands sent to the earbuds (→) and their replies (←).",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),

@@ -13,7 +13,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import ua.olex.sonyanc.SonyProtocol.Mode
 import ua.olex.sonyanc.SonyProtocol.NcState
 
@@ -161,6 +165,104 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         turningOff = true
         try { if (!Headphones.powerOff()) show("The earbuds didn't confirm. They may still be on.") }
         finally { turningOff = false }
+    }
+
+    var weekendMode by mutableStateOf(Prefs.weekendMode(ctx)); private set
+    fun updateWeekendMode(mode: OnConnect?) {
+        Prefs.setWeekendMode(ctx, mode)
+        weekendMode = mode
+    }
+
+    var profileBusy by mutableStateOf(false); private set
+
+    internal fun saveProfile(slot: Int) {
+        val state = Headphones.state.value
+        val mode = state.nc?.takeIf { state.ncConfirmed && state.pending == null }
+            ?: return show("Wait for your earbuds to confirm their current mode.")
+        val eq = Headphones.equalizer.value?.takeUnless { it.preset == 0xA0 && it.bands.size != 6 }
+        Prefs.savePersonalProfile(ctx, slot, PersonalProfile(mode, eq))
+        show("Profile $slot saved.")
+    }
+
+    internal fun applyProfile(slot: Int, profile: PersonalProfile) {
+        if (profileBusy) return
+        profileBusy = true
+        viewModelScope.launch {
+            try {
+                stayInAmbient()
+                val modeApplied = withTimeoutOrNull(8_500L) {
+                    if (!Headphones.request(profile.noise).await()) return@withTimeoutOrNull false
+                    val state = Headphones.state.first { it.pending == null }
+                    state.ncConfirmed && state.nc?.let {
+                        it.mode == profile.noise.mode &&
+                            (it.mode != Mode.AMBIENT || it.level == profile.noise.level && it.voice == profile.noise.voice)
+                    } == true
+                } == true
+                if (!modeApplied) {
+                    show("The earbuds did not confirm the profile's noise control.")
+                    return@launch
+                }
+                val eq = profile.equalizer
+                val eqApplied = when {
+                    eq == null -> true
+                    eq.preset == 0xA0 -> Headphones.writeEqualizer(bands = eq.bands)
+                    else -> Headphones.writeEqualizer(preset = eq.preset)
+                }
+                show(if (eqApplied) "Profile $slot applied." else "Noise control applied. Equalizer change could not be confirmed.")
+            } finally {
+                profileBusy = false
+            }
+        }
+    }
+
+    fun exportSettings(uri: android.net.Uri) = viewModelScope.launch {
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                checkNotNull(ctx.contentResolver.openOutputStream(uri, "wt")).use { it.write(SettingsBackup.encode(ctx)) }
+            }
+        }
+        show(if (result.isSuccess) "Settings exported." else "Could not export settings.")
+    }
+
+    fun importSettings(uri: android.net.Uri) = viewModelScope.launch {
+        val result = withContext(Dispatchers.IO) {
+            runCatching { checkNotNull(ctx.contentResolver.openInputStream(uri)).use { SettingsBackup.restore(ctx, it) } }
+        }
+        if (result.isFailure) return@launch show("Could not restore settings. Choose an Earbuds backup.")
+        dynamicColor = Prefs.dynamicColor(ctx)
+        haptics = Prefs.haptics(ctx)
+        tileTwoWay = Prefs.tileTwoWay(ctx)
+        onConnect = Prefs.onConnect(ctx)
+        weekendMode = Prefs.weekendMode(ctx)
+        ambientMinutes = Prefs.ambientMinutes(ctx)
+        show("Settings restored.")
+    }
+
+    var diagnosticResult by mutableStateOf<String?>(null); private set
+    var diagnosticRunning by mutableStateOf(false); private set
+
+    fun runDiagnostics() {
+        if (diagnosticRunning) return
+        diagnosticRunning = true
+        viewModelScope.launch {
+            try {
+                val result = withTimeoutOrNull(8_000L) {
+                    if (!Headphones.connectAndSync()) return@withTimeoutOrNull Headphones.state.value.error ?: "Control link unavailable."
+                    val codec = Headphones.queryCodec()
+                    Headphones.queryBattery()
+                    val state = Headphones.state.value
+                    listOf(
+                        if (state.connected) "Control link ready" else "Control link lost during check",
+                        if (state.ncConfirmed) "Noise control confirmed" else "Noise control unconfirmed",
+                        codec?.takeIf { it.isKnown }?.label ?: "Codec unknown",
+                        "${state.liveBatteryParts.size}/3 battery levels live",
+                    ).joinToString(" · ")
+                }
+                diagnosticResult = result ?: "The connection check timed out."
+            } finally {
+                diagnosticRunning = false
+            }
+        }
     }
 
     // ---- app settings ----
