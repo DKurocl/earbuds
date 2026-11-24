@@ -137,32 +137,18 @@ class ModeWidget : AppWidgetProvider() {
          */
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
-            // A slot tall enough for a title row gets one, as Google's widgets have: the earbuds'
-            // name and charge, and tapping it opens the app. Shorter slots get the earbuds button.
-            val head=height>=92f
-            // The modes fill the height left: a 48 dp row in a short slot, taller buttons with the
-            // label under a bigger icon in a tall one, so a big widget is never a thin bar in a box.
-            val bar=minOf(140f,maxOf(32f,height-12f-(if(head) 30f else 0f)))
+            // The modes fill the slot's height: a 48 dp row in a short slot, taller buttons with the
+            // label under a bigger icon in a tall one. The app button on the left matches their height.
+            val bar=minOf(140f,maxOf(32f,height-12f))
             val stacked=bar>=84f
             val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_switch_tall else R.layout.widget_switch)
             val iconSize=when { bar>=110f -> 32f; bar>=84f -> 28f; else -> 20f }
-            val open=!head && width>=220f
-            v.setViewVisibility(R.id.w_head,if(head) View.VISIBLE else View.GONE)
-            v.setTextViewTextSize(R.id.w_head_name,TypedValue.COMPLEX_UNIT_SP,if(bar>=84f) 16f else 14f)
-            if(head) {
-                val name=Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "Earbuds"
-                val b=Prefs.lastBattery(ctx)?.first
-                val buds=listOfNotNull(b?.left,b?.right).minOrNull()
-                // Narrow and away: the status is what matters, so it takes the name's place.
-                val narrowAway=away && width<220f
-                v.setTextViewText(R.id.w_head_name,if(narrowAway) "Not connected" else name)
-                v.setTextViewText(R.id.w_head_battery,when { narrowAway -> ""; away -> "Not connected"; buds!=null -> "$buds%"; else -> "" })
-            }
-            val slot=(width-12f-(if(open) bar+6f else 0f))/3f
+            val open=width>=220f
+            val slot=(width-12f-(if(open) minOf(bar,56f)+6f else 0f))/3f
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
             val labels=if(stacked) slot>=widest+12f else slot>=iconSize+6f+widest+8f
             v.setViewVisibility(R.id.w_open,if(open) View.VISIBLE else View.GONE)
-            v.setViewLayoutWidth(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutWidth(R.id.w_open,minOf(bar,56f),TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutHeight(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutHeight(R.id.w_track,bar,TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutMargin(R.id.w_track,RemoteViews.MARGIN_START,if(open) 6f else 0f,TypedValue.COMPLEX_UNIT_DIP)
@@ -177,7 +163,6 @@ class ModeWidget : AppWidgetProvider() {
                 val openApp=PendingIntent.getActivity(ctx,101,open,flags)
                 v.setOnClickPendingIntent(android.R.id.background,openApp)
                 v.setOnClickPendingIntent(R.id.w_open,openApp)
-                v.setOnClickPendingIntent(R.id.w_head,openApp)
             }
             for(stop in stops) {
                 val on=stop.mode==chosen

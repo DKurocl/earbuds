@@ -21,6 +21,6 @@
     <color name="w_bar_on">@android:color/system_primary_dark</color>
     <color name="w_bar_on_text">@android:color/system_on_primary_dark</color>
     <color name="w_bar_text">@android:color/system_on_surface_dark</color>
-    <color name="w_open">@android:color/system_secondary_container_dark</color>
-    <color name="w_open_text">@android:color/system_on_secondary_container_dark</color>
+    <color name="w_open">@android:color/system_accent2_700</color>
+    <color name="w_open_text">@android:color/system_accent2_100</color>
 </resources>

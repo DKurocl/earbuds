@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The open-the-app button: a tonal circle. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+<!-- The open-the-app button: a tonal pill, a circle in a short slot. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="@color/w_open" />
+    <corners android:radius="999dp" />
 </shape>
