@@ -172,21 +172,26 @@ fun EqualizerContent(
                             modifier = Modifier.semantics { contentDescription = "Equalizer" })
                     }
                     if (refused) Text("The earbuds didn't take this change", style = MaterialTheme.typography.bodyMedium, color = cs.error)
-                    // Twelve choices as four rows of three connected buttons (M3E button groups):
-                    // the chosen one turns into a full pill, the others keep their joined shapes.
+                    // Two groups, each as rows of connected buttons (M3E button groups): your own
+                    // sounds first, then Sony's presets. The chosen one turns into a full pill.
                     val flat = state.preset == CUSTOM && bands.size == 6 && bands.drop(1).all { it == 0 }
-                    val choices = EqualizerProtocol.presets.filterKeys { it != OFF }.map { (code, name) ->
-                        Triple(name, state.preset == code && !(code == CUSTOM && flat)) { onPreset(code) }
-                    } + Triple("Flat", flat) { onBands(listOf(bands.getOrElse(0) { 0 }) + List(5) { 0 }) }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        choices.chunked(3).forEach { row ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                                row.forEachIndexed { i, (name, selected, pick) ->
-                                    PresetButton(name, selected, editable, i, row.size, Modifier.weight(1f), pick)
+                    fun pick(code: Int) = Triple(EqualizerProtocol.presets[code] ?: "", state.preset == code && !(code == CUSTOM && flat)) { onPreset(code) }
+                    val yours = listOf(pick(CUSTOM), Triple("Flat", flat) { onBands(listOf(bands.getOrElse(0) { 0 }) + List(5) { 0 }) }, pick(0xA1), pick(0xA2))
+                    val sony = listOf(0x10, 0x11, 0x12, 0x13, 0x14, 0x17, 0x15, 0x16).map { pick(it) }
+                    @Composable fun Rows(title: String, rows: List<List<Triple<String, Boolean, () -> Unit>>>) {
+                        Text(title, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            rows.forEach { row ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                                    row.forEachIndexed { i, (name, selected, choose) ->
+                                        PresetButton(name, selected, editable, i, row.size, Modifier.weight(1f), choose)
+                                    }
                                 }
                             }
                         }
                     }
+                    Rows("Your sound", listOf(yours))
+                    Rows("Presets", listOf(sony.take(3), sony.subList(3, 6), sony.drop(6)))
                     if (bands.size == 6) {
                         var held by remember { mutableStateOf<Int?>(null) }
                         EqCurve(bands.drop(1), editable, on, held,

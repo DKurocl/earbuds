@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The switch's knob: a full pill in the accent color, one third of the track. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="@color/w_bar_on" />
-    <corners android:radius="999dp" />
-</shape>

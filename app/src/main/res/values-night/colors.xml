@@ -18,6 +18,8 @@
     <!-- The mode bar in the wallpaper's tones: a tinted surface (accent2), primary for the chosen
          mode, and tertiary (accent3) for the app button, so the widget is never plain grey. -->
     <color name="w_bar">@android:color/system_accent2_800</color>
+    <!-- A mode segment at rest: one tone up from the bar. -->
+    <color name="w_seg">@android:color/system_accent2_700</color>
     <color name="w_bar_on">@android:color/system_primary_dark</color>
     <color name="w_bar_on_text">@android:color/system_on_primary_dark</color>
     <color name="w_bar_text">@android:color/system_accent2_50</color>

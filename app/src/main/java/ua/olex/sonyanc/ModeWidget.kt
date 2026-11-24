@@ -22,8 +22,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Three controls only: ANC, Ambient, Off, in the app's floating toolbar look: a pill that slides
- * to the chosen mode; the wide side edges open the app. A tap on a mode reconnects on
+ * Three controls only: ANC, Ambient, Off, as Material 3 Expressive's connected button group: the
+ * chosen segment morphs into a primary pill; the wide side edges open the app. A tap on a mode reconnects on
  * demand and sets it.
  * No persistent service or notification. Large slots get the dashboard.
  */
@@ -119,65 +119,53 @@ class ModeWidget : AppWidgetProvider() {
             return switch(ctx,width,height,current,pending,linked==false,interactive)
         }
 
-        /** A knob position: the mode, its slot, knob and icon, and its name under the track. */
-        private data class Stop(val mode:SonyProtocol.Mode,val id:Int,val content:Int,val glyph:Int,val name:Int,val icon:Int,val bold:Int)
-        private val stops=listOf(
-            Stop(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_content,R.id.w_anc_glyph,R.id.w_anc_name,R.drawable.w_icon_anc,R.drawable.w_icon_anc_bold),
-            Stop(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_content,R.id.w_amb_glyph,R.id.w_amb_name,R.drawable.w_icon_ambient,R.drawable.w_icon_ambient_bold),
-            Stop(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_content,R.id.w_off_glyph,R.id.w_off_name,R.drawable.w_icon_off,R.drawable.w_icon_off_bold),
+        /** A mode's segment and the parts the widget sizes: icon box and label (both colors live inside). */
+        private data class Segment(val mode:SonyProtocol.Mode,val id:Int,val icon:Int,val label:Int,val texts:List<Int>)
+        private val segments=listOf(
+            Segment(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_icon,R.id.w_anc_label,listOf(R.id.w_anc_label_off,R.id.w_anc_label_on)),
+            Segment(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_icon,R.id.w_amb_label,listOf(R.id.w_amb_label_off,R.id.w_amb_label_on)),
+            Segment(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_icon,R.id.w_off_label,listOf(R.id.w_off_label_off,R.id.w_off_label_on)),
         )
-        /** Spacers shown around the knob for each position: two before it, two after it, one each in the middle. */
-        private val spacers=listOf(R.id.w_sp1,R.id.w_sp2,R.id.w_sp3,R.id.w_sp4)
-        private fun spacersFor(index:Int)=when(index) { 0 -> setOf(2,3); 1 -> setOf(0,3); else -> setOf(0,1) }
 
         /**
-         * The app's floating mode toolbar as a widget: the three modes with a pill that slides to
-         * the chosen one (the pending choice wins); the wide side edges open the app.
-         * Labels sit beside the icons when the slot is wide enough, as in the app.
+         * Material 3 Expressive's connected button group (docs/widget/connected.py): three tonal
+         * segments; the chosen one (the pending choice wins) is disabled, which morphs its corners
+         * into a full pill and its color into primary, while the old one morphs back. A segment
+         * sets its mode; the side edges open the app. The group fills the slot's height up to
+         * where a segment would be taller than wide; tall groups put the label under the icon.
          */
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
-            // The modes fill the slot's height: a 48 dp row in a short slot, taller buttons with the
-            // label under a bigger icon in a tall one. 
-            val bar=minOf(140f,maxOf(32f,height-12f))
+            val slot=(width-40f-4f)/3f
+            val bar=minOf(140f,height-12f,slot).coerceAtLeast(32f)
             val stacked=bar>=84f
-            val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_switch_tall else R.layout.widget_switch)
-            val iconSize=when { bar>=110f -> 32f; bar>=84f -> 28f; else -> 20f }
-            // Wide side edges (20 dp each) are the way into the app; the modes take the rest.
-            val slot=(width-40f)/3f
+            val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_group_tall else R.layout.widget_group)
+            val iconSize=when { bar>=110f -> 32f; bar>=84f -> 28f; else -> 24f }
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
-            val labels=if(stacked) slot>=widest+12f else slot>=iconSize+6f+widest+8f
-            v.setViewLayoutHeight(R.id.w_track,bar,TypedValue.COMPLEX_UNIT_DIP)
+            val labels=if(stacked) slot>=widest+16f else slot>=iconSize+6f+widest+20f
+            v.setViewLayoutHeight(R.id.w_group,bar,TypedValue.COMPLEX_UNIT_DIP)
             val chosen=pending ?: current
-            // No reading yet: the pill waits in the middle, faint.
-            val at=chosen?.let{stops.indexOfFirst{s->s.mode==it}} ?: 1
-            spacers.forEachIndexed{i,id->v.setViewVisibility(id,if(i in spacersFor(at)) View.VISIBLE else View.GONE)}
-            v.setFloat(R.id.w_knob,"setAlpha",if(chosen==null) 0.3f else 1f)
             val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             if(interactive) {
                 val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                val openApp=PendingIntent.getActivity(ctx,101,open,flags)
-                v.setOnClickPendingIntent(android.R.id.background,openApp)
+                v.setOnClickPendingIntent(android.R.id.background,PendingIntent.getActivity(ctx,101,open,flags))
             }
-            for(stop in stops) {
-                val on=stop.mode==chosen
-                val applying=stop.mode==pending
-                val ink=ctx.getColor(if(on) R.color.w_bar_on_text else R.color.w_bar_text)
-                v.setImageViewResource(stop.glyph,if(on) stop.bold else stop.icon)
-                v.setInt(stop.glyph,"setColorFilter",ink)
-                v.setTextColor(stop.name,ink)
-                v.setTextViewText(stop.name,stop.mode.short+if(applying) "…" else "")
-                v.setViewVisibility(stop.name,if(labels) View.VISIBLE else View.GONE)
-                v.setViewLayoutWidth(stop.glyph,iconSize,TypedValue.COMPLEX_UNIT_DIP)
-                v.setViewLayoutHeight(stop.glyph,iconSize,TypedValue.COMPLEX_UNIT_DIP)
-                v.setContentDescription(stop.id,stop.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
+            for(seg in segments) {
+                val on=seg.mode==chosen
+                val applying=seg.mode==pending
+                v.setBoolean(seg.id,"setEnabled",!on)
+                v.setViewLayoutWidth(seg.icon,iconSize,TypedValue.COMPLEX_UNIT_DIP)
+                v.setViewLayoutHeight(seg.icon,iconSize,TypedValue.COMPLEX_UNIT_DIP)
+                for(t in seg.texts) v.setTextViewText(t,seg.mode.short+if(applying) "…" else "")
+                v.setViewVisibility(seg.label,if(labels) View.VISIBLE else View.GONE)
+                v.setContentDescription(seg.id,seg.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
                     val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {
-                        PendingIntent.getActivity(ctx,stop.mode.ordinal,Intent(ctx,MainActivity::class.java).putExtra("hush.mode",stop.mode.name),flags)
+                        PendingIntent.getActivity(ctx,seg.mode.ordinal,Intent(ctx,MainActivity::class.java).putExtra("hush.mode",seg.mode.name),flags)
                     } else {
-                        PendingIntent.getBroadcast(ctx,stop.mode.ordinal,Intent(ctx,ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE,stop.mode.name),flags)
+                        PendingIntent.getBroadcast(ctx,seg.mode.ordinal,Intent(ctx,ModeWidget::class.java).setAction(ACTION_SET).putExtra(EXTRA_MODE,seg.mode.name),flags)
                     }
-                    v.setOnClickPendingIntent(stop.id,action)
+                    v.setOnClickPendingIntent(seg.id,action)
                 }
             }
             return v

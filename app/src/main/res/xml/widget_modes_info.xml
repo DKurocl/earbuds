@@ -9,7 +9,7 @@
     android:minResizeHeight="40dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
-    android:initialLayout="@layout/widget_switch"
-    android:previewLayout="@layout/widget_switch"
+    android:initialLayout="@layout/widget_group"
+    android:previewLayout="@layout/widget_group"
     android:description="@string/widget_desc"
     android:widgetCategory="home_screen|keyguard" />
