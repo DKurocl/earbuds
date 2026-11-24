@@ -249,8 +249,8 @@ fun EqualizerContent(
 /** A rounded card for one part of the sound, as in Music. */
 @Composable
 private fun SoundCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(UiTokens.cardInset), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }
 }
 
@@ -267,7 +267,7 @@ private fun PresetButton(name: String, selected: Boolean, enabled: Boolean, inde
         checked = selected, onCheckedChange = { if (!selected) onClick() }, enabled = enabled, shapes = shapes,
         colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 8.dp),
-        modifier = modifier.heightIn(min = 48.dp).semantics { role = Role.RadioButton; this.selected = selected },
+        modifier = modifier.heightIn(min = UiTokens.minTouchTarget).semantics { role = Role.RadioButton; this.selected = selected },
     ) {
         Text(name, style = MaterialTheme.typography.labelLarge, maxLines = 1,
             autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = MaterialTheme.typography.labelLarge.fontSize, stepSize = 0.5.sp))

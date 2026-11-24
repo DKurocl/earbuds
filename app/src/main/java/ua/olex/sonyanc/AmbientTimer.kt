@@ -23,8 +23,11 @@ object AmbientTimer {
     fun until(ctx: Context): Long? = Prefs.timerUntil(ctx).takeIf { it > System.currentTimeMillis() }
     fun returnMode(ctx: Context): SonyProtocol.Mode = Prefs.timerReturn(ctx) ?: SonyProtocol.Mode.ANC
 
-    private fun intent(ctx: Context) = PendingIntent.getBroadcast(
-        ctx, 7, Intent(ctx, AmbientTimerReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    internal const val EXTRA_UNTIL = "expires_at"
+
+    private fun intent(ctx: Context, until: Long = 0) = PendingIntent.getBroadcast(
+        ctx, 7, Intent(ctx, AmbientTimerReceiver::class.java).putExtra(EXTRA_UNTIL, until),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
     /**
@@ -37,8 +40,8 @@ object AmbientTimer {
         val back = if (from.mode == SonyProtocol.Mode.AMBIENT) SonyProtocol.Mode.ANC else from.mode
         Prefs.setTimer(ctx, until, back)
         val alarms = ctx.getSystemService(AlarmManager::class.java)
-        if (alarms.canScheduleExactAlarms()) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, until, intent(ctx))
-        else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, until, intent(ctx))
+        if (alarms.canScheduleExactAlarms()) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, until, intent(ctx, until))
+        else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, until, intent(ctx, until))
         Headphones.request(from.copy(mode = SonyProtocol.Mode.AMBIENT))
         LiveTimer.show(ctx, until, back)
         Widgets.refreshAll(ctx)
@@ -66,7 +69,10 @@ object AmbientTimer {
  */
 class AmbientTimerReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (Prefs.timerUntil(ctx) == 0L) { LiveTimer.hide(ctx); return } // cancelled meanwhile
+        val activeUntil = Prefs.timerUntil(ctx)
+        if (activeUntil == 0L) { LiveTimer.hide(ctx); return }
+        if (intent.hasExtra(AmbientTimer.EXTRA_UNTIL) &&
+            intent.getLongExtra(AmbientTimer.EXTRA_UNTIL, 0) != activeUntil) return
         if (intent.action == LiveTimer.ACTION_STAY) { AmbientTimer.cancel(ctx); return }
         val back = AmbientTimer.returnMode(ctx)
         ctx.getSystemService(android.app.AlarmManager::class.java).cancel(
@@ -108,12 +114,15 @@ object LiveTimer {
     private const val CHANNEL = "ambient_timer"
     private const val ID = 7
 
-    private fun action(ctx: Context, action: String, code: Int) = PendingIntent.getBroadcast(
-        ctx, code, Intent(ctx, AmbientTimerReceiver::class.java).setAction(action),
+    private fun action(ctx: Context, action: String, code: Int, until: Long) = PendingIntent.getBroadcast(
+        ctx, code, Intent(ctx, AmbientTimerReceiver::class.java).setAction(action)
+            .setData(android.net.Uri.parse("earbuds://ambient-timer/$until"))
+            .putExtra(AmbientTimer.EXTRA_UNTIL, until),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
     fun show(ctx: Context, until: Long, back: SonyProtocol.Mode) {
+        if (until <= System.currentTimeMillis() || Prefs.timerUntil(ctx) != until) return
         if (ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
         val nm = ctx.getSystemService(android.app.NotificationManager::class.java) ?: return
         nm.createNotificationChannel(android.app.NotificationChannel(CHANNEL, "Ambient for a moment", android.app.NotificationManager.IMPORTANCE_LOW).apply {
@@ -127,15 +136,16 @@ object LiveTimer {
             .setContentText("Back to ${back.label.lowercase()} at $at")
             .setOngoing(true).setOnlyAlertOnce(true)
             .setCategory(android.app.Notification.CATEGORY_STATUS)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
             .setWhen(until).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
             .setTimeoutAfter(until - System.currentTimeMillis() + 5_000)
             .setContentIntent(open)
-            .addAction(android.app.Notification.Action.Builder(null, "Stay in Ambient", action(ctx, ACTION_STAY, 9)).build())
-            .addAction(android.app.Notification.Action.Builder(null, "${back.short} now", action(ctx, ACTION_NOW, 10)).build())
+            .addAction(android.app.Notification.Action.Builder(null, "Stay in Ambient", action(ctx, ACTION_STAY, 9, until)).build())
+            .addAction(android.app.Notification.Action.Builder(null, "${back.short} now", action(ctx, ACTION_NOW, 10, until)).build())
         // Android 16 QPR2 (36.1) and later: promote it to a Live Update (status-bar chip, top of
         // the lock screen). SDK_INT_FULL itself only exists from 36.
         if (android.os.Build.VERSION.SDK_INT >= 36 &&
-            android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1) b.setRequestPromotedOngoing(true)
+            android.os.Build.VERSION.SDK_INT_FULL >= android.os.Build.VERSION_CODES_FULL.BAKLAVA_1) b.setRequestPromotedOngoing(true).setShortCriticalText("Ambient")
         nm.notify(ID, b.build())
     }
 

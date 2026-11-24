@@ -4,6 +4,7 @@ import android.content.Intent
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -15,21 +16,25 @@ class NoiseTileService : TileService() {
         Headphones.init(this)
         listening?.cancel()
         listening=CoroutineScope(Dispatchers.Main).launch {
-            // Mode, link and the emptier earbud's level; codec and other updates are skipped.
-            Headphones.state.map {Triple(it.shownNc?.mode,it.connected,it.battery?.let{b->listOfNotNull(b.left,b.right).minOrNull()})}
-                .distinctUntilChanged().collect {(mode,connected,level) ->
+            Headphones.state.combine(Prefs.linkedChanges(this@NoiseTileService)) { device, linked ->
+                Triple(device.shownNc?.mode, linked, device.pending != null)
+            }.distinctUntilChanged().collect { (mode, linked, applying) ->
+                val needsSetup = !Headphones.hasPermission(this@NoiseTileService) ||
+                    Prefs.deviceAddress(this@NoiseTileService) == null
                 qsTile?.apply {
-                    label="Noise control"
-                    subtitle=(mode?.short ?: "Tap to connect")+(level?.let{" · $it%"} ?: "")
-                    // Earbuds in the case: the tile greys out instead of failing a few seconds later.
-                    val away=!connected && Prefs.linked(this@NoiseTileService)==false
-                    if(away) subtitle="In case"
-                    this.state=when {
-                        away -> Tile.STATE_UNAVAILABLE
-                        connected && mode!=SonyProtocol.Mode.OFF -> Tile.STATE_ACTIVE
+                    label = "Noise control"
+                    subtitle = when {
+                        needsSetup -> "Set up Earbuds first"
+                        linked == false -> "Earbuds disconnected"
+                        applying -> "Applying ${mode?.short.orEmpty()}"
+                        else -> mode?.short ?: "Tap to connect"
+                    }
+                    state = when {
+                        linked == false && !needsSetup -> Tile.STATE_UNAVAILABLE
+                        !needsSetup && linked == true && mode != null && mode != SonyProtocol.Mode.OFF -> Tile.STATE_ACTIVE
                         else -> Tile.STATE_INACTIVE
                     }
-                    contentDescription="Noise control, "+(mode?.label ?: "not connected")
+                    contentDescription = "$label, $subtitle"
                     updateTile()
                 }
             }
@@ -37,10 +42,14 @@ class NoiseTileService : TileService() {
     }
     override fun onClick() {
         super.onClick()
+        Headphones.init(this)
         if(!Headphones.hasPermission(this) || Prefs.deviceAddress(this)==null) {
-            qsTile?.apply {subtitle="Set up Earbuds first";updateTile()}
+            val setup = android.app.PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
+                android.app.PendingIntent.FLAG_IMMUTABLE)
+            startActivityAndCollapse(setup)
             return
         }
+        if (Prefs.linked(this) == false) return
         val current=(Headphones.state.value.shownNc ?: Prefs.lastNc(this))?.mode
         val next=when(current) {
             SonyProtocol.Mode.ANC -> SonyProtocol.Mode.AMBIENT

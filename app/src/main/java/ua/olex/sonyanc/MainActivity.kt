@@ -6,6 +6,10 @@ import android.appwidget.AppWidgetManager
 import android.content.ClipData
 import android.content.ComponentName
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
@@ -25,6 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -59,7 +66,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppTheme(model.dynamicColor) {
-                App(model, startTick.intValue, shortcutMode.value) { shortcutMode.value = null }
+                val systemFeedback = LocalHapticFeedback.current
+                val silentFeedback = remember {
+                    object : HapticFeedback {
+                        override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+                    }
+                }
+                CompositionLocalProvider(LocalHapticFeedback provides if (model.haptics) systemFeedback else silentFeedback) {
+                    App(model, startTick.intValue, shortcutMode.value) { shortcutMode.value = null }
+                }
             }
         }
     }
@@ -91,6 +106,21 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val device by Headphones.state.collectAsStateWithLifecycle()
+    val linked by remember(ctx) { Prefs.linkedChanges(ctx) }.collectAsStateWithLifecycle(Prefs.linked(ctx))
+    DisposableEffect(ctx, model) {
+        val changes = object : BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: Intent) {
+                model.onStart(reconnect = true)
+            }
+        }
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED).apply {
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            ctx, changes, filter, androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+        )
+        onDispose { ctx.unregisterReceiver(changes) }
+    }
     val equalizer by Headphones.equalizer.collectAsStateWithLifecycle()
     val advanced by Headphones.advanced.collectAsStateWithLifecycle()
     var renaming by rememberSaveable { mutableStateOf(false) }
@@ -179,7 +209,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                 when (Page.valueOf(page)) {
                     Page.HOME -> HushScreen(
                         device.status, device.nc, device.pending, device.ncConfirmed, device.error, device.battery, model.granted, model.saved != null,
-                        onMode = model::requestMode, onSettings = { open(Page.EARBUDS) },
+                        onMode = model::requestMode, onSettings = { open(Page.APP) },
                         onConnect = { model.connect() },
                         onPermission = { permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) },
                         onBluetooth = ::bluetooth, onPick = { open(Page.APP) },
@@ -187,7 +217,9 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         haptics = model.haptics, batteryRefreshing = device.batteryRefreshing, batteryFresh = device.liveBatteryParts.isNotEmpty(),
                         onBattery = { model.refreshInfo() }, codec = device.codec, codecRefreshing = device.codecRefreshing,
                         deviceName = model.displayName,
-                        onAppSettings = { open(Page.APP) }, batteryParts = device.liveBatteryParts,
+                        batteryParts = device.liveBatteryParts,
+                        linked = linked, bluetoothOn = model.bluetoothOn, codecLive = device.codecLive,
+                        paired = model.saved == null || model.devices.any { it.address == model.saved },
                         equalizerPreset = equalizer?.let { EqualizerProtocol.presets[it.preset] },
                         batterySeenAt = device.batterySeenAt,
                         onFind = ::findHub, onBatteryDetails = { open(Page.BATTERY) },
@@ -199,7 +231,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                             if (!model.ambientForAMoment()) timerNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         },
                         onStayInAmbient = model::stayInAmbient,
-                        lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && !device.connected && Prefs.linked(ctx) == false },
+                        lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && linked == false },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
                     Page.BATTERY -> BatteryScreen(::back)
@@ -231,7 +263,15 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                             ctx.getSystemService(android.app.StatusBarManager::class.java).requestAddTileService(
                                 ComponentName(ctx, NoiseTileService::class.java), "Noise control",
                                 android.graphics.drawable.Icon.createWithResource(ctx, R.drawable.w_icon_anc), ctx.mainExecutor,
-                            ) {}
+                            ) { result ->
+                                when (result) {
+                                    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED ->
+                                        model.show("Noise control is already in Quick Settings.")
+                                    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED,
+                                    android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> Unit
+                                    else -> model.show("Could not open Quick Settings setup.")
+                                }
+                            }
                         },
                         onPinWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, ModeWidget::class.java), null, null) },
                         onPinBatteryWidget = { widgetManager.requestPinAppWidget(ComponentName(ctx, BatteryWidget::class.java), null, null) },

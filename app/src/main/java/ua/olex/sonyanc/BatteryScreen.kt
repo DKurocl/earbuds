@@ -6,9 +6,7 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,7 +53,7 @@ fun BatteryScreen(onBack: () -> Unit) {
 fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}, health: List<WeekHealth> = emptyList()) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Battery", onBack) {
-        Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Last 7 days", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -220,7 +218,7 @@ private fun HealthCard(verdict: BatteryHealth.Verdict?) {
     verdict ?: return
     val cs = MaterialTheme.colorScheme
     when (verdict) {
-        is BatteryHealth.Verdict.Declined -> Surface(shape = RoundedCornerShape(28.dp), color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+        is BatteryHealth.Verdict.Declined -> Surface(shape = UiTokens.cardShape, color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HushIcon(Glyph.BATTERY, Modifier.size(22.dp), cs.onSecondaryContainer)

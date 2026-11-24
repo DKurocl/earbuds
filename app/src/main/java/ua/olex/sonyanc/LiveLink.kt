@@ -52,7 +52,7 @@ object LiveLink {
             Headphones.addLog("✗ Stay in sync: ${if (!supported) "needs Android 16" else if (address == null) "no earbuds chosen" else "no companion service"}")
             return done(false)
         }
-        association(ctx)?.let { observe(ctx, it.id); return done(true) }
+        association(ctx)?.let { return done(observe(ctx, it.id)) }
         val request = AssociationRequest.Builder()
             .addDeviceFilter(BluetoothDeviceFilter.Builder().setAddress(address).build())
             .setSingleDevice(true)
@@ -60,8 +60,10 @@ object LiveLink {
         manager.associate(request, ctx.mainExecutor, object : CompanionDeviceManager.Callback() {
             override fun onAssociationPending(intentSender: IntentSender) = confirm(intentSender)
             override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                observe(ctx, associationInfo.id)
-                done(true)
+                val current = address.equals(Prefs.deviceAddress(ctx), ignoreCase = true)
+                val observed = current && observe(ctx, associationInfo.id)
+                if (!observed) runCatching { manager.disassociate(associationInfo.id) }
+                done(observed)
             }
             override fun onFailure(error: CharSequence?) {
                 Headphones.addLog("✗ companion: $error")
@@ -89,11 +91,12 @@ object LiveLink {
     }
 
     @SuppressLint("MissingPermission") // REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE is a normal permission
-    private fun observe(ctx: Context, id: Int) {
-        if (!supported) return
-        runCatching { cdm(ctx)?.startObservingDevicePresence(ObservingDevicePresenceRequest.Builder().setAssociationId(id).build()) }
-            .onSuccess { Headphones.addLog("· Stay in sync: Android watches the earbuds (association $id)") }
-            .onFailure { Headphones.addLog("✗ companion observe: ${it.message}") }
+    private fun observe(ctx: Context, id: Int): Boolean {
+        if (!supported) return false
+        val manager = cdm(ctx) ?: return false
+        return runCatching {
+            manager.startObservingDevicePresence(ObservingDevicePresenceRequest.Builder().setAssociationId(id).build())
+        }.onFailure { Headphones.addLog("✗ companion observe: ${it.message}") }.isSuccess
     }
 
     /** Re-arms observing after an update or reboot (cheap and idempotent). */
@@ -110,11 +113,20 @@ object LiveLink {
 /** Bound by Android while the associated earbuds are connected (see [LiveLink]). */
 @RequiresApi(36)
 class LinkService : CompanionDeviceService() {
+    private var activeAssociation: Int? = null
+
     override fun onDevicePresenceEvent(event: DevicePresenceEvent) {
         Headphones.init(this)
         Headphones.addLog("· Stay in sync: Android reports event ${event.event}")
         val present = LiveLink.presenceChange(event.event) ?: return
-        if (present && !Headphones.hasPermission(this)) return Headphones.addLog("✗ Stay in sync: no Bluetooth permission")
+        if (present) {
+            if (event.associationId != LiveLink.association(this)?.id) return
+            if (!Headphones.hasPermission(this)) return Headphones.addLog("✗ Stay in sync: no Bluetooth permission")
+            activeAssociation = event.associationId
+        } else {
+            if (event.associationId != activeAssociation) return
+            activeAssociation = null
+        }
         Headphones.stay(present)
         // Android binds this service for the companion: the surest moment to bring the sheet up.
         if (present) ConnectedSheet.show(this, "Stay in sync")
@@ -122,7 +134,7 @@ class LinkService : CompanionDeviceService() {
 
     override fun onDestroy() {
         // Unbound: the earbuds are gone, or Android stopped observing.
-        Headphones.stay(false)
+        if (activeAssociation != null) Headphones.stay(false)
         super.onDestroy()
     }
 }

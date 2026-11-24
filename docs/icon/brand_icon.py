@@ -11,7 +11,6 @@ of the case below it.
 The splash plays it in about half a second: the case drops in, its back copy settles under it, and
 the lid lifts once and closes, as a real case does when the earbuds come out.
 """
-import sys
 from pathlib import Path
 
 
@@ -22,7 +21,7 @@ NS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
 AAPT = 'xmlns:aapt="http://schemas.android.com/aapt"'
 SIZE = 'android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"'
 
-BACKGROUND = "#FFFFFFFF"
+BACKGROUND = "@color/brand_icon_background"
 CORAL = "#FFFF6536"
 PEACH = "#FFFDBBA2"
 
@@ -73,7 +72,7 @@ def parts():
     # The clip stays put while the copy inside it slides (the splash), so the slit stays white.
     back = (f'<group><clip-path android:pathData="{BACK_CLIP}"/><group android:name="back">'
             f'<path android:fillColor="{PEACH}" android:pathData="{rounded(*BACK)}"/></group></group>')
-    base = coloured(BASE_CLIP) + f'<path android:fillColor="#FFFFFFFF" android:pathData="{DOT}"/>'
+    base = coloured(BASE_CLIP) + f'<path android:fillColor="{BACKGROUND}" android:pathData="{DOT}"/>'
     # The lid scales from its bottom edge, so opening shortens it upwards.
     lid = f'<group android:name="lid" android:pivotX="54" android:pivotY="{num(SEAM_TOP)}">{coloured(LID_CLIP)}</group>'
     return back, base, lid

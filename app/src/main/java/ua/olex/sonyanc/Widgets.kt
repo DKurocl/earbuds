@@ -148,7 +148,8 @@ object Widgets {
     internal fun sizes(options: Bundle?, fallback: List<SizeF>): List<SizeF> {
         if (options == null) return fallback
         val exact = options.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
-        if (!exact.isNullOrEmpty()) return exact.filter { it.width > 0 && it.height > 0 }.distinct().take(16)
+        val usable = exact.orEmpty().filter { it.width > 0 && it.height > 0 }.distinct().take(16)
+        if (usable.isNotEmpty()) return usable
         val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
         val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
         val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
@@ -172,16 +173,23 @@ object Widgets {
         if (Prefs.previewVersion(ctx) == version) return
         val mgr = AppWidgetManager.getInstance(ctx)
         val home = AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN
-        val ok = runCatching {
-            mgr.setWidgetPreview(ComponentName(ctx, ModeWidget::class.java), home,
-                ModeWidget.viewsFor(ctx, 340f, 96f, SonyProtocol.Mode.ANC, interactive = false, linked = true)) &&
-                // The lock-screen hub shows the dashboard size of the same widget.
-                mgr.setWidgetPreview(ComponentName(ctx, ModeWidget::class.java), AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD,
-                    ModeWidget.viewsFor(ctx, 416f, 275f, SonyProtocol.Mode.ANC, interactive = false, linked = true,
-                        battery = BatteryWidget.SAMPLE to System.currentTimeMillis())) &&
-                mgr.setWidgetPreview(ComponentName(ctx, BatteryWidget::class.java), home,
-                    BatteryWidget.viewsFor(ctx, 250f, 150f, BatteryWidget.SAMPLE, System.currentTimeMillis(), linked = true, lastSeen = 0L, interactive = false))
+        val modes = ComponentName(ctx, ModeWidget::class.java)
+        val battery = ComponentName(ctx, BatteryWidget::class.java)
+        val now = System.currentTimeMillis()
+        val homeModes = runCatching {
+            mgr.setWidgetPreview(modes, home,
+                ModeWidget.viewsFor(ctx, 340f, 96f, SonyProtocol.Mode.ANC, interactive = false, linked = true, showDashboard = false))
         }.getOrDefault(false)
+        val lockModes = runCatching {
+            mgr.setWidgetPreview(modes, AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD,
+                ModeWidget.viewsFor(ctx, 416f, 275f, SonyProtocol.Mode.ANC, interactive = false, linked = true,
+                    battery = BatteryWidget.SAMPLE to now))
+        }.getOrDefault(false)
+        val batteryPreview = runCatching {
+            mgr.setWidgetPreview(battery, home or AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD,
+                BatteryWidget.viewsFor(ctx, 250f, 150f, BatteryWidget.SAMPLE, now, linked = true, lastSeen = 0L, interactive = false))
+        }.getOrDefault(false)
+        val ok = homeModes && lockModes && batteryPreview
         if (ok) Prefs.setPreviewVersion(ctx, version)
     }
 }

@@ -1,5 +1,6 @@
 package ua.olex.sonyanc
 
+import android.animation.ValueAnimator
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.core.CubicBezierEasing
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
@@ -126,6 +128,7 @@ internal fun PageStack(stack: List<String>, onPop: () -> Unit, content: @Composa
     var dy by remember { mutableFloatStateOf(0f) }
     // A finished swipe has already played its ending; the stack change only swaps the pages.
     var swiped by remember { mutableStateOf(false) }
+    var recovery by remember { mutableStateOf<Job?>(null) }
     val saved = rememberSaveableStateHolder()
     val origins = remember { PageOrigins() }
     // Per page: the card it grew out of, so it can return into it.
@@ -140,6 +143,14 @@ internal fun PageStack(stack: List<String>, onPop: () -> Unit, content: @Composa
 
     LaunchedEffect(stack) {
         val old = shown
+        recovery?.cancel()
+        if (stack != old && !ValueAnimator.areAnimatorsEnabled()) {
+            if (stack.size < old.size) old.drop(stack.size).forEach(saved::removeState)
+            origins.next = null
+            cards.keys.retainAll(stack.toSet())
+            land(stack)
+            return@LaunchedEffect
+        }
         when {
             stack == old -> Unit
             stack.size == old.size + 1 && stack.dropLast(1) == old -> {
@@ -163,9 +174,12 @@ internal fun PageStack(stack: List<String>, onPop: () -> Unit, content: @Composa
     }
 
     PredictiveBackHandler(enabled = stack.size > 1) { events ->
+        recovery?.cancel()
+        val animated = ValueAnimator.areAnimatorsEnabled()
         var startY = Float.NaN
         try {
             events.collect { e ->
+                if (!animated) return@collect
                 fromLeft = e.swipeEdge != BackEventCompat.EDGE_RIGHT
                 if (startY.isNaN()) startY = e.touchY
                 dy = e.touchY - startY
@@ -173,11 +187,11 @@ internal fun PageStack(stack: List<String>, onPop: () -> Unit, content: @Composa
             }
             // Let go (or the 3-button Back): the system's ending, from wherever the finger was.
             swiped = true
-            settleTo()
+            if (animated) settleTo()
             onPop()
         } catch (e: CancellationException) {
             // A cancelled gesture also cancels this coroutine; spring back from outside it.
-            if (!swiped) scope.launch {
+            if (animated && !swiped) recovery = scope.launch {
                 val from = swipe; val fromDy = dy
                 animate(1f, 0f, animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)) { v, _ ->
                     swipe = from * v; dy = fromDy * v

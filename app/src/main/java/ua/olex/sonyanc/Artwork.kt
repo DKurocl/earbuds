@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +19,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import java.util.Locale
 
 /**
@@ -58,10 +60,11 @@ internal object SymbolFont {
  */
 @Composable
 fun HushIcon(
-    glyph: Glyph, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface,
+    glyph: Glyph, modifier: Modifier = Modifier, color: Color = LocalContentColor.current,
     filled: Boolean = false, bold: Boolean = false,
 ) {
     val ctx = LocalContext.current
+    val mirror = glyph == Glyph.BACK && LocalLayoutDirection.current == LayoutDirection.Rtl
     val motion = MaterialTheme.motionScheme
     val fill by animateFloatAsState(if (filled) 1f else 0f, motion.defaultEffectsSpec(), label = "fill")
     val weight by animateFloatAsState(if (bold) 600f else 400f, motion.fastSpatialSpec(), label = "weight")
@@ -75,7 +78,10 @@ fun HushIcon(
     val paint = remember {
         Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = SymbolFont.get(ctx); textAlign = Paint.Align.CENTER }
     }
-    Canvas(modifier.size(24.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value }) {
+    Canvas(modifier.size(UiTokens.symbolSize).graphicsLayer {
+        scaleX = if (mirror) -pop.value else pop.value
+        scaleY = pop.value
+    }) {
         // The font has 960 units per em with the icon standing on the baseline: an em-sized
         // glyph drawn with its baseline at the bottom fills the box exactly.
         val em = size.minDimension

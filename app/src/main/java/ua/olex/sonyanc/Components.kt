@@ -71,8 +71,8 @@ fun PageScaffold(
     ) { insets ->
         Column(
             Modifier.padding(insets).fillMaxSize().verticalScroll(column)
-                .padding(horizontal = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .padding(horizontal = UiTokens.pageInset).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(UiTokens.pageSectionGap),
             content = { content(); Spacer(Modifier.height(12.dp)) },
         )
     }
@@ -84,13 +84,12 @@ class GroupScope {
 }
 
 /**
- * A group of Material 3 segmented list items, as in Android 16 settings: 16 dp outside, 4 dp
- * between, 2 dp apart, and the pressed row morphs to fully rounded corners.
+ * A group of Material 3 segmented list items with the library's connected row shapes and gap.
  */
 @Composable
 fun ListGroup(title: String? = null, build: GroupScope.() -> Unit) {
     val scope = GroupScope().apply(build)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(UiTokens.sectionLabelGap)) {
         title?.let { SectionTitle(it) }
         Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
             scope.items.forEachIndexed { i, item -> item(ListItemDefaults.segmentedShapes(index = i, count = scope.items.size)) }
@@ -171,12 +170,11 @@ private fun supporting(summary: String?, note: RowNote?): (@Composable () -> Uni
 @Composable
 fun InfoRow(shape: ListItemShapes, glyph: Glyph?, title: String, value: String?) {
     ListItem(
-        headlineContent = { Text(title) },
         supportingContent = { if (value != null) Text(value) else ValuePlaceholder() },
         leadingContent = leading(glyph),
         colors = ListItemDefaults.colors(containerColor = Surfaces.card),
         modifier = Modifier.fillMaxWidth().clip(shape.shape),
-    )
+    ) { Text(title) }
 }
 
 /** A static bar the height of a line of supporting text: no animation, so nothing redraws while it waits. */
@@ -281,7 +279,7 @@ fun RollingText(
 ) {
     val spatial = MaterialTheme.motionScheme.fastSpatialSpec<androidx.compose.ui.unit.IntOffset>()
     val effects = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
-    val base = style.copy(fontFeatureSettings = "tnum", color = if (color.isSpecified) color else style.color)
+    val base = style.withTabularFigures().copy(color = if (color.isSpecified) color else style.color)
     // No BoxWithConstraints: this sits in rows sized by intrinsics. A layout modifier scales the
     // finished line down when it is wider than its space.
     Row(

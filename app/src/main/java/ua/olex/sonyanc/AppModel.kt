@@ -3,6 +3,7 @@ package ua.olex.sonyanc
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
+import android.bluetooth.BluetoothManager
 import android.content.pm.PackageManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -10,8 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -35,6 +34,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     // ---- the earbuds and access ----
     var granted by mutableStateOf(Headphones.hasPermission(ctx)); private set
+    var bluetoothOn by mutableStateOf(true); private set
     var saved by mutableStateOf(Prefs.deviceAddress(ctx)); private set
     var devices by mutableStateOf(emptyList<PairedDevice>()); private set
     var displayName by mutableStateOf(Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "WF-1000XM5"); private set
@@ -68,7 +68,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     // ---- "Ambient for a moment" ----
     var ambientMinutes by mutableIntStateOf(Prefs.ambientMinutes(ctx)); private set
     var ambientUntil by mutableStateOf(AmbientTimer.until(ctx)); private set
-    private var ambientWatch: Job? = null
+    init {
+        viewModelScope.launch { Prefs.timerChanges(ctx).collect { ambientUntil = it } }
+    }
 
     var turningOff by mutableStateOf(false); private set
 
@@ -82,22 +84,29 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun notificationsAllowed() = ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
+    private fun updateBluetoothState() {
+        bluetoothOn = ctx.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
+    }
+
     /** The screen came to the front: check access, pick the only pair, connect, pick up timers. */
-    fun onStart() {
+    fun onStart(reconnect: Boolean = false) {
         granted = Headphones.hasPermission(ctx)
-        watchAmbient()
         if (!granted) return
+        updateBluetoothState()
         val bonded = Headphones.bondedDevices(ctx)
         devices = bonded.map { PairedDevice(it.address, it.name ?: "WF-1000XM5") }
         viewModelScope.launch {
             if (saved == null && bonded.size == 1) {
                 Headphones.selectDevice(bonded.single().address, bonded.single().name)
                 saved = bonded.single().address
-            } else if (saved != null) Headphones.connectAndSync()
+                Headphones.connectAndSync()
+            } else if (reconnect && bluetoothOn && devices.any { it.address == saved }) {
+                Headphones.connectAndSync()
+            }
         }
     }
 
-    fun onPermission(allowed: Boolean) { granted = allowed; if (allowed) onStart() }
+    fun onPermission(allowed: Boolean) { granted = allowed; if (allowed) onStart(reconnect = true) }
 
     // ---- noise control ----
     /** Two-stage feedback: the tap ticks at once (UI); the earbuds' answer plays the mode's own pulse. */
@@ -128,22 +137,11 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     fun ambientForAMoment(): Boolean {
         val from = Headphones.state.value.shownNc ?: NcState(Mode.ANC)
         AmbientTimer.start(ctx, ambientMinutes, from)
-        watchAmbient()
+        ambientUntil = AmbientTimer.until(ctx)
         return notificationsAllowed()
     }
 
     fun stayInAmbient() { AmbientTimer.cancel(ctx); ambientUntil = null }
-
-    /** Follows the timer's end (or a cancel from the widget or notification) while the app is open. */
-    private fun watchAmbient() {
-        ambientUntil = AmbientTimer.until(ctx)
-        ambientWatch?.cancel()
-        val until = ambientUntil ?: return
-        ambientWatch = viewModelScope.launch {
-            delay(until - System.currentTimeMillis() + 300)
-            ambientUntil = AmbientTimer.until(ctx)
-        }
-    }
 
     // ---- device info ----
     fun connect() = viewModelScope.launch { Headphones.connectAndSync() }

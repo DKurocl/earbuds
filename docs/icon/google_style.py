@@ -1,12 +1,11 @@
-"""Google-style launcher icon (2025 Pixel look): white background, one bold geometric shape,
+"""Archived blue launcher concept: white background, one bold geometric shape,
 saturated blues with smooth top-down gradients for soft volume, a small green accent.
-Writes the adaptive-icon vectors and an SVG preview from the same geometry.
+Writes preview assets to the given directory. The active launcher and splash use brand_icon.py.
 
-Run from the repository root:  python3 docs/icon/google_style.py [preview-dir]
+Run from the repository root:  python3 docs/icon/google_style.py <preview-dir>
 """
 import sys
-
-RES = "app/src/main/res"
+from pathlib import Path
 
 # Geometry in the 108 x 108 adaptive-icon viewport (66 dp safe zone = 21..87). The outline is the
 # real case's, measured from Sony's front shot (docs/icon/ref/wf1000xm5_case.webp): a domed lid that
@@ -135,11 +134,14 @@ mark = ('<vector xmlns:android="http://schemas.android.com/apk/res/android" andr
         + "    </group>\n</vector>\n")
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("Usage: python3 docs/icon/google_style.py <preview-dir>")
+    preview = Path(sys.argv[1])
+    preview.mkdir(parents=True, exist_ok=True)
     for name, text in [("ic_launcher_foreground", foreground), ("ic_launcher_background", background),
                        ("ic_launcher_monochrome", monochrome)]:
-        open(f"{RES}/drawable/{name}.xml", "w").write(text)
-    if len(sys.argv) > 1:
-        svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="432" height="432">
+        (preview / f"{name}.xml").write_text(text)
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="432" height="432">
 <defs>
  <linearGradient id="lid" x1="{R}" y1="{TOP}" x2="{L}" y2="{SEAM}" gradientUnits="userSpaceOnUse">{"".join(f'<stop offset="{o}" stop-color="{c}"/>' for o, c in LID_STOPS)}</linearGradient>
  <linearGradient id="body" x1="{R}" y1="{SEAM + GAP}" x2="{L}" y2="{BOTTOM}" gradientUnits="userSpaceOnUse">{"".join(f'<stop offset="{o}" stop-color="{c}"/>' for o, c in BODY_STOPS)}</linearGradient>
@@ -147,4 +149,4 @@ if __name__ == "__main__":
 <rect width="108" height="108" fill="#fff"/>
 <path d="{LID}" fill="url(#lid)"/><path d="{BODY}" fill="url(#body)"/><path d="{circle_path(*LED)}" fill="{LED_COLOR}"/>
 </svg>'''
-        open(f"{sys.argv[1]}/icon.svg", "w").write(svg)
+    (preview / "icon.svg").write_text(svg)

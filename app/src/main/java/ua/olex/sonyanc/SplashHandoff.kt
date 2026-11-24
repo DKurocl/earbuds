@@ -24,7 +24,12 @@ object SplashHandoff {
 
     fun install(activity: Activity) {
         activity.splashScreen.setOnExitAnimationListener { splash ->
-            // Let the icon finish its gesture; an app that is ready sooner still waits for it.
+            if (!ValueAnimator.areAnimatorsEnabled()) {
+                Intro.finish()
+                splash.remove()
+                return@setOnExitAnimationListener
+            }
+            // Let the icon finish its gesture before moving it into Home.
             val end = splash.iconAnimationStart?.plus(splash.iconAnimationDuration ?: Duration.ZERO)
             val wait = end?.let { (it.toEpochMilli() - Instant.now().toEpochMilli()).coerceIn(0, 800) } ?: 0
             splash.postDelayed({ handOver(splash) }, wait)

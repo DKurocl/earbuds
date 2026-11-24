@@ -34,7 +34,9 @@ abstract class EarbudsFunctions : AppFunctionService() {
         AmbientTimer.cancel(this) // a choice of one's own wins over "Ambient for a moment"
         return withLink {
             val base = Headphones.state.value.shownNc ?: SonyProtocol.NcState(wanted)
-            val ok = withTimeoutOrNull(8500) { Headphones.request(base.copy(mode = wanted)).await() } ?: false
+            val ok = withTimeoutOrNull(8500) {
+                Headphones.request(base.copy(mode = wanted)).await() && confirmedMode(wanted)
+            } ?: false
             if (ok) "${wanted.label} is on." else notReachable()
         }
     }
@@ -53,8 +55,7 @@ abstract class EarbudsFunctions : AppFunctionService() {
         return withLink {
             val from = Headphones.state.value.shownNc ?: SonyProtocol.NcState(SonyProtocol.Mode.ANC)
             AmbientTimer.start(this, minutes, from)
-            val ok = withTimeoutOrNull(8500) { Headphones.state.first { it.pending == null } } != null &&
-                Headphones.state.value.nc?.mode == SonyProtocol.Mode.AMBIENT
+            val ok = withTimeoutOrNull(8500) { confirmedMode(SonyProtocol.Mode.AMBIENT) } ?: false
             if (ok) "Ambient sound for $minutes minutes, then back to ${AmbientTimer.returnMode(this).label.lowercase()}."
             else { AmbientTimer.cancel(this); notReachable() }
         }
@@ -69,7 +70,10 @@ abstract class EarbudsFunctions : AppFunctionService() {
     @AppFunctionDeclaration(isDescribedByKDoc = true)
     suspend fun getEarbudsBattery(): EarbudsBattery {
         Headphones.init(this)
-        if (Prefs.linked(this) == true) withLink { withTimeoutOrNull(4000) { Headphones.queryBattery() }; "" }
+        if (Prefs.linked(this) != false) withLink {
+            withTimeoutOrNull(5000) { if (Headphones.connectAndSync()) Headphones.queryBattery() }
+            ""
+        }
         val state = Headphones.state.value
         val b = state.battery ?: SonyProtocol.Battery()
         val mode = state.nc?.mode
@@ -80,6 +84,11 @@ abstract class EarbudsFunctions : AppFunctionService() {
             listeningMinutesLeft = left ?: -1,
             summary = BatteryWords.sentence(b, left?.let(BatteryLife::format), Prefs.linked(this) == true),
         )
+    }
+
+    private suspend fun confirmedMode(mode: SonyProtocol.Mode): Boolean {
+        val state = Headphones.state.first { it.pending == null }
+        return state.ncConfirmed && state.nc?.mode == mode
     }
 
     private fun modeOf(name: String) = when (name.lowercase()) {

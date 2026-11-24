@@ -1,4 +1,4 @@
-# Earbuds design (1.4)
+# Earbuds design
 
 Reference: Pixel Buds device details and Android 17 Settings. The app should read like a
 Google app on a Pixel: wallpaper colors, Google Sans, grouped lists, large collapsing titles,
@@ -15,12 +15,14 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 - **Icon**: Google's product-icon style (Calendar, Tasks, Meet): the case as one bold coral shape on white, lid slit and
   light cut out in white, a peach copy peeking below, one pink glow (`docs/icon/brand_icon.py`).
-- **Color**: dynamic color by default; without it, a warm tonal scheme from the icon's coral (#FF6536). Page background
-  is `surfaceContainer` (light) / `surfaceContainerLow` (dark); cards one step up
-  (`surfaceContainerLowest` / `surfaceContainerHigh`). See `Surfaces`.
+- **Color**: wallpaper palettes are the default. The coral palette provides matching surface,
+  outline and inverse roles in both themes. Pages use `surface`, cards use `surfaceContainerHigh`,
+  and battery rings use a semantic green, with `error` for low charge.
+- **Dimensions**: `UiTokens` defines page insets, section spacing, card shapes and shared control
+  sizes. Connected rows and control groups use Material's own spacing and shapes.
 - **Type**: Google Sans Flex is bundled (`res/font/google_sans_flex.ttf`, OFL, Latin subset) and
   used through its axes: `opsz` follows each style's size, display and headline styles are
-  rounded (`ROND` 100), body and labels stay plain. Same look on every phone and in renders.
+  rounded (`ROND` 100), body and labels stay plain. Rolling readings use tabular figures.
 - **Motion**: `MotionScheme.expressive()`. Pages move exactly like Android's own screens
   (`Navigation.kt`, values from AOSP's CrossActivityBackAnimation): under a back swipe the page
   shrinks to 0.9 toward the far edge (8 dp margin), following the finger up and down, through
@@ -30,8 +32,8 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
   back arrow plays the same ending; opening a page is its mirror. Pose and page swaps happen in
   one snapshot, so no frame ever shows a page in the wrong place, and the page beneath stays
   composed for an instant start. `PredictiveBackHandler`, `enableOnBackInvokedCallback`.
-- **Lists**: `ListGroup` of Material's `SegmentedListItem`s: 16 dp outside, 4 dp between, 2 dp
-  apart, and the pressed row morphs to fully rounded corners. Primary-colored section titles.
+- **Lists**: `ListGroup` uses Material's `SegmentedListItem` for actions and `ListItem` for
+  read-only information. The group uses Material's connected shapes and gap.
   - `SwitchRow`: the whole row toggles; the row stays neutral and the switch shows the state
     (Android settings), announced as a switch. A setting the earbuds did not report says
     "Not available" and is not toggleable at all.
@@ -47,7 +49,7 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 | Page | Content |
 |---|---|
-| Home (`HomeScreen.kt`) | Settings button only (gear → Earbud settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → the Battery page grows out of the tile; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
+| Home (`HomeScreen.kt`) | Settings button only (gear → App settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → the Battery page grows out of the tile; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
 | Equalizer | Presets as Material toggle buttons (round; the chosen one squares off), Off and Custom first; Saved 1/2 are the earbuds' slots. Custom: five `VerticalSlider`s with the centered track (fill from 0 dB), whole-dB steps, a haptic tick per dB and a firmer one at 0; Clear Bass is a centered `Slider`; Reset. Fixed presets offer "Use Custom". |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |
@@ -86,11 +88,11 @@ than wide (`WidgetLayout.modes`). `WidgetAnimationTest` seeks the animators and 
 
 ## Icon
 
-Google's 2025 Pixel icon style (Docs, Calendar, Drive): a white background, one bold geometric
-glyph and diagonal gradients from saturated blue into lavender. The glyph is the WF-1000XM5 case:
-a lighter lid (the "fold"), a white seam, the body and a green status light as the second colour.
-`docs/icon/google_style.py` writes the foreground, background and themed (monochrome) vectors from
-one geometry, and an SVG preview. The case is 48 dp wide, inside the 66 dp safe zone.
+The active adaptive launcher icon and animated splash use the coral case mark from
+`docs/icon/brand_icon.py`. Both use the same white background resource. The launcher also has a
+monochrome layer for themed icons. In light and dark mode the system splash uses Android's
+wallpaper surface role. With system animations disabled, the splash hands over immediately.
+The archived blue concept in `docs/icon/google_style.py` writes preview assets to a chosen folder.
 
 ## Not done yet (needs captures from the real earbuds first)
 
@@ -110,7 +112,7 @@ WF-1000XM5's own shape, traced from the product render (`docs/icon/device_pictur
 the truth, and the status line says when the earbuds left ("Disconnected 10:18"). Mode buttons
 keep their colors too; a tap connects.
 
-Large slots (lock-screen hub 416 × 275, home 4×2) get the dashboard: the name with the status on
+Large lock-screen slots (hub 416 × 275) get the dashboard. Home-screen noise control stays mode-only. The dashboard shows the name with the status on
 the right ("Updated 14:32", "Back to ANC at 14:40"); a middle row that takes every dp the header
 and the buttons leave, with how long you can listen as the big number (largest size that fits its
 column, red under an hour) and the case's share under it, beside the three rings as large as the
@@ -243,3 +245,28 @@ stays whenever the case's level is known, so nothing moves while a change is on 
 Earbud settings are grouped by what they are about: Sound, Conversation, Touch and gestures, Calls,
 Wearing, Spoken prompts. Each row has its own Material Symbol in one style (the same light circle in
 the wallpaper's primary); rows the connected earbuds never answer are left out. Commits are signed (Verified on GitHub).
+
+
+## Earbuds 1.23 on Pixel
+
+- Home's settings button opens App settings directly. The dock keeps three touch targets and uses
+  symbols alone when space is limited. Home distinguishes pairing, permission, Bluetooth radio,
+  connection and reconnect states, and labels the current codec only after a live report.
+- The Home battery rings use their own green and low-charge colors. The wallpaper palette
+  continues to style controls and surfaces.
+- The home-screen noise control widget stays mode-only. Larger lock-screen slots on supported
+  launchers can show the dashboard. The separate battery widget supports both hosts.
+- Gemini mode changes report success after read-back. Quick Settings follows the Android
+  link even when the app has no control socket. Companion events are scoped to the selected pair.
+- The haptics setting applies to Compose controls across the main app. Predictive Back cancels
+  an earlier recovery when a new gesture starts and respects disabled system animations.
+
+### 120 Hz device profiling
+
+Use a Pixel with Smooth Display enabled and verify the refresh rate on-device, then run
+`adb shell dumpsys gfxinfo ua.olex.sonyanc reset`. Switch ANC and Ambient several times,
+drag the Ambient slider, and open and close the Battery page with both the back arrow and
+predictive back. Capture `adb shell dumpsys gfxinfo ua.olex.sonyanc framestats`.
+At 120 Hz the frame interval is about 8.33 ms. Use the reported frame deadlines and jank
+counts to evaluate the gestures. Take a second capture with the charging wave idle to distinguish
+its intentional lower frame-rate request from interaction performance.

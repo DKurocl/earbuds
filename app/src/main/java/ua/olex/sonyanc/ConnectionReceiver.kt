@@ -53,13 +53,17 @@ class ConnectionReceiver : BroadcastReceiver() {
                 // The sheet comes from Stay in sync's presence event, the moment Android lets a
                 // companion open a screen; this broadcast only backs it up if that has not come.
                 delay(SHEET_BACKUP_MS)
+                if (Prefs.deviceAddress(ctx) != saved || Prefs.linked(ctx) != true) return@launch
                 ConnectedSheet.show(ctx, "Bluetooth")
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS - SHEET_BACKUP_MS)
+                if (Prefs.deviceAddress(ctx) != saved || Prefs.linked(ctx) != true) return@launch
                 withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(apply) }
                 // Normally LinkService's presence event does this; the broadcast backs it up.
-                if (LiveLink.enabled(ctx)) Headphones.stay(true)
-                CaseReminder.onEarbudsOut(ctx)
+                if (Prefs.deviceAddress(ctx) == saved && Prefs.linked(ctx) == true) {
+                    if (LiveLink.enabled(ctx)) Headphones.stay(true)
+                    CaseReminder.onEarbudsOut(ctx)
+                }
             } finally {
                 pending.finish()
             }

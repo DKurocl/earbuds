@@ -109,15 +109,19 @@ class ModeWidget : AppWidgetProvider() {
             val linked=Prefs.linked(ctx)
             for(id in ids) {
                 val sizes=Widgets.sizes(mgr.getAppWidgetOptions(id),FALLBACK)
-                mgr.updateAppWidget(id,Widgets.forSizes(sizes){viewsFor(ctx,it.width,it.height,current,busyMode,linked=linked)})
+                val category = mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_HOST_CATEGORY)
+                val showDashboard = category == android.appwidget.AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD
+                mgr.updateAppWidget(id,Widgets.forSizes(sizes){
+                    viewsFor(ctx,it.width,it.height,current,busyMode,linked=linked,showDashboard=showDashboard)
+                })
             }
         }
 
         /** The exact views for one widget size. The debug gallery and the picker preview use this too. */
         internal fun viewsFor(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?=null,
                               interactive:Boolean=true,linked:Boolean?=Prefs.linked(ctx),
-                              battery:Pair<SonyProtocol.Battery,Long>?=Prefs.lastBattery(ctx)):RemoteViews {
-        WidgetLayout.dashboard(width,height,Widgets.lineHeight(ctx,16f,"google-sans-text-medium"),
+                              battery:Pair<SonyProtocol.Battery,Long>?=Prefs.lastBattery(ctx), showDashboard:Boolean=true):RemoteViews {
+        if (showDashboard) WidgetLayout.dashboard(width,height,Widgets.lineHeight(ctx,16f,"google-sans-text-medium"),
             Widgets.lineHeight(ctx,14f,"google-sans-text-medium"),Widgets.lineHeight(ctx,13f),
             SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)})?.let {
             return dashboard(ctx,it,current,pending,interactive,linked,battery)

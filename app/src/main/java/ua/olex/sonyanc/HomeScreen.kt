@@ -69,16 +69,19 @@ fun HushScreen(
     onConnection: () -> Unit = {}, haptics: Boolean = true,
     batteryRefreshing: Boolean = false, batteryFresh: Boolean = true, onBattery: () -> Unit = {},
     codec: CodecProtocol.State? = null, codecRefreshing: Boolean = false,
-    deviceName: String = "WF-1000XM5", onAppSettings: () -> Unit = onSettings,
+    deviceName: String = "WF-1000XM5",
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
     batterySeenAt: Long? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null, onBatteryDetails: () -> Unit = {},
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, ambientUntil: Long? = null, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
+    linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true, codecLive: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
     val state = pending ?: nc
-    val ready = status == Headphones.Status.CONNECTED
+    val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
+    val connecting = status == Headphones.Status.CONNECTING && linked != false
+    val canControl = granted && hasDevice && bluetoothOn && paired && linked != false
     val feedback = LocalHapticFeedback.current
     fun choose(value: NcState) {
         if (haptics) feedback.performHapticFeedback(HapticFeedbackType.SegmentTick)
@@ -90,7 +93,7 @@ fun HushScreen(
             Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
-            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).introFade().semantics { contentDescription = "Settings" }) {
+            IconButton(onClick = onSettings, modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
         }
@@ -102,7 +105,7 @@ fun HushScreen(
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
-            isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = onBattery, state = pull,
+            isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
             // The page ends above the floating toolbar: nothing scrolls under it or shows behind it.
             modifier = Modifier.fillMaxSize().padding(bottom = dockHeight),
             indicator = {
@@ -111,16 +114,28 @@ fun HushScreen(
             },
         ) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = UiTokens.pageInset).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(UiTokens.homeSectionGap),
         ) {
-            // No banner for a link problem: the status line under the name says it quietly, and
-            // Connect is right below. (Setup cards still explain a missing permission or device.)
-            Box(Modifier.introFade()) { Header(deviceName, status, codec, batteryRefreshing, lastSeen, problem = error.takeIf { granted && hasDevice }) }
+            // Keep connection feedback under the device name so the controls stay in place.
+            val connectionLabel = when {
+                !granted -> "Bluetooth access required"
+                !bluetoothOn -> "Bluetooth is off"
+                !hasDevice -> "No earbuds selected"
+                !paired -> "Earbuds are no longer paired"
+                ready -> "Connected" + (codec?.takeIf { codecLive && it.isKnown }?.let { " · ${it.label}" } ?: "")
+                linked == false -> lastSeen?.let {
+                    "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
+                } ?: "Earbuds disconnected"
+                connecting -> statusText(status)
+                else -> error ?: statusText(status)
+            }
+            Box(Modifier.introFade()) { Header(deviceName, connectionLabel, connecting || (ready && batteryRefreshing)) }
 
             when {
                 !granted -> SetupCard("Allow Bluetooth access", "Earbuds talks to your WF-1000XM5 directly. Nothing leaves your phone.", "Allow", Glyph.BLUETOOTH, onPermission)
-                !hasDevice -> SetupCard("Choose your earbuds", "Pair your WF-1000XM5 in Android Bluetooth settings, then pick it here.", "Choose earbuds", Glyph.EARBUDS, onPick)
+                !bluetoothOn -> SetupCard("Turn on Bluetooth", "Connect your earbuds in Android Bluetooth settings.", "Bluetooth settings", Glyph.BLUETOOTH, onBluetooth)
+                !hasDevice || !paired -> SetupCard("Choose your earbuds", "Pair your WF-1000XM5 in Android Bluetooth settings, then pick it here.", "Choose earbuds", Glyph.EARBUDS, onPick)
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Batteries(battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery, confirmed = nc?.mode.takeIf { pending == null })
@@ -135,24 +150,23 @@ fun HushScreen(
                         // Only what is used day to day. The control link opens and closes by itself (no
                         // Disconnect); Android's Bluetooth settings are one level down in Device info.
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
-                        if (!ready) BigAction(Glyph.REFRESH, if (status == Headphones.Status.CONNECTING) "Connecting…" else "Connect",
-                            enabled = status != Headphones.Status.CONNECTING, onClick = onConnect)
+                        if (!ready && linked != false) BigAction(Glyph.REFRESH, if (connecting) "Connecting…" else "Connect",
+                            enabled = !connecting, onClick = onConnect)
                     }
 
                     // What the chosen mode offers, in the page as a card (as Pixel Buds settings do),
                     // never floating: Ambient's level and voice focus, or Speak-to-Chat and
                     // "Ambient for a moment" with noise cancelling.
-                    ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
+                    if (ready) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
 
                     Box(Modifier.introFade()) { ListGroup("More controls") {
                         // Battery opens from the listening-time tiles above; no second entry here.
                         item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
                         item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls, Speak-to-Chat, voice prompts", onClick = onEarbuds) }
                         item {
-                            val codecLine = if (ready) codec?.label else null
+                            val codecLine = if (ready && codecLive) codec?.label else null
                             NavRow(it, Glyph.INFO, "Device info", codecLine?.let { c -> "Codec · $c" } ?: "Codec, firmware, power", onClick = onConnection)
                         }
-                        item { NavRow(it, Glyph.SETTINGS, "App settings", "Appearance, shortcuts, device", onClick = onAppSettings) }
                     } }
                 }
             }
@@ -160,8 +174,8 @@ fun HushScreen(
         }
         }
         // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
-        if (granted && hasDevice) ModeDock(
-            state, pending, ::choose,
+        if (granted && hasDevice && bluetoothOn && paired) ModeDock(
+            state, pending, canControl, ::choose,
             Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
         )
         }
@@ -169,22 +183,15 @@ fun HushScreen(
 }
 
 @Composable
-private fun Header(name: String, status: Headphones.Status, codec: CodecProtocol.State?, busy: Boolean, lastSeen: Long? = null, problem: String? = null) {
+private fun Header(name: String, status: String, busy: Boolean) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        // Renaming is rare: it lives in App settings, not next to the name.
-        Text(name, style = MaterialTheme.typography.headlineMediumEmphasized, textAlign = TextAlign.Center, maxLines = 1,
-            overflow = TextOverflow.Ellipsis)
+        Text(name, style = MaterialTheme.typography.headlineMediumEmphasized, textAlign = TextAlign.Center,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val line = when (status) {
-                Headphones.Status.CONNECTED -> "Connected" + (codec?.takeIf { it.isKnown }?.let { " · ${it.label}" } ?: "")
-                Headphones.Status.CONNECTING -> statusText(status)
-                // Android reported the earbuds gone (case, range or Bluetooth off), or why the link failed.
-                else -> lastSeen?.let { "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS) }
-                    ?: problem ?: statusText(status)
-            }
-            Text(line, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            if (status == Headphones.Status.CONNECTING || busy) LoadingIndicator(Modifier.size(20.dp))
+            Text(status, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
+                textAlign = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            if (busy) LoadingIndicator(Modifier.size(20.dp))
         }
     }
 }
@@ -212,7 +219,7 @@ internal fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, 
         }
     }
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).clickable(enabled = ready, onClickLabel = "Refresh battery", onClick = onRefresh)
+        Modifier.fillMaxWidth().clip(UiTokens.cardShape).clickable(enabled = ready, onClickLabel = "Refresh battery", onClick = onRefresh)
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
@@ -235,13 +242,11 @@ internal fun Batteries(b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, 
 @Composable
 private fun BatteryRing(label: String, value: Int?, charging: Boolean, live: Boolean, swell: () -> Float = { 1f }, art: @Composable () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val dark = isSystemInDarkTheme()
-    val good = if (dark) Color(0xFF6DD58C) else Color(0xFF1E8E3E)
-    val onGood = if (dark) Color(0xFF0A3818) else Color.White
+    val normal = batteryIndicator
     val (ringColor, chipContent) = when {
         value == null -> cs.outlineVariant to cs.onSurfaceVariant
         value <= 20 && !charging -> cs.error to cs.onError
-        else -> good to onGood
+        else -> normal
     }
     val color = if (live || value == null) ringColor else ringColor.copy(alpha = .55f)
     val track = cs.surfaceContainerHighest
@@ -390,7 +395,7 @@ private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockE
         enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec()),
         exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec()),
     ) {
-        Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             AnimatedContent(
                 lastCard, label = "mode card",
                 transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
@@ -420,12 +425,13 @@ private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockE
  * scroll. The page ends above it, so it never covers a row.
  */
 @Composable
-private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> Unit, modifier: Modifier = Modifier) {
+private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onChoose: (NcState) -> Unit, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
-    Column(
+    BoxWithConstraints(
         modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.Center,
     ) {
+        val iconOnly = maxWidth < 320.dp || LocalDensity.current.fontScale >= 1.3f
         // Material 3 Expressive's floating toolbar: a pill above the page with the three modes. The
         // pressed mode widens and its neighbours give way (animateWidth); the chosen one fills in.
         Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
@@ -439,7 +445,7 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
                     customItem(
                         buttonGroupContent = {
                             ModeButton(
-                                mode, state?.mode == mode, pending?.mode == mode, interactions[index],
+                                mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly, interactions[index],
                                 Modifier.weight(1f).animateWidth(interactions[index]),
                             ) { onChoose((state ?: NcState(mode)).copy(mode = mode)) }
                         },
@@ -454,7 +460,7 @@ private fun ModeDock(state: NcState?, pending: NcState?, onChoose: (NcState) -> 
 /** One mode in the floating toolbar: Material's toggle button, filled when chosen. */
 @Composable
 private fun ModeButton(
-    mode: Mode, selected: Boolean, applying: Boolean,
+    mode: Mode, selected: Boolean, applying: Boolean, enabled: Boolean, iconOnly: Boolean,
     interaction: MutableInteractionSource, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -462,6 +468,7 @@ private fun ModeButton(
     ToggleButton(
         checked = selected,
         onCheckedChange = { onClick() },
+        enabled = enabled,
         // Toolbar items: no container at rest, a full pill when chosen, squarer under the finger.
         shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = RoundedCornerShape(16.dp), checkedShape = CircleShape),
         colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
@@ -469,16 +476,16 @@ private fun ModeButton(
         interactionSource = interaction,
         modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
-            .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label },
+            .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {
         if (applying) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
         // The chosen mode's icon thickens with a small spring pop; a press does the same at once.
         else HushIcon(mode.glyph, Modifier.size(24.dp), LocalContentColor.current, bold = selected || pressed)
-        Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
-        // Fixed size: the button group squeezes its neighbours while one is pressed, and a text
-        // that fits itself to the width would shrink and grow with every press.
-        Text(mode.short, style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Visible)
+        if (!iconOnly) {
+            Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
+            Text(mode.short, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false,
+                overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -586,7 +593,7 @@ private fun SoftChip(
 @Composable
 private fun SetupCard(title: String, body: String, action: String, glyph: Glyph, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(28.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(shape = CircleShape, color = cs.primaryContainer, modifier = Modifier.size(72.dp)) {
                 Box(contentAlignment = Alignment.Center) { HushIcon(glyph, Modifier.size(32.dp), cs.onPrimaryContainer) }

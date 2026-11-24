@@ -5,7 +5,6 @@ package ua.olex.sonyanc
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -157,6 +156,8 @@ fun AppSettingsContent(
             if (homeMode != null) item {
                 SwitchRow(it, Glyph.HQ, "Best sound at home", "LDAC at home, a steadier link when you're out", qualityByPlace, onChange = onQualityByPlace)
             }
+        }
+        ListGroup("Timers & alerts") {
             item {
                 ChoiceRow(it, Glyph.TIMER, "Ambient for a moment", AmbientTimer.CHOICES.map { m -> m to "$m minutes, then back" }, ambientMinutes) { m ->
                     onAmbientMinutes(m)
@@ -188,11 +189,11 @@ fun AppSettingsContent(
             }
         }
         ListGroup("Appearance") {
-            item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Match the colors of your wallpaper", dynamicColor, onChange = onDynamicColor) }
+            item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Use your wallpaper palette in the app", dynamicColor, onChange = onDynamicColor) }
             item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "A tap when you choose, a pulse when the earbuds confirm", haptics, onChange = onHaptics) }
             if (haptics) item { NavRow(it, Glyph.TUNE, "Vibrations", "How each answer feels: try and choose", onClick = onVibrations) }
         }
-        if (canAddTile || canPinWidget) ListGroup("Shortcuts") {
+        if (canAddTile || canPinWidget) ListGroup("System shortcuts") {
             if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Cycle noise control from the notification shade", onClick = onAddTile) }
             item {
                 ChoiceRow(it, Glyph.REFRESH, "Quick Settings tile cycles", listOf(0 to "ANC → Ambient → Off", 1 to "ANC ↔ Ambient"),
@@ -221,7 +222,7 @@ fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () ->
             "Commands sent to the earbuds (→) and their replies (←).",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),
         )
-        Surface(shape = RoundedCornerShape(24.dp), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = UiTokens.compactCardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
             Text(
                 log.joinToString("\n").ifEmpty { "No messages yet" },
                 fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 16.sp,
@@ -235,7 +236,7 @@ fun DiagnosticsContent(log: List<String>, onBack: () -> Unit = {}, onCopy: () ->
 @Composable
 private fun HintCard(title: String, body: String, action: String, onAction: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(24.dp), color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = UiTokens.compactCardShape, color = cs.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
             Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)

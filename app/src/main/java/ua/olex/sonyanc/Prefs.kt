@@ -1,6 +1,10 @@
 package ua.olex.sonyanc
 
 import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("sonyanc", Context.MODE_PRIVATE)
@@ -87,6 +91,19 @@ object Prefs {
     // ---- Android's Bluetooth link, from ACL broadcasts (see ConnectionReceiver) ----
     /** True/false once a broadcast or a working control link said so; null while unknown. */
     fun linked(ctx: Context): Boolean? = p(ctx).takeIf { it.contains("linked") }?.getBoolean("linked", false)
+    internal fun linkedChanges(ctx: Context) = changes(ctx, "linked") { linked(ctx) }
+    internal fun timerChanges(ctx: Context) = changes(ctx, "timer_until") { AmbientTimer.until(ctx) }
+
+    private fun <T> changes(ctx: Context, key: String, value: () -> T) = callbackFlow {
+        val prefs = p(ctx)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changed ->
+            if (changed == key) trySend(value())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(value())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
     fun setLinked(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("linked", value).apply()
     /** When the earbuds last disconnected from the phone (usually: went back in the case). */
     fun lastSeen(ctx: Context): Long = p(ctx).getLong("last_seen", 0L)
