@@ -9,6 +9,22 @@
     android:background="@drawable/w_bar_bg" android:padding="6dp">
 <LinearLayout android:id="@+id/w_group"
     android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="center"
+    android:orientation="vertical">
+<LinearLayout android:id="@+id/w_head"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:paddingHorizontal="10dp" android:paddingBottom="8dp"
+    android:gravity="center_vertical" android:orientation="horizontal">
+    <ImageView android:layout_width="18dp" android:layout_height="18dp"
+        android:src="@drawable/w_icon_earbuds" android:tint="@color/w_bar_text" android:importantForAccessibility="no" />
+    <TextView android:id="@+id/w_head_name" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:layout_marginStart="8dp" android:fontFamily="google-sans-text-medium" android:textSize="14sp"
+        android:includeFontPadding="false" android:singleLine="true" android:ellipsize="end" android:textColor="@color/w_bar_text" />
+    <TextView android:id="@+id/w_head_battery" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="8dp" android:fontFamily="google-sans-text" android:textSize="13sp"
+        android:includeFontPadding="false" android:singleLine="true" android:textColor="@color/w_sub_text" />
+</LinearLayout>
+<LinearLayout
+    android:layout_width="match_parent" android:layout_height="wrap_content"
     android:gravity="center_vertical" android:orientation="horizontal" android:baselineAligned="false">
     <FrameLayout android:id="@+id/w_open"
         android:layout_width="48dp" android:layout_height="48dp"
@@ -80,5 +96,6 @@
                 </FrameLayout>
         </LinearLayout>
     </FrameLayout>
+</LinearLayout>
 </LinearLayout>
 </FrameLayout>

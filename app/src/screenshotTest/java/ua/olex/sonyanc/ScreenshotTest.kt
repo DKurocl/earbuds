@@ -250,7 +250,7 @@ class ScreenshotTest {
                         val views = if (battery) BatteryWidget.viewsFor(
                             ctx, w.toFloat(), h.toFloat(),
                             if (i == 3) SonyProtocol.Battery(18, 64, null, rightCharging = true) else SonyProtocol.Battery(82, 79, 56, caseCharging = true),
-                            System.currentTimeMillis(), linked = i != 4, lastSeen = System.currentTimeMillis() - 3_600_000, interactive = false,
+                            clock(), linked = i != 4, lastSeen = clock() - 3_600_000, interactive = false,
                         ) else ModeWidget.viewsFor(ctx, w.toFloat(), h.toFloat(), SonyProtocol.Mode.entries[i % 3],
                             pending = if (i == 2) SonyProtocol.Mode.ANC else null, interactive = false, linked = i != 6)
                         addView(views.apply(ctx, this), FrameLayout.LayoutParams(-1, -1))
@@ -260,9 +260,12 @@ class ScreenshotTest {
         }
     }
 
+    /** Widgets print the reading's clock time ("Updated 2:00 PM"): always today at 14:00, so goldens never drift with the hour. */
+    private fun clock() = java.time.LocalDate.now().atTime(14, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+
     @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
     @Test fun dashboards() = shoot("widgets-dashboard") {
-        val now = System.currentTimeMillis()
+        val now = clock()
         Column(Modifier.background(Color(0xFF0B1530)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf(Triple(416, 275, true), Triple(340, 208, false), Triple(416, 230, null)).forEach { (w, h, linked) ->
                 Text("$w × $h dp", color = Color(0xFFCAD1E4), style = MaterialTheme.typography.labelMedium)

@@ -140,8 +140,21 @@ class ModeWidget : AppWidgetProvider() {
             val v=RemoteViews(ctx.packageName,R.layout.widget_switch)
             // One row of 48 dp controls, shorter in a short slot. A narrow slot drops the earbuds
             // button (the bar's edge still opens the app) so the modes keep room.
-            val bar=minOf(48f,maxOf(32f,height-12f))
-            val open=width>=220f
+            // A slot tall enough for a title row gets one, as Google's widgets have: the earbuds'
+            // name and charge, and tapping it opens the app. Shorter slots get the earbuds button.
+            val head=height>=92f
+            val bar=minOf(48f,maxOf(32f,height-12f-(if(head) 30f else 0f)))
+            val open=!head && width>=220f
+            v.setViewVisibility(R.id.w_head,if(head) View.VISIBLE else View.GONE)
+            if(head) {
+                val name=Prefs.displayName(ctx) ?: Prefs.deviceName(ctx) ?: "Earbuds"
+                val b=Prefs.lastBattery(ctx)?.first
+                val buds=listOfNotNull(b?.left,b?.right).minOrNull()
+                // Narrow and away: the status is what matters, so it takes the name's place.
+                val narrowAway=away && width<220f
+                v.setTextViewText(R.id.w_head_name,if(narrowAway) "Not connected" else name)
+                v.setTextViewText(R.id.w_head_battery,when { narrowAway -> ""; away -> "Not connected"; buds!=null -> "$buds%"; else -> "" })
+            }
             val slot=(width-12f-(if(open) bar+6f else 0f))/3f
             val labels=slot>=20f+6f+SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}+8f
             v.setViewVisibility(R.id.w_open,if(open) View.VISIBLE else View.GONE)
@@ -160,6 +173,7 @@ class ModeWidget : AppWidgetProvider() {
                 val openApp=PendingIntent.getActivity(ctx,101,open,flags)
                 v.setOnClickPendingIntent(android.R.id.background,openApp)
                 v.setOnClickPendingIntent(R.id.w_open,openApp)
+                v.setOnClickPendingIntent(R.id.w_head,openApp)
             }
             for(stop in stops) {
                 val on=stop.mode==chosen
