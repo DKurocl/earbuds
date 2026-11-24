@@ -94,10 +94,13 @@ fun HushScreen(
             Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
-            if (onProfiles != null) IconButton(onClick = onProfiles,
+            // Top actions in tonal circles, as Google's Expressive apps draw them.
+            val tonal = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.surfaceContainerHigh)
+            if (onProfiles != null) FilledTonalIconButton(onClick = onProfiles, colors = tonal,
                 modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Personal profiles" },
             ) { HushIcon(Glyph.TUNE, color = cs.onSurfaceVariant) }
-            IconButton(onClick = onSettings, modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
+            Spacer(Modifier.width(4.dp))
+            FilledTonalIconButton(onClick = onSettings, colors = tonal, modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
                 HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
             }
         }
@@ -199,7 +202,8 @@ fun HushScreen(
 private fun Header(name: String, status: String, busy: Boolean) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(name, style = MaterialTheme.typography.headlineMediumEmphasized, textAlign = TextAlign.Center,
+        // The device name is the page title: large, rounded and heavy, as Pixel Buds shows it.
+        Text(name, style = MaterialTheme.typography.headlineLargeEmphasized, textAlign = TextAlign.Center,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(status, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,

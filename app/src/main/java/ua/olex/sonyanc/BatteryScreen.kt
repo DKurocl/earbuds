@@ -108,8 +108,8 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
             val minutes = BatteryLife.budsMinutes(battery, mode, measured?.rate)
             if (minutes != null) ListGroup("Listening time left") {
                 item {
-                    val source = if (measured == null) "Sony rated runtime"
-                        else "Based on ${BatteryLife.short(measured.minutes.toInt())} of recorded drain"
+                    val source = if (measured == null) "Sony's rating, until it learns your use"
+                        else "From your last ${BatteryLife.short(measured.minutes.toInt())} of listening"
                     val stale = if (device.liveBatteryParts.isEmpty()) " · Last reading" else ""
                     InfoRow(it, Glyph.BATTERY, BatteryLife.short(minutes), source + stale)
                 }

@@ -62,7 +62,9 @@ fun PageScaffold(
             LargeFlexibleTopAppBar(
                 title = { Text(title, maxLines = 1) },
                 navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Back" }) { HushIcon(Glyph.BACK) }
+                    // Back in a tonal circle, as Android 16's own pages draw it.
+                    FilledTonalIconButton(onClick = onBack, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        modifier = Modifier.padding(start = 4.dp).semantics { contentDescription = "Back" }) { HushIcon(Glyph.BACK) }
                 },
                 actions = actions,
                 scrollBehavior = scroll,
