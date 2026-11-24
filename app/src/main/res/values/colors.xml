@@ -14,12 +14,12 @@
     <color name="w_on_ring">@android:color/system_accent1_0</color>
     <color name="w_disc_fill">@android:color/system_accent1_100</color>
     <color name="w_glyph">@android:color/system_accent1_700</color>
-    <!-- The mode bar: the same tokens as the app's floating toolbar (surface container high,
-         primary for the chosen mode, secondary container for the open-the-app button). -->
-    <color name="w_bar">@android:color/system_surface_container_high_light</color>
+    <!-- The mode bar in the wallpaper's tones: a tinted surface (accent2), primary for the chosen
+         mode, and tertiary (accent3) for the app button, so the widget is never plain grey. -->
+    <color name="w_bar">@android:color/system_accent2_50</color>
     <color name="w_bar_on">@android:color/system_primary_light</color>
     <color name="w_bar_on_text">@android:color/system_on_primary_light</color>
-    <color name="w_bar_text">@android:color/system_on_surface_light</color>
-    <color name="w_open">@android:color/system_accent2_100</color>
-    <color name="w_open_text">@android:color/system_accent2_900</color>
+    <color name="w_bar_text">@android:color/system_accent2_900</color>
+    <color name="w_open">@android:color/system_accent3_100</color>
+    <color name="w_open_text">@android:color/system_accent3_800</color>
 </resources>

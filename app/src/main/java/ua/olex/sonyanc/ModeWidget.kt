@@ -148,8 +148,9 @@ class ModeWidget : AppWidgetProvider() {
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
             val labels=if(stacked) slot>=widest+12f else slot>=iconSize+6f+widest+8f
             v.setViewVisibility(R.id.w_open,if(open) View.VISIBLE else View.GONE)
+            // The cookie keeps its shape: square, up to 56 dp, centered beside the modes.
             v.setViewLayoutWidth(R.id.w_open,minOf(bar,56f),TypedValue.COMPLEX_UNIT_DIP)
-            v.setViewLayoutHeight(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutHeight(R.id.w_open,minOf(bar,56f),TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutHeight(R.id.w_track,bar,TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutMargin(R.id.w_track,RemoteViews.MARGIN_START,if(open) 6f else 0f,TypedValue.COMPLEX_UNIT_DIP)
             val chosen=pending ?: current
