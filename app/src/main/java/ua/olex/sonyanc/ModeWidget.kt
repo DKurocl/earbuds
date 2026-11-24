@@ -22,8 +22,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Three controls only: ANC, Ambient, Off, in the app's floating toolbar look: an earbuds button
- * that opens the app and a pill that slides to the chosen mode. A tap on a mode reconnects on
+ * Three controls only: ANC, Ambient, Off, in the app's floating toolbar look: a pill that slides
+ * to the chosen mode; the wide side edges open the app. A tap on a mode reconnects on
  * demand and sets it.
  * No persistent service or notification. Large slots get the dashboard.
  */
@@ -131,28 +131,23 @@ class ModeWidget : AppWidgetProvider() {
         private fun spacersFor(index:Int)=when(index) { 0 -> setOf(2,3); 1 -> setOf(0,3); else -> setOf(0,1) }
 
         /**
-         * The app's floating mode toolbar as a widget: an earbuds button that opens the app, then
-         * the three modes with a pill that slides to the chosen one (the pending choice wins).
+         * The app's floating mode toolbar as a widget: the three modes with a pill that slides to
+         * the chosen one (the pending choice wins); the wide side edges open the app.
          * Labels sit beside the icons when the slot is wide enough, as in the app.
          */
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
             // The modes fill the slot's height: a 48 dp row in a short slot, taller buttons with the
-            // label under a bigger icon in a tall one. The app button on the left matches their height.
+            // label under a bigger icon in a tall one. 
             val bar=minOf(140f,maxOf(32f,height-12f))
             val stacked=bar>=84f
             val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_switch_tall else R.layout.widget_switch)
             val iconSize=when { bar>=110f -> 32f; bar>=84f -> 28f; else -> 20f }
-            val open=width>=220f
-            val slot=(width-12f-(if(open) minOf(bar,56f)+6f else 0f))/3f
+            // Wide side edges (20 dp each) are the way into the app; the modes take the rest.
+            val slot=(width-40f)/3f
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
             val labels=if(stacked) slot>=widest+12f else slot>=iconSize+6f+widest+8f
-            v.setViewVisibility(R.id.w_open,if(open) View.VISIBLE else View.GONE)
-            // The cookie keeps its shape: square, up to 56 dp, centered beside the modes.
-            v.setViewLayoutWidth(R.id.w_open,minOf(bar,56f),TypedValue.COMPLEX_UNIT_DIP)
-            v.setViewLayoutHeight(R.id.w_open,minOf(bar,56f),TypedValue.COMPLEX_UNIT_DIP)
             v.setViewLayoutHeight(R.id.w_track,bar,TypedValue.COMPLEX_UNIT_DIP)
-            v.setViewLayoutMargin(R.id.w_track,RemoteViews.MARGIN_START,if(open) 6f else 0f,TypedValue.COMPLEX_UNIT_DIP)
             val chosen=pending ?: current
             // No reading yet: the pill waits in the middle, faint.
             val at=chosen?.let{stops.indexOfFirst{s->s.mode==it}} ?: 1
@@ -163,7 +158,6 @@ class ModeWidget : AppWidgetProvider() {
                 val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 val openApp=PendingIntent.getActivity(ctx,101,open,flags)
                 v.setOnClickPendingIntent(android.R.id.background,openApp)
-                v.setOnClickPendingIntent(R.id.w_open,openApp)
             }
             for(stop in stops) {
                 val on=stop.mode==chosen
