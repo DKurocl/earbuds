@@ -1,16 +1,12 @@
 package ua.olex.sonyanc
 
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.ui.graphics.Path
 import kotlin.math.cos
-import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Material 3 Expressive's soft shapes (cookie, sunny, clover) as one family: a circle with
- * [lobes] scallops [depth] deep, so a row's icon shape says what kind of setting it is without
- * another container: sound rows a sunny, connection rows a cookie, battery and routine rows a
- * clover. Pure geometry, no state, drawn once per size.
+ * Material 3 Expressive's soft cookie shape: a circle with [lobes] scallops [depth] deep. Used
+ * for accents only (the equalizer's held band); rows keep Android's plain icon shapes.
  */
 internal object Scallop {
     fun path(cx: Float, cy: Float, radius: Float, lobes: Int, depth: Float, into: Path = Path(), points: Int = 96): Path {
@@ -24,12 +20,4 @@ internal object Scallop {
         into.close()
         return into
     }
-
-    fun shape(lobes: Int, depth: Float) = GenericShape { size, _ ->
-        addPath(path(size.width / 2f, size.height / 2f, min(size.width, size.height) / 2f, lobes, depth))
-    }
-
-    val sunny = shape(8, 0.06f)
-    val cookie = shape(6, 0.08f)
-    val clover = shape(4, 0.14f)
 }
