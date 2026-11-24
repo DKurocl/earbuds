@@ -128,12 +128,14 @@ private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> 
     val cs = MaterialTheme.colorScheme
     val (container, glyphColor, shape) = when {
         danger -> Triple(cs.errorContainer, cs.onErrorContainer, RoundedCornerShape(12.dp))
-        g in linkGlyphs -> Triple(cs.secondaryFixed, cs.onSecondaryFixed, RoundedCornerShape(13.dp))
-        g in routineGlyphs -> Triple(cs.tertiaryFixedDim, cs.onTertiaryFixed, RoundedCornerShape(16.dp))
-        else -> Triple(cs.primaryFixedDim, cs.onPrimaryFixed, CircleShape)
+        // The shape tells the kind of row as the color does (Scallop.kt): connection a cookie,
+        // battery and routines a clover, sound and everything else a sunny.
+        g in linkGlyphs -> Triple(cs.secondaryFixed, cs.onSecondaryFixed, Scallop.cookie)
+        g in routineGlyphs -> Triple(cs.tertiaryFixedDim, cs.onTertiaryFixed, Scallop.clover)
+        else -> Triple(cs.primaryFixedDim, cs.onPrimaryFixed, Scallop.sunny)
     }
 
-    Surface(shape = shape, color = container, contentColor = glyphColor, modifier = Modifier.size(40.dp)) {
+    Surface(shape = shape, color = container, contentColor = glyphColor, modifier = Modifier.size(42.dp)) {
         Box(contentAlignment = Alignment.Center) { HushIcon(g, Modifier.size(22.dp), glyphColor) }
     }
 } }

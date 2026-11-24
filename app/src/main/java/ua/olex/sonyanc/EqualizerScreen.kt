@@ -356,9 +356,17 @@ private fun EqCurve(values: List<Int>, enabled: Boolean, active: Boolean, held: 
         drawPath(area, tone.copy(alpha = .16f))
         drawPath(line, tone, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
         points.forEachIndexed { i, c ->
-            val r = if (held == i) 11.dp.toPx() else 6.dp.toPx()
-            drawCircle(dot, r + 2.dp.toPx(), c)
-            drawCircle(tone, r, c)
+            // A held band grows into a cookie (the app's sound shape family, Scallop.kt), so the
+            // finger's point reads as picked up; the others stay small round dots.
+            if (held == i) {
+                val r = 13.dp.toPx()
+                drawPath(Scallop.path(c.x, c.y, r + 2.dp.toPx(), 8, 0.08f), dot)
+                drawPath(Scallop.path(c.x, c.y, r, 8, 0.08f), tone)
+            } else {
+                val r = 6.dp.toPx()
+                drawCircle(dot, r + 2.dp.toPx(), c)
+                drawCircle(tone, r, c)
+            }
             if (held == i) {
                 val layout = measurer.measure("${signed(values[i])} dB · ${bandLabel(BAND_HZ[i])}", valueStyle)
                 val bw = layout.size.width + 20.dp.toPx(); val bh = layout.size.height + 10.dp.toPx()
