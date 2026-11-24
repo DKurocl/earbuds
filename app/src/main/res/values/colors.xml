@@ -22,11 +22,4 @@
     <color name="w_bar_on">@android:color/system_primary_light</color>
     <color name="w_bar_on_text">@android:color/system_on_primary_light</color>
     <color name="w_bar_text">@android:color/system_accent2_900</color>
-    <!-- Each mode's own color, as the app's toolbar shows it: ANC primary, Ambient tertiary, Off secondary. -->
-    <color name="w_anc_on">@color/w_bar_on</color>
-    <color name="w_anc_on_text">@color/w_bar_on_text</color>
-    <color name="w_amb_on">@android:color/system_accent3_600</color>
-    <color name="w_amb_on_text">@android:color/system_accent3_0</color>
-    <color name="w_off_on">@android:color/system_accent2_600</color>
-    <color name="w_off_on_text">@android:color/system_accent2_0</color>
 </resources>

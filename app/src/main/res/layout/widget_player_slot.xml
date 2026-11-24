@@ -25,7 +25,7 @@
                 android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
                 android:alpha="0" android:importantForAccessibility="noHideDescendants">
                 <ImageView android:layout_width="22dp" android:layout_height="22dp"
-                    android:src="@drawable/w_icon_anc_bold" android:tint="@color/w_anc_on_text" />
+                    android:src="@drawable/w_icon_anc_bold" android:tint="@color/w_bar_on_text" />
                 <TextView android:id="@+id/w_anc_label_on" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:layout_marginTop="2dp"
                     android:paddingHorizontal="5dp" android:gravity="center" android:singleLine="true"
@@ -52,7 +52,7 @@
                 android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
                 android:alpha="0" android:importantForAccessibility="noHideDescendants">
                 <ImageView android:layout_width="22dp" android:layout_height="22dp"
-                    android:src="@drawable/w_icon_ambient_bold" android:tint="@color/w_amb_on_text" />
+                    android:src="@drawable/w_icon_ambient_bold" android:tint="@color/w_bar_on_text" />
                 <TextView android:id="@+id/w_amb_label_on" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:layout_marginTop="2dp"
                     android:paddingHorizontal="5dp" android:gravity="center" android:singleLine="true"
@@ -79,7 +79,7 @@
                 android:duplicateParentState="true" android:stateListAnimator="@animator/w_while_chosen"
                 android:alpha="0" android:importantForAccessibility="noHideDescendants">
                 <ImageView android:layout_width="22dp" android:layout_height="22dp"
-                    android:src="@drawable/w_icon_off_bold" android:tint="@color/w_off_on_text" />
+                    android:src="@drawable/w_icon_off_bold" android:tint="@color/w_bar_on_text" />
                 <TextView android:id="@+id/w_off_label_on" android:layout_width="match_parent"
                     android:layout_height="wrap_content" android:layout_marginTop="2dp"
                     android:paddingHorizontal="5dp" android:gravity="center" android:singleLine="true"
