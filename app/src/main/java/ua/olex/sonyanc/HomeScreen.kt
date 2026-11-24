@@ -659,8 +659,10 @@ private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boo
 @Composable
 private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, onClick: () -> Unit = {}, icon: @Composable (Color) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val accent = if (low) cs.errorContainer else cs.primaryContainer
-    val onAccent = if (low) cs.onErrorContainer else cs.onPrimaryContainer
+    // Calm tiles: a neutral icon disc, so the mode toolbar stays the screen's one accent; only a
+    // low battery takes color.
+    val accent = if (low) cs.errorContainer else cs.surfaceContainerHighest
+    val onAccent = if (low) cs.onErrorContainer else cs.onSurfaceVariant
     // Tapping either tile opens the Battery page (history and measured battery life) as a
     // normal page, the same way every other page opens.
     // Pressed, the tile settles in a little and its corners tighten, with Material's springs.

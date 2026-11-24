@@ -313,6 +313,20 @@ class ScreenshotTest {
     private fun clock() = java.time.LocalDate.now().atTime(14, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 
     @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
+    @Test fun statusWidgets() = shoot("widgets-status") {
+        Column(Modifier.background(Color(0xFF0B1530)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            listOf(SonyProtocol.Mode.ANC to true, SonyProtocol.Mode.AMBIENT to false).forEach { (mode, linked) ->
+                AndroidView(factory = { ctx ->
+                    FrameLayout(ctx).apply {
+                        val views = StatusWidget.viewsFor(ctx, mode, SonyProtocol.Battery(64, 71, 40, rightCharging = !linked) to clock(), linked, interactive = false)
+                        addView(views.apply(ctx, this), FrameLayout.LayoutParams(-1, -1))
+                    }
+                }, modifier = Modifier.size(180.dp, 180.dp))
+            }
+        }
+    }
+
+    @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
     @Test fun dashboards() = shoot("widgets-dashboard") {
         val now = clock()
         Column(Modifier.background(Color(0xFF0B1530)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

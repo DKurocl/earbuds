@@ -55,6 +55,20 @@ fun BatteryScreen(onBack: () -> Unit) {
 fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {}, health: List<WeekHealth> = emptyList(), device: DeviceState? = null) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Battery", onBack) {
+        // One line first, as Pixel's own battery page says it: until when the earbuds last.
+        val heroBattery = device?.battery
+        val heroMode = device?.nc?.mode
+        val heroMinutes = heroBattery?.let { BatteryLife.budsMinutes(it, heroMode, BatteryLog.drain(log, heroMode)?.rate) }
+        if (heroMinutes != null) {
+            val ctx = LocalContext.current
+            val until = android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(now + heroMinutes * 60_000L))
+            Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Until about $until", style = MaterialTheme.typography.headlineMediumEmphasized)
+                Text(BatteryLife.short(heroMinutes) + " of listening" +
+                    (BatteryLife.caseMinutes(heroBattery, heroMode, BatteryLog.drain(log, heroMode)?.rate)?.takeIf { it >= 10 }?.let { " · the case adds " + BatteryLife.short(it) } ?: ""),
+                    style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            }
+        }
         val week = log.filter { now - it.at in 0..7 * 24 * 60 * 60_000L }
         val separate = week.any { it.left != null || it.right != null }
         Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
