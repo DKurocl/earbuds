@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status widget's mode: a primary pill, as the chosen mode in the app's toolbar. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/w_on" />
+    <corners android:radius="999dp" />
+</shape>

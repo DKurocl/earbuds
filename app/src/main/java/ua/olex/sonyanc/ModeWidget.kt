@@ -95,6 +95,7 @@ class ModeWidget : AppWidgetProvider() {
         }
 
         fun refreshAll(ctx:Context) {
+            StatusWidget.refreshAll(ctx) // the 2×2 glance shows both mode and battery
             val mgr=AppWidgetManager.getInstance(ctx)
             val ids=mgr.getAppWidgetIds(ComponentName(ctx,ModeWidget::class.java))
             if(ids.isNotEmpty()) render(ctx,mgr,ids)

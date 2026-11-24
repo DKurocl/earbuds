@@ -493,7 +493,8 @@ private fun ModeButton(
         colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
-        modifier = modifier.heightIn(min = ButtonDefaults.MediumContainerHeight)
+        // The screen's one hero control, as Pixel Buds' mode button: taller than a normal button.
+        modifier = modifier.heightIn(min = 64.dp)
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {

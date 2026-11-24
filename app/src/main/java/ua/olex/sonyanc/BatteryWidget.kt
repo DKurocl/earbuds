@@ -34,6 +34,7 @@ class BatteryWidget : AppWidgetProvider() {
         private val FALLBACK = listOf(SizeF(110f, 110f), SizeF(250f, 110f), SizeF(250f, 150f), SizeF(340f, 200f))
 
         fun refreshAll(ctx: Context) {
+            StatusWidget.refreshAll(ctx) // the 2×2 glance shows both mode and battery
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, BatteryWidget::class.java))
             if (ids.isNotEmpty()) render(ctx, mgr, ids)
