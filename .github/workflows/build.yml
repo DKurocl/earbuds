@@ -50,10 +50,13 @@ jobs:
           ! grep -rn 'material-icons-extended' app/build.gradle.kts gradle/ || { echo '::error::use Material Symbols (HushIcon)'; exit 1; }
           ! grep -rnE 'Icons\.(Rounded|Filled|Outlined|Default|AutoMirrored)' app/src/main || { echo '::error::use HushIcon'; exit 1; }
       - name: Quick APK
-        if: contains(github.event.head_commit.message, '[quick-apk]')
+        if: contains(github.event.head_commit.message, '[quick-apk]') && !contains(github.event.head_commit.message, '[quick-release]')
         run: gradle :app:testDebugUnitTest :app:assembleRelease -PquickApk=true --no-daemon
+      - name: Quick release
+        if: contains(github.event.head_commit.message, '[quick-release]')
+        run: gradle :app:testDebugUnitTest :app:assembleRelease --no-daemon
       - name: Test, lint and build
-        if: "!contains(github.event.head_commit.message, '[quick-apk]')"
+        if: "!contains(github.event.head_commit.message, '[quick-apk]') && !contains(github.event.head_commit.message, '[quick-release]')"
         run: |
           set -o pipefail
           gradle :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest --no-daemon 2>&1 | tee build.log || {
@@ -80,7 +83,7 @@ jobs:
           name: Earbuds-install
           path: app/build/outputs/apk/release/*.apk
       - uses: actions/upload-artifact@v4
-        if: "!contains(github.event.head_commit.message, '[quick-apk]')"
+        if: "!contains(github.event.head_commit.message, '[quick-apk]') && !contains(github.event.head_commit.message, '[quick-release]')"
         with:
           name: Earbuds-ui-tests
           path: app/build/outputs/apk/androidTest/debug/*.apk
@@ -88,7 +91,7 @@ jobs:
     # Every main build becomes a GitHub release that Obtainium on the phone installs by itself.
     # Only with the owner key: builds signed with a throwaway key could not update each other.
     # Publishes only an APK the build itself signed with the owner key (not a check made later).
-    if: github.ref == 'refs/heads/main' && needs.build.outputs.owner_key == 'true' && !contains(github.event.head_commit.message, '[quick-apk]')
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.owner_key == 'true' && (!contains(github.event.head_commit.message, '[quick-apk]') || contains(github.event.head_commit.message, '[quick-release]'))
     needs: build
     runs-on: ubuntu-24.04
     permissions:
@@ -111,7 +114,7 @@ jobs:
   screenshots:
     # Every page, pose and widget rendered on the JVM (Robolectric) and compared with its golden
     # in app/src/screenshotTest/goldens, so a layout or color change never slips in unseen.
-    if: "!contains(github.event.head_commit.message, '[quick-apk]')"
+    if: "!contains(github.event.head_commit.message, '[quick-apk]') && !contains(github.event.head_commit.message, '[quick-release]')"
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -140,7 +143,7 @@ jobs:
             app/build/screenshots/
             app/build/test-results/
   visual-check:
-    if: "!contains(github.event.head_commit.message, '[quick-apk]')"
+    if: "!contains(github.event.head_commit.message, '[quick-apk]') && !contains(github.event.head_commit.message, '[quick-release]')"
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
