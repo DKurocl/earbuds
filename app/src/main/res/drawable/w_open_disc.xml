@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The switch's knob: a filled circle in the accent color. -->
+<!-- The open-the-app button: a tonal circle. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="@color/w_on" />
+    <solid android:color="@color/w_open" />
 </shape>

@@ -260,7 +260,7 @@ private fun PresetButton(name: String, selected: Boolean, enabled: Boolean, inde
     val cs = MaterialTheme.colorScheme
     ToggleButton(
         checked = selected, onCheckedChange = { if (!selected) onClick() }, enabled = enabled, shapes = shapes,
-        colors = ToggleButtonDefaults.toggleButtonColors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurfaceVariant),
+        colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 8.dp),
         modifier = modifier.heightIn(min = 48.dp).semantics { role = Role.RadioButton; this.selected = selected },
     ) {

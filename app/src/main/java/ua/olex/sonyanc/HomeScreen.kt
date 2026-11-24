@@ -634,18 +634,15 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
     val cs = MaterialTheme.colorScheme
     val accent = if (low) cs.errorContainer else cs.primaryContainer
     val onAccent = if (low) cs.onErrorContainer else cs.onPrimaryContainer
-    // Tapping either tile opens the Battery page (history and measured battery life), which
-    // grows out of the tile itself (container transform, Navigation.kt) and returns into it.
-    val origins = LocalPageOrigins.current
-    var bounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    // Tapping either tile opens the Battery page (history and measured battery life) as a
+    // normal page, the same way every other page opens.
     // Pressed, the tile settles in a little and its corners tighten, with Material's springs.
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
     val corner by animateDpAsState(if (pressed) 20.dp else PageMotion.CARD_CORNER, MaterialTheme.motionScheme.fastSpatialSpec(), label = "corner")
     val squeeze by animateFloatAsState(if (pressed) 0.96f else 1f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "squeeze")
-    Surface(onClick = { origins.mark(bounds); onClick() }, shape = RoundedCornerShape(corner), color = Surfaces.card, interactionSource = press,
+    Surface(onClick = onClick, shape = RoundedCornerShape(corner), color = Surfaces.card, interactionSource = press,
         modifier = modifier
-            .onGloballyPositioned { bounds = it.boundsInRoot() }
             .graphicsLayer { scaleX = squeeze; scaleY = squeeze }
             .semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {
         Column(

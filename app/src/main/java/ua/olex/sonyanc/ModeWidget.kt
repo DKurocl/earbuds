@@ -22,8 +22,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Three controls only: ANC, Ambient, Off, as a three-position switch (a knob on a pill track).
- * A tap on a position reconnects on demand and sets it; the rest of the widget opens the app.
+ * Three controls only: ANC, Ambient, Off, in the app's floating toolbar look: an earbuds button
+ * that opens the app and a pill that slides to the chosen mode. A tap on a mode reconnects on
+ * demand and sets it.
  * No persistent service or notification. Large slots get the dashboard.
  */
 class ModeWidget : AppWidgetProvider() {
@@ -119,45 +120,56 @@ class ModeWidget : AppWidgetProvider() {
         }
 
         /** A knob position: the mode, its slot, knob and icon, and its name under the track. */
-        private data class Stop(val mode:SonyProtocol.Mode,val id:Int,val knob:Int,val glyph:Int,val name:Int,val icon:Int,val bold:Int)
+        private data class Stop(val mode:SonyProtocol.Mode,val id:Int,val glyph:Int,val name:Int,val icon:Int,val bold:Int)
         private val stops=listOf(
-            Stop(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_knob,R.id.w_anc_glyph,R.id.w_anc_name,R.drawable.w_icon_anc,R.drawable.w_icon_anc_bold),
-            Stop(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_knob,R.id.w_amb_glyph,R.id.w_amb_name,R.drawable.w_icon_ambient,R.drawable.w_icon_ambient_bold),
-            Stop(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_knob,R.id.w_off_glyph,R.id.w_off_name,R.drawable.w_icon_off,R.drawable.w_icon_off_bold),
+            Stop(SonyProtocol.Mode.ANC,R.id.w_anc,R.id.w_anc_glyph,R.id.w_anc_name,R.drawable.w_icon_anc,R.drawable.w_icon_anc_bold),
+            Stop(SonyProtocol.Mode.AMBIENT,R.id.w_amb,R.id.w_amb_glyph,R.id.w_amb_name,R.drawable.w_icon_ambient,R.drawable.w_icon_ambient_bold),
+            Stop(SonyProtocol.Mode.OFF,R.id.w_off,R.id.w_off_glyph,R.id.w_off_name,R.drawable.w_icon_off,R.drawable.w_icon_off_bold),
         )
+        /** Spacers shown around the knob for each position: two before it, two after it, one each in the middle. */
+        private val spacers=listOf(R.id.w_sp1,R.id.w_sp2,R.id.w_sp3,R.id.w_sp4)
+        private fun spacersFor(index:Int)=when(index) { 0 -> setOf(2,3); 1 -> setOf(0,3); else -> setOf(0,1) }
 
         /**
-         * The three-position switch: a pill track with the knob on the chosen mode (the pending
-         * choice wins). A position sets its mode; the rest of the widget opens the app. Names sit
-         * under the track when the slot is tall enough.
+         * The app's floating mode toolbar as a widget: an earbuds button that opens the app, then
+         * the three modes with a pill that slides to the chosen one (the pending choice wins).
+         * Labels sit beside the icons when the slot is wide enough, as in the app.
          */
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
             val v=RemoteViews(ctx.packageName,R.layout.widget_switch)
-            val room=height-16f
-            val names=room>=56f+24f
-            val track=minOf(64f,maxOf(40f,if(names) room-24f else room))
-            v.setViewLayoutHeight(R.id.w_track,track,TypedValue.COMPLEX_UNIT_DIP)
-            v.setViewVisibility(R.id.w_names,if(names) View.VISIBLE else View.GONE)
-            val knob=track-8f
+            // One row of 48 dp controls, shorter in a short slot. A narrow slot drops the earbuds
+            // button (the bar's edge still opens the app) so the modes keep room.
+            val bar=minOf(48f,maxOf(32f,height-12f))
+            val open=width>=220f
+            val slot=(width-12f-(if(open) bar+6f else 0f))/3f
+            val labels=slot>=20f+6f+SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}+8f
+            v.setViewVisibility(R.id.w_open,if(open) View.VISIBLE else View.GONE)
+            v.setViewLayoutWidth(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutHeight(R.id.w_open,bar,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutHeight(R.id.w_track,bar,TypedValue.COMPLEX_UNIT_DIP)
+            v.setViewLayoutMargin(R.id.w_track,RemoteViews.MARGIN_START,if(open) 6f else 0f,TypedValue.COMPLEX_UNIT_DIP)
             val chosen=pending ?: current
+            // No reading yet: the pill waits in the middle, faint.
+            val at=chosen?.let{stops.indexOfFirst{s->s.mode==it}} ?: 1
+            spacers.forEachIndexed{i,id->v.setViewVisibility(id,if(i in spacersFor(at)) View.VISIBLE else View.GONE)}
+            v.setFloat(R.id.w_knob,"setAlpha",if(chosen==null) 0.3f else 1f)
             val flags=PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             if(interactive) {
                 val open=Intent(ctx,MainActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 val openApp=PendingIntent.getActivity(ctx,101,open,flags)
                 v.setOnClickPendingIntent(android.R.id.background,openApp)
-                v.setOnClickPendingIntent(R.id.w_group,openApp)
+                v.setOnClickPendingIntent(R.id.w_open,openApp)
             }
             for(stop in stops) {
                 val on=stop.mode==chosen
                 val applying=stop.mode==pending
-                v.setViewLayoutWidth(stop.knob,knob,TypedValue.COMPLEX_UNIT_DIP)
-                v.setViewLayoutHeight(stop.knob,knob,TypedValue.COMPLEX_UNIT_DIP)
-                v.setViewVisibility(stop.knob,if(on) View.VISIBLE else View.GONE)
+                val ink=ctx.getColor(if(on) R.color.w_bar_on_text else R.color.w_bar_text)
                 v.setImageViewResource(stop.glyph,if(on) stop.bold else stop.icon)
-                v.setInt(stop.glyph,"setColorFilter",ctx.getColor(if(on) R.color.w_on_text else R.color.w_off_text))
-                v.setTextColor(stop.name,ctx.getColor(if(on) R.color.w_off_text else R.color.w_sub_text))
+                v.setInt(stop.glyph,"setColorFilter",ink)
+                v.setTextColor(stop.name,ink)
                 v.setTextViewText(stop.name,stop.mode.short+if(applying) "…" else "")
+                v.setViewVisibility(stop.name,if(labels) View.VISIBLE else View.GONE)
                 v.setContentDescription(stop.id,stop.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
                     val action=if(Prefs.deviceAddress(ctx)==null || !Headphones.hasPermission(ctx)) {

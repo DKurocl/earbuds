@@ -37,7 +37,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.GraphicsLayerScope
@@ -201,7 +200,6 @@ internal fun PageLayers(shown: List<String>, pose: PagePose, content: @Composabl
     val top = shown.last()
     val under = shown.getOrNull(shown.size - 2)
     val background = MaterialTheme.colorScheme.background
-    val card = Surfaces.card
     val scrimMax = if (isSystemInDarkTheme()) PageMotion.SCRIM_DARK else PageMotion.SCRIM_LIGHT
     // Cards report root coordinates; the layers draw relative to this box.
     val at = remember { mutableStateOf(Offset.Zero) }
@@ -213,13 +211,8 @@ internal fun PageLayers(shown: List<String>, pose: PagePose, content: @Composabl
             Box(
                 Modifier.fillMaxSize()
                     .graphicsLayer { if (isTop) closing(local) else behind(local) }
-                    // Out of a card the container starts in the card's color and turns into the page's.
-                    .drawBehind { drawRect(if (isTop) lerp(card, background, containerShare(local)) else background) },
-            ) {
-                // Fade through: the page's content appears once the container has nearly grown,
-                // and leaves first when it returns, so no shrunken copy of the page is ever seen.
-                Box(Modifier.fillMaxSize().graphicsLayer { if (isTop) alpha = contentShare(local) }) { content(page) }
-            }
+                    .background(background),
+            ) { content(page) }
             // The scrim lies between the two pages, as the system's does.
             if (!isTop) Box(Modifier.fillMaxSize().drawBehind {
                 val alpha = scrim(local) * scrimMax
@@ -227,21 +220,6 @@ internal fun PageLayers(shown: List<String>, pose: PagePose, content: @Composabl
             })
         }
     }
-}
-
-/** How far a card-born container has turned into the page: 0 = the card, 1 = the page. */
-private fun containerShare(pose: PagePose): Float {
-    if (pose.origin() == null || !moving(pose)) return 1f
-    val e = PageMotion.EMPHASIZED.transform(pose.settle())
-    return if (pose.opening()) e else if (pose.settle() > 0f) 1f - e else 1f
-}
-
-/** The page's own content inside a card-born container: in over 30 to 80 %, out over the first 30 %. */
-private fun contentShare(pose: PagePose): Float {
-    if (pose.origin() == null || !moving(pose)) return 1f
-    val t = pose.settle()
-    return if (pose.opening()) ((t - 0.3f) / 0.5f).coerceIn(0f, 1f)
-    else if (t > 0f) (1f - t / 0.3f).coerceIn(0f, 1f) else 1f
 }
 
 private fun moving(pose: PagePose) = pose.swipe() > 0f || pose.settle() > 0f || pose.opening()
