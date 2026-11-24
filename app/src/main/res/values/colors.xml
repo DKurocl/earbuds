@@ -22,4 +22,5 @@
     <color name="w_bar_on">@android:color/system_primary_light</color>
     <color name="w_bar_on_text">@android:color/system_on_primary_light</color>
     <color name="w_bar_text">@android:color/system_accent2_900</color>
+    <color name="ic_launcher_plate">#FFFFFFFF</color>
 </resources>
