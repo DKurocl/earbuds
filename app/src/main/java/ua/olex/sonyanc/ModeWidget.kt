@@ -160,7 +160,7 @@ class ModeWidget : AppWidgetProvider() {
                 v.setBoolean(seg.id,"setEnabled",!on)
                 v.setViewLayoutWidth(seg.icon,iconSize,TypedValue.COMPLEX_UNIT_DIP)
                 v.setViewLayoutHeight(seg.icon,iconSize,TypedValue.COMPLEX_UNIT_DIP)
-                for(t in seg.texts) v.setTextViewText(t,seg.mode.short+if(applying) "…" else "")
+                for(t in seg.texts) v.setTextViewText(t,seg.mode.short)
                 v.setViewVisibility(seg.label,if(labels) View.VISIBLE else View.GONE)
                 v.setContentDescription(seg.id,seg.mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
@@ -199,7 +199,7 @@ class ModeWidget : AppWidgetProvider() {
                 v.setBoolean(tile.id,"setEnabled",!on)
                 v.setViewLayoutWidth(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
                 v.setViewLayoutHeight(tile.icon,icon,TypedValue.COMPLEX_UNIT_DIP)
-                for(text in tile.texts) v.setTextViewText(text,mode.short+if(applying) "…" else "")
+                for(text in tile.texts) v.setTextViewText(text,mode.short)
                 v.setViewVisibility(tile.label,if(labels) View.VISIBLE else View.GONE)
                 v.setContentDescription(tile.id,mode.label+(if(applying) ", applying" else if(on) ", selected" else "")+if(away) ", earbuds not connected" else "")
                 if(interactive) {
