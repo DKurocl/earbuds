@@ -213,29 +213,27 @@ class ScreenshotTest {
         assertTrue("The refresh indicator remained after completion", idle.contentEquals(topCenterPixels()))
     }
 
-    @Test fun modeGlyphsDrawDifferentContoursThenReturnToTheirRestingShape() {
+    @Test fun modeGlyphsStayOpaqueThroughoutContourMotion() {
         val request = mutableStateOf<Int?>(null)
         compose.setContent {
             AppTheme(dynamic = false) {
                 Row {
                     SonyProtocol.Mode.entries.forEach { mode ->
-                        ModeGlyph(mode, request.value, selected = true, applying = false, color = Color.White)
+                        ModeGlyph(mode, request.value, selected = true, color = Color.White)
                     }
                 }
             }
         }
         fun icons(pose: String? = null): List<IntArray> = compose.runOnIdle {
             val root = compose.activity.findViewById<View>(android.R.id.content)
-            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-            root.draw(Canvas(bitmap))
             val side = with(compose.density) { 24.dp.roundToPx() }
+            val bitmap = Bitmap.createBitmap(side * 3, side, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
             if (pose != null) {
-                val strip = Bitmap.createBitmap(bitmap, 0, 0, side * 3, side)
                 val directory = File(System.getProperty("screenshotDir")!!).apply { mkdirs() }
                 File(directory, "mode-glyphs-$pose.png").outputStream().use {
-                    strip.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
                 }
-                strip.recycle()
             }
             List(3) { index ->
                 IntArray(side * side).also { bitmap.getPixels(it, 0, side, index * side, 0, side, side) }
@@ -245,12 +243,23 @@ class ScreenshotTest {
         assertTrue(rest.all { pixels -> pixels.any { it == android.graphics.Color.WHITE } })
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { request.value = 1 }
-        compose.mainClock.advanceTimeBy(128)
-        icons() // Flush the view display list before sampling the animated draw layers.
-        compose.mainClock.advanceTimeBy(96)
-        val attack = icons("attack")
-        compose.mainClock.advanceTimeBy(80)
-        val release = icons("release")
+        var attack = rest
+        var release = rest
+        repeat(24) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            val pose = when (frame) {
+                10 -> "attack"
+                16 -> "release"
+                else -> null
+            }
+            val pixels = icons(pose)
+            pixels.forEachIndexed { index, icon ->
+                assertTrue("Frame $frame dims ${SonyProtocol.Mode.entries[index]}",
+                    icon.any { it == android.graphics.Color.WHITE })
+            }
+            if (frame == 10) attack = pixels
+            if (frame == 16) release = pixels
+        }
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
         icons()

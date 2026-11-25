@@ -1,5 +1,9 @@
 # Verification
 
+## Mode icon flicker after build 243
+
+The Pixel recording shows the ANC symbol briefly dimming while its label stays white at about 0.22 seconds. The glyph was fading between two separately rendered layers while a pending command also lowered its opacity. The dock now draws one full-opacity outline per symbol, interpolating its weight on confirmation. The rendered regression checks each glyph for a full-opacity stroke through 24 animation frames and verifies that the settled symbols match their initial poses.
+
 ## Floating mode panel after build 236
 
 A single elevated, opaque surface holds the three mode buttons above the scrolling Home content. The selected mode has its own fill within that surface. The end of the content reserves the measured panel height, including the system navigation inset, so the last row can scroll fully above the buttons.

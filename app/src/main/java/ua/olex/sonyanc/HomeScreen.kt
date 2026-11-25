@@ -542,7 +542,7 @@ private fun ModeButton(
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {
-        ModeGlyph(mode, motionRequest, selected, applying, LocalContentColor.current)
+        ModeGlyph(mode, motionRequest, selected, LocalContentColor.current)
         if (!iconOnly) {
             Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
             Text(mode.short, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false,
