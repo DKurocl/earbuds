@@ -186,7 +186,7 @@ fun ConnectedSheetContent(
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(20.dp))
-                Batteries(battery, live, ready = false, onRefresh = {})
+                Batteries(battery, live)
                 Spacer(Modifier.height(20.dp))
                 // With nothing playing yet, the first thing wanted after putting the earbuds in.
                 if (canResume) {

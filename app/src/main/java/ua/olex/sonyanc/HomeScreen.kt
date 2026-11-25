@@ -152,7 +152,7 @@ fun HushScreen(
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Batteries(
-                            battery ?: SonyProtocol.Battery(), batteryParts, ready, onBattery,
+                            battery ?: SonyProtocol.Battery(), batteryParts,
                             confirmed = nc?.mode.takeIf { pending == null }, dimCached = linked != true,
                         )
                         Box(Modifier.introFade()) {
@@ -225,7 +225,7 @@ private fun Header(name: String, status: String, busy: Boolean) {
 
 @Composable
 internal fun Batteries(
-    b: SonyProtocol.Battery, live: Set<Int>, ready: Boolean, onRefresh: () -> Unit,
+    b: SonyProtocol.Battery, live: Set<Int>,
     confirmed: Mode? = null, dimCached: Boolean = true,
 ) {
     // The owner's earbuds as Android shows a device in its details: the product render
@@ -258,8 +258,7 @@ internal fun Batteries(
         }
     }
     Row(
-        Modifier.fillMaxWidth().clip(UiTokens.cardShape).clickable(enabled = ready, onClickLabel = "Refresh battery", onClick = onRefresh)
-            .padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().clip(UiTokens.cardShape).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.

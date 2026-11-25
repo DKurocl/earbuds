@@ -131,7 +131,7 @@ class ScreenshotTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             AppTheme(dynamic = false) {
-                Batteries(SonyProtocol.Battery(100, 80, 90), setOf(0, 1, 2), true, {})
+                Batteries(SonyProtocol.Battery(100, 80, 90), setOf(0, 1, 2))
             }
         }
         compose.mainClock.advanceTimeBy(64)
@@ -173,7 +173,8 @@ class ScreenshotTest {
         }
     }
 
-    @Test fun backgroundReadsDoNotShowTheManualRefreshIndicator() {
+    @Test fun batteryRingsDoNotRequestRefreshAndBackgroundReadsDoNotShowIt() {
+        var refreshRequests = 0
         val background = mutableStateOf(false)
         val manual = mutableStateOf(false)
         compose.setContent {
@@ -182,6 +183,7 @@ class ScreenshotTest {
                     status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC),
                     pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
                     granted = true, hasDevice = true, batteryRefreshing = background.value, manualRefreshing = manual.value,
+                    onBattery = { refreshRequests++ },
                     onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
                 )
             }
@@ -200,6 +202,10 @@ class ScreenshotTest {
 
         val indicator = compose.onNodeWithContentDescription("Refreshing earbuds")
         val idle = topCenterPixels()
+        for (part in listOf("Left", "Case", "Right")) {
+            compose.onNodeWithContentDescription("$part battery").performTouchInput { click() }
+        }
+        compose.runOnIdle { assertEquals(0, refreshRequests) }
         repeat(2) {
             compose.runOnIdle { background.value = true }
             assertTrue("A background read changed the top-center pixels", idle.contentEquals(topCenterPixels()))
