@@ -2,9 +2,9 @@
 
 ## Noise control interaction after build 231
 
-The owner reported a two-stage collapse under Find, clipped mode labels during presses, and mode glyphs briefly replaced by a loading indicator. The mode options now follow the confirmed mode. Their bottom gap collapses with the card, and the three toolbar slots keep their bounds throughout presses and confirmation.
+The owner reported a two-stage collapse under Find, clipped mode labels during presses, and mode glyphs briefly replaced by a loading indicator. The mode options now follow the confirmed mode. Their bottom gap collapses with the card, and the mode buttons grow inward on press. Each neighbor can give up to 8 dp of width, with less compression when a label needs the space.
 
-The regression holds both outer controls, verifies that a pending request keeps the previous selection and card position, and samples the collapse frame by frame after Off is confirmed. Settled screen goldens remain byte-for-byte identical to build 231. The dock animates the original symbol contours independently. The rendered gesture test captures rest, attack, release and settled frames for all three symbols and compares the final pixels with the initial pixels. On the physical Pixel, verify the icon motion, rapid taps in both directions and the collapse from Ambient and ANC, including with system animations disabled.
+The regression holds both outer controls, checks the stretch, fixed outside edges and room for the Ambient label, verifies that a pending request keeps the previous selection and card position, and samples the collapse frame by frame after Off is confirmed. Settled screen goldens remain byte-for-byte identical to build 231. The dock animates the original symbol contours independently. ANC leaves a clear gap between the ear and the ring, and a superseded symbol eases to rest. The rendered gesture test captures rest, attack, release and settled frames for all three symbols and compares the final pixels with the initial pixels. On the physical Pixel, verify the icon motion, rapid taps in both directions and the collapse from Ambient and ANC, including with system animations disabled.
 
 ## Pixel feedback after build 223
 

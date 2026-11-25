@@ -258,7 +258,7 @@ class ScreenshotTest {
         }
     }
 
-    @Test fun noiseControlKeepsItsBoundsAndWaitsForConfirmation() {
+    @Test fun noiseControlStretchesInwardAndWaitsForConfirmation() {
         val anc = SonyProtocol.NcState(SonyProtocol.Mode.ANC)
         val confirmed = mutableStateOf(anc)
         val pending = mutableStateOf<SonyProtocol.NcState?>(null)
@@ -283,15 +283,34 @@ class ScreenshotTest {
         val more = compose.onNodeWithText("More controls")
         val initialMore = more.getBoundsInRoot().top
 
+        fun assertStretch(index: Int) {
+            val pressed = dockBounds()
+            val before = initialButtons[index]
+            val after = pressed[index]
+            val growth = (after.right - after.left) - (before.right - before.left)
+            assertTrue("Expected a restrained stretch, got $growth", growth > 1.dp && growth <= 9.dp)
+            assertEquals(initialButtons.first().left, pressed.first().left)
+            assertEquals(initialButtons.last().right, pressed.last().right)
+            pressed.zip(initialButtons).forEach { (current, initial) ->
+                assertEquals(initial.top, current.top)
+                assertEquals(initial.bottom, current.bottom)
+            }
+            assertTrue("Ambient needs room to keep its full label", pressed[1].right - pressed[1].left >= 104.dp)
+        }
+
         ancButton.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(120)
-        assertEquals(initialButtons, dockBounds())
+        assertStretch(0)
         ancButton.performTouchInput { cancel() }
+        compose.mainClock.advanceTimeBy(350)
+        assertEquals(initialButtons, dockBounds())
 
         offButton.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(120)
-        assertEquals(initialButtons, dockBounds())
+        assertStretch(2)
         offButton.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(350)
+        assertEquals(initialButtons, dockBounds())
         ancButton.assertIsSelected()
         offButton.assertIsNotSelected()
         assertEquals("Applying", offButton.fetchSemanticsNode().config[SemanticsProperties.StateDescription])

@@ -51,6 +51,7 @@ import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -462,23 +463,43 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
         modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        val iconOnly = maxWidth < 320.dp || LocalDensity.current.fontScale >= 1.3f
+        val density = LocalDensity.current
+        val textMeasurer = rememberTextMeasurer()
+        val labelStyle = MaterialTheme.typography.labelLarge
+        val slotWidth = (maxWidth - 20.dp) / 3
+        val labelWidths = Mode.entries.map { mode ->
+            with(density) { textMeasurer.measure(mode.short, style = labelStyle, maxLines = 1).size.width.toDp() }
+        }
+        val contentWidths = labelWidths.map { it + 24.dp + ToggleButtonDefaults.IconSpacing + 24.dp }
+        val iconOnly = maxWidth < 320.dp || density.fontScale >= 1.3f || contentWidths.any { it > slotWidth }
         Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
             var iconMotion by remember { mutableStateOf<Pair<Mode, Int>?>(null) }
-            Row(
+            val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
+            ButtonGroup(
+                overflowIndicator = {},
+                expandedRatio = .08f,
                 modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Mode.entries.forEach { mode ->
-                    ModeButton(
-                        mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
-                        iconMotion?.takeIf { it.first == mode }?.second, Modifier.weight(1f),
-                    ) {
-                        if (mode != (pending ?: state)?.mode) {
-                            iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
-                        }
-                        onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
-                    }
+                Mode.entries.forEachIndexed { index, mode ->
+                    val contentWidth = if (iconOnly) 48.dp else contentWidths[index]
+                    // Keep room for the whole label, including the case where two neighbors press.
+                    val compression = ((slotWidth - contentWidth - 1.dp) / 2).coerceIn(0.dp, 8.dp)
+                    customItem(
+                        buttonGroupContent = {
+                            ModeButton(
+                                mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
+                                iconMotion?.takeIf { it.first == mode }?.second, interactions[index],
+                                Modifier.weight(1f).animateWidth(interactions[index], compression),
+                            ) {
+                                if (mode != (pending ?: state)?.mode) {
+                                    iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
+                                }
+                                onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
+                            }
+                        },
+                        menuContent = {},
+                    )
                 }
             }
         }
@@ -489,7 +510,7 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
 @Composable
 private fun ModeButton(
     mode: Mode, selected: Boolean, applying: Boolean, enabled: Boolean, iconOnly: Boolean,
-    motionRequest: Int?, modifier: Modifier, onClick: () -> Unit,
+    motionRequest: Int?, interaction: MutableInteractionSource, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     ToggleButton(
@@ -499,6 +520,7 @@ private fun ModeButton(
         shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = CircleShape, checkedShape = CircleShape),
         colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
         contentPadding = PaddingValues(horizontal = 12.dp),
+        interactionSource = interaction,
         // The screen's one hero control, as Pixel Buds' mode button: taller than a normal button.
         modifier = modifier.heightIn(min = 64.dp)
             // One of three, like radio buttons: announced and tested as selected, not as on/off.

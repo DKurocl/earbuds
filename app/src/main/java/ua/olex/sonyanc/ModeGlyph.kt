@@ -33,11 +33,13 @@ internal fun ModeGlyph(mode: Mode, request: Int?, selected: Boolean, applying: B
     val phase = remember { Animatable(1f) }
     val motionEnabled = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
     LaunchedEffect(request, motionEnabled) {
-        if (request == null || !motionEnabled) {
-            phase.snapTo(1f)
-        } else {
-            phase.snapTo(0f)
-            phase.animateTo(1f, tween(320, easing = LinearEasing))
+        when {
+            !motionEnabled -> phase.snapTo(1f)
+            request == null -> phase.animateTo(1f, tween(72, easing = LinearEasing))
+            else -> {
+                phase.snapTo(0f)
+                phase.animateTo(1f, tween(320, easing = LinearEasing))
+            }
         }
     }
     val glyph = remember(mode) { lazy(LazyThreadSafetyMode.NONE) { GlyphContours(mode) } }
@@ -62,7 +64,8 @@ private fun contourAlpha(time: Float): Float = minOf(time / .11f, (1f - time) / 
 
 private fun impulse(time: Float, start: Float, finish: Float): Float {
     val position = ((time - start) / (finish - start)).coerceIn(0f, 1f)
-    return sin(PI * position).toFloat()
+    val amplitude = sin(PI * position).toFloat()
+    return amplitude * amplitude
 }
 
 private class GlyphContours(private val mode: Mode) {
@@ -81,7 +84,7 @@ private class GlyphContours(private val mode: Mode) {
     fun draw(scope: DrawScope, time: Float, color: Color) = with(scope) {
         when (mode) {
             Mode.ANC -> {
-                val aperture = 1f - .19f * impulse(time, .1f, .62f) + .035f * impulse(time, .62f, .85f)
+                val aperture = 1f - .145f * impulse(time, .08f, .62f) + .024f * impulse(time, .62f, .87f)
                 scale(aperture, aperture, Offset(480f, 480f)) { drawPath(ring, color) }
                 drawPath(paths[2], color)
                 val dot = 1f - .23f * impulse(time, .25f, .72f)
@@ -93,7 +96,7 @@ private class GlyphContours(private val mode: Mode) {
                 scale(dot, dot, Offset(387f, 597f)) { drawPath(paths[1], color) }
                 val wave = impulse(time, .22f, .85f)
                 translate(left = 62f * wave, top = 28f * wave) {
-                    rotate(-9f * wave, pivot = Offset(710f, 600f)) { drawPath(paths[0], color) }
+                    rotate(-7f * wave, pivot = Offset(710f, 600f)) { drawPath(paths[0], color) }
                 }
             }
             Mode.OFF -> {
