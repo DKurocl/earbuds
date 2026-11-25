@@ -3,6 +3,8 @@ package ua.olex.sonyanc
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.SemanticsMatcher
@@ -205,6 +207,66 @@ class ScreenshotTest {
         compose.runOnIdle { manual.value = false }
         indicator.assertDoesNotExist()
         assertTrue("The refresh indicator remained after completion", idle.contentEquals(topCenterPixels()))
+    }
+
+    @Test fun noiseControlKeepsItsBoundsAndWaitsForConfirmation() {
+        val anc = SonyProtocol.NcState(SonyProtocol.Mode.ANC)
+        val confirmed = mutableStateOf(anc)
+        val pending = mutableStateOf<SonyProtocol.NcState?>(null)
+        val requested = mutableListOf<SonyProtocol.NcState>()
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                HushScreen(
+                    status = Headphones.Status.CONNECTED, nc = confirmed.value,
+                    pending = pending.value, fresh = true, error = null,
+                    battery = SonyProtocol.Battery(80, 80, 70), granted = true, hasDevice = true,
+                    onMode = { requested.add(it); pending.value = it },
+                    onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                )
+            }
+        }
+
+        val ancButton = compose.onNodeWithContentDescription(SonyProtocol.Mode.ANC.label)
+        val offButton = compose.onNodeWithContentDescription(SonyProtocol.Mode.OFF.label)
+        val ambientButton = compose.onNodeWithContentDescription(SonyProtocol.Mode.AMBIENT.label)
+        fun dockBounds() = listOf(ancButton, ambientButton, offButton).map { it.getBoundsInRoot() }
+        val initialButtons = dockBounds()
+        val more = compose.onNodeWithText("More controls")
+        val initialMore = more.getBoundsInRoot().top
+
+        ancButton.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(120)
+        assertEquals(initialButtons, dockBounds())
+        ancButton.performTouchInput { cancel() }
+
+        offButton.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(120)
+        assertEquals(initialButtons, dockBounds())
+        offButton.performTouchInput { up() }
+        ancButton.assertIsSelected()
+        offButton.assertIsNotSelected()
+        assertEquals("Applying", offButton.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        assertEquals(initialMore, more.getBoundsInRoot().top)
+        compose.runOnIdle {
+            assertEquals(listOf(SonyProtocol.Mode.OFF), requested.map { it.mode })
+        }
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            confirmed.value = requested.single()
+            pending.value = null
+        }
+        val positions = List(48) {
+            compose.mainClock.advanceTimeByFrame()
+            more.getBoundsInRoot().top.value
+        }
+        offButton.assertIsSelected()
+        assertEquals(initialButtons, dockBounds())
+        assertTrue("Options should collapse after the earbuds confirm Off", positions.last() < initialMore.value)
+        val frameSteps = (listOf(initialMore.value) + positions).zipWithNext { a, b -> kotlin.math.abs(a - b) }
+        assertTrue("The mode card lost a full section gap in a single frame: $frameSteps",
+            frameSteps.all { it < UiTokens.homeSectionGap.value })
+        assertTrue("The collapse should have visible intermediate positions", positions.distinct().size > 5)
     }
 
     @Test fun home() = shoot("home") {

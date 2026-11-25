@@ -1,5 +1,11 @@
 # Verification
 
+## Noise control interaction after build 231
+
+The owner reported a two-stage collapse under Find, clipped mode labels during presses, and mode glyphs briefly replaced by a loading indicator. The mode options now follow the confirmed mode. Their bottom gap collapses with the card, and the three toolbar slots keep their bounds throughout presses and confirmation.
+
+The regression holds both outer controls, verifies that a pending request keeps the previous selection and card position, and samples the collapse frame by frame after Off is confirmed. Settled screen goldens remain byte-for-byte identical to build 231. On the physical Pixel, verify the icon motion, rapid taps in both directions and the collapse from Ambient and ANC, including with system animations disabled.
+
 ## Pixel feedback after build 223
 
 The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/earbuds/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget. The follow-up recording shows the pull-to-refresh indicator passing over the case badge about 1.8–2.0 seconds into the clip, after the app switch. The Equalizer and Device info summaries also change as hardware reads complete.

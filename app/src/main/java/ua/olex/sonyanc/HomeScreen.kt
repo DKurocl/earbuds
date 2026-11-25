@@ -80,7 +80,6 @@ fun HushScreen(
     onProfiles: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
-    val state = pending ?: nc
     val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
     val connecting = status == Headphones.Status.CONNECTING && linked != false
     val canControl = granted && hasDevice && bluetoothOn && paired && linked != false
@@ -173,16 +172,17 @@ fun HushScreen(
                         }
                     }
 
-                    // What the chosen mode offers, in the page as a card (as Pixel Buds settings do),
-                    // never floating: Ambient's level and voice focus, or Speak-to-Chat and
-                    // "Ambient for a moment" with noise cancelling.
-                    if (canControl && (ready || nc != null)) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient))
-
-                    Box(Modifier.introFade()) { ListGroup("More controls") {
-                        item { NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass", onClick = onEqualizer) }
-                        item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls and voice prompts", onClick = onEarbuds) }
-                        item { NavRow(it, Glyph.INFO, "Device info", "Codec and firmware", onClick = onConnection) }
-                    } }
+                    Column {
+                        if (canControl && (ready || nc != null)) {
+                            val options = pending?.takeIf { it.mode == nc?.mode } ?: nc
+                            ModeCard(options, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient))
+                        }
+                        Box(Modifier.introFade()) { ListGroup("More controls") {
+                            item { NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass", onClick = onEqualizer) }
+                            item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls and voice prompts", onClick = onEarbuds) }
+                            item { NavRow(it, Glyph.INFO, "Device info", "Codec and firmware", onClick = onConnection) }
+                        } }
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -190,7 +190,7 @@ fun HushScreen(
         }
         // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
         if (granted && hasDevice && bluetoothOn && paired) ModeDock(
-            state, pending, canControl, ::choose,
+            nc, pending, canControl, ::choose,
             Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
         )
         }
@@ -423,10 +423,10 @@ private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockE
     if (card != null) lastCard = card
     AnimatedVisibility(
         visible = card != null,
-        enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec()),
-        exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec()),
+        enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Top),
+        exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Top),
     ) {
-        Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth().padding(bottom = UiTokens.homeSectionGap)) {
             AnimatedContent(
                 lastCard, label = "mode card",
                 transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
@@ -463,25 +463,15 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
         contentAlignment = Alignment.Center,
     ) {
         val iconOnly = maxWidth < 320.dp || LocalDensity.current.fontScale >= 1.3f
-        // Material 3 Expressive's floating toolbar: a pill above the page with the three modes. The
-        // pressed mode widens and its neighbours give way (animateWidth); the chosen one fills in.
         Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
-            val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
-            ButtonGroup(
-                overflowIndicator = {}, // three buttons always fit
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Mode.entries.forEachIndexed { index, mode ->
-                    customItem(
-                        buttonGroupContent = {
-                            ModeButton(
-                                mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly, interactions[index],
-                                Modifier.weight(1f).animateWidth(interactions[index]),
-                            ) { onChoose((state ?: NcState(mode)).copy(mode = mode)) }
-                        },
-                        menuContent = {},
-                    )
+                Mode.entries.forEach { mode ->
+                    ModeButton(
+                        mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly, Modifier.weight(1f),
+                    ) { onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode)) }
                 }
             }
         }
@@ -492,16 +482,22 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
 @Composable
 private fun ModeButton(
     mode: Mode, selected: Boolean, applying: Boolean, enabled: Boolean, iconOnly: Boolean,
-    interaction: MutableInteractionSource, modifier: Modifier, onClick: () -> Unit,
+    modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val motionEnabled = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
+    val iconScale = animateFloatAsState(
+        targetValue = if (motionEnabled && pressed) .85f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "mode icon press",
+    )
     ToggleButton(
         checked = selected,
         onCheckedChange = { onClick() },
         enabled = enabled,
-        // Toolbar items: no container at rest, a full pill when chosen, squarer under the finger.
-        shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = RoundedCornerShape(16.dp), checkedShape = CircleShape),
+        shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = CircleShape, checkedShape = CircleShape),
         colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
@@ -510,9 +506,16 @@ private fun ModeButton(
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {
-        if (applying) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current)
-        // The chosen mode's icon thickens with a small spring pop; a press does the same at once.
-        else HushIcon(mode.glyph, Modifier.size(24.dp), LocalContentColor.current, bold = selected || pressed)
+        HushIcon(
+            mode.glyph,
+            Modifier.size(24.dp).graphicsLayer {
+                scaleX = iconScale.value
+                scaleY = iconScale.value
+                alpha = if (applying && !selected) .65f else 1f
+            },
+            LocalContentColor.current,
+            bold = selected,
+        )
         if (!iconOnly) {
             Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
             Text(mode.short, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false,
