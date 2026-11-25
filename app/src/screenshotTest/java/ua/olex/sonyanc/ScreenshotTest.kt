@@ -357,7 +357,7 @@ class ScreenshotTest {
         val button = ambient.getBoundsInRoot()
         assertTrue("The scroll viewport should continue behind the mode buttons", viewport.getBoundsInRoot().bottom > button.bottom)
         viewport.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
-        val deviceInfo = compose.onNodeWithText("Device info").assertIsDisplayed()
+        val deviceInfo = compose.onNodeWithContentDescription("Device info").assertIsDisplayed()
         assertTrue("The last row should clear the mode buttons", deviceInfo.getBoundsInRoot().bottom < button.top)
         assertEquals(button, ambient.getBoundsInRoot())
         deviceInfo.performTouchInput { click(center) }

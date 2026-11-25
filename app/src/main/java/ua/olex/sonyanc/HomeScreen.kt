@@ -182,9 +182,18 @@ fun HushScreen(
                             ModeCard(options, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient))
                         }
                         Box(Modifier.introFade()) { ListGroup("More controls") {
-                            item { NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass", onClick = onEqualizer) }
-                            item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls and voice prompts", onClick = onEarbuds) }
-                            item { NavRow(it, Glyph.INFO, "Device info", "Codec and firmware", onClick = onConnection) }
+                            item {
+                                NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass",
+                                    modifier = Modifier.semantics { contentDescription = "Equalizer" }, onClick = onEqualizer)
+                            }
+                            item {
+                                NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls and voice prompts",
+                                    modifier = Modifier.semantics { contentDescription = "Earbud settings" }, onClick = onEarbuds)
+                            }
+                            item {
+                                NavRow(it, Glyph.INFO, "Device info", "Codec and firmware",
+                                    modifier = Modifier.semantics { contentDescription = "Device info" }, onClick = onConnection)
+                            }
                         } }
                     }
                 }
