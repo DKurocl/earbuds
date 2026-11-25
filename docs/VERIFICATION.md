@@ -2,9 +2,9 @@
 
 ## Floating mode panel after build 236
 
-The mode buttons sit above the scrolling Home content with clear gaps and individual surfaces. The end of the content reserves the measured panel height, including the system navigation inset, so the last row can scroll fully above the buttons.
+A single elevated, opaque surface holds the three mode buttons above the scrolling Home content. The selected mode has its own fill within that surface. The end of the content reserves the measured panel height, including the system navigation inset, so the last row can scroll fully above the buttons.
 
-The Home regression checks that the scroll viewport extends behind the panel, the panel stays fixed, and Device info can scroll clear and respond to a touch. Home navigation rows keep their accessible names even when a button obscures their child text. Light, dark, large-text and disconnected goldens cover the new layering. Verify the panel on the physical Pixel after installation.
+The Home regression checks that the gap between modes keeps the dock color, the scroll viewport extends behind the panel, the panel stays fixed, and Device info can scroll clear and respond to a touch. Home navigation rows keep their accessible names even when a button obscures their child text. Light, dark, large-text and disconnected goldens cover the new layering. Verify the panel on the physical Pixel after installation.
 
 ## Noise control interaction after build 231
 

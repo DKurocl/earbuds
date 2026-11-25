@@ -31,6 +31,7 @@ import androidx.compose.runtime.Recomposer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import android.graphics.Canvas
 import android.view.View
 import androidx.activity.ComponentActivity
@@ -342,8 +343,11 @@ class ScreenshotTest {
 
     @Test fun floatingModesLeaveSpaceToOpenTheLastRow() {
         var opened = false
+        var dockColor = 0
         compose.setContent {
             AppTheme(dynamic = false) {
+                val color = MaterialTheme.colorScheme.surfaceContainerHighest.toArgb()
+                SideEffect { dockColor = color }
                 HushScreen(
                     status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT),
                     pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
@@ -355,6 +359,16 @@ class ScreenshotTest {
         val viewport = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
         val ambient = compose.onNodeWithContentDescription(SonyProtocol.Mode.AMBIENT.label)
         val button = ambient.getBoundsInRoot()
+        val off = compose.onNodeWithContentDescription(SonyProtocol.Mode.OFF.label).getBoundsInRoot()
+        val gapX = with(compose.density) { ((button.right + off.left) / 2).roundToPx() }
+        val gapY = with(compose.density) { ((button.top + button.bottom) / 2).roundToPx() }
+        compose.runOnIdle {
+            val root = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            assertEquals("The shared dock should cover the page between mode buttons", dockColor, bitmap.getPixel(gapX, gapY))
+            bitmap.recycle()
+        }
         assertTrue("The scroll viewport should continue behind the mode buttons", viewport.getBoundsInRoot().bottom > button.bottom)
         viewport.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         val deviceInfo = compose.onNodeWithContentDescription("Device info").assertIsDisplayed()
