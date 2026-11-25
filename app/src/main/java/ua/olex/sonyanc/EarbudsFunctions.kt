@@ -54,10 +54,9 @@ abstract class EarbudsFunctions : AppFunctionService() {
         if (minutes !in 1..30) throw AppFunctionInvalidArgumentException("minutes must be between 1 and 30")
         return withLink {
             val from = Headphones.state.value.shownNc ?: SonyProtocol.NcState(SonyProtocol.Mode.ANC)
-            AmbientTimer.start(this, minutes, from)
-            val ok = withTimeoutOrNull(8500) { confirmedMode(SonyProtocol.Mode.AMBIENT) } ?: false
-            if (ok) "Ambient sound for $minutes minutes, then back to ${AmbientTimer.returnMode(this).label.lowercase()}."
-            else { AmbientTimer.cancel(this); notReachable() }
+            val back = AmbientTimer.start(this, minutes, from)
+            if (back != null) "Ambient sound for $minutes minutes, then back to ${back.label.lowercase()}."
+            else notReachable()
         }
     }
 

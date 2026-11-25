@@ -1,5 +1,7 @@
 package ua.olex.sonyanc
 
+import android.content.Intent
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,5 +43,33 @@ class PortableSettingsTest {
         SettingsBackup.restore(ctx, """{"version":1,"settings":{"haptics":false}}""".byteInputStream())
         assertFalse(Prefs.haptics(ctx))
         assertEquals("My earbuds", Prefs.displayName(ctx))
+    }
+
+    @Test fun failedAmbientConfirmationDoesNotArmACountdown() = runBlocking {
+        Headphones.init(ctx)
+        ModeControl.cancelModes()
+        Prefs.clearTimer(ctx)
+        try {
+            assertNull(AmbientTimer.start(ctx, 5, SonyProtocol.NcState(SonyProtocol.Mode.OFF)))
+            assertEquals(0L, Prefs.timerUntil(ctx))
+        } finally {
+            ModeControl.cancelModes()
+            AmbientTimer.cancel(ctx)
+        }
+    }
+
+    @Test fun aReplacedTimerIgnoresThePreviousAlarmAndNotificationAction() {
+        val now = System.currentTimeMillis()
+        val previous = now - 60_000
+        val current = now + 60_000
+        Prefs.setTimer(ctx, current, SonyProtocol.Mode.OFF)
+        val receiver = AmbientTimerReceiver()
+        receiver.onReceive(ctx, Intent().putExtra(AmbientTimer.EXTRA_UNTIL, previous))
+        receiver.onReceive(ctx, Intent(LiveTimer.ACTION_STAY).putExtra(AmbientTimer.EXTRA_UNTIL, previous))
+        assertEquals(current, AmbientTimer.until(ctx))
+        assertEquals(SonyProtocol.Mode.OFF, AmbientTimer.returnMode(ctx))
+
+        receiver.onReceive(ctx, Intent(LiveTimer.ACTION_STAY).putExtra(AmbientTimer.EXTRA_UNTIL, current))
+        assertNull(AmbientTimer.until(ctx))
     }
 }

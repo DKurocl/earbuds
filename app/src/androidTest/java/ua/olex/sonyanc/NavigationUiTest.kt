@@ -1,5 +1,7 @@
 package ua.olex.sonyanc
 
+import android.animation.ValueAnimator
+import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Rule
@@ -7,6 +9,7 @@ import org.junit.Test
 import org.junit.Assert.assertTrue
 import androidx.lifecycle.Lifecycle
 import androidx.activity.BackEventCompat
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 
 class NavigationUiTest {
@@ -67,7 +70,13 @@ class NavigationUiTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         val row = compose.onNodeWithText("Wallpaper colors")
         row.performScrollTo().assertIsDisplayed()
+        fun scrollRange() = compose.onAllNodes(
+            SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange),
+        ).fetchSemanticsNodes().map {
+            it.config[androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange].run { value() to maxValue() }
+        }
         val before = row.getBoundsInRoot()
+        val beforeRange = scrollRange()
         scenario.moveToState(Lifecycle.State.CREATED)
         scenario.moveToState(Lifecycle.State.RESUMED)
         row.assertIsDisplayed()
@@ -75,6 +84,29 @@ class NavigationUiTest {
 
         scenario.recreate()
         row.assertIsDisplayed()
-        assertEquals(before.top.value, row.getBoundsInRoot().top.value, 0.5f)
+        assertEquals("Scroll ranges before $beforeRange and after ${scrollRange()}", before.top.value, row.getBoundsInRoot().top.value, 0.5f)
+    }
+
+    @Test fun predictiveBackKeepsThePageStillWhenSystemAnimationsAreDisabled() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command))
+            .bufferedReader().use { it.readText().trim() }
+
+        val oldScale = shell("settings get global animator_duration_scale")
+        try {
+            shell("settings put global animator_duration_scale 0")
+            compose.waitUntil(5_000) { !ValueAnimator.areAnimatorsEnabled() }
+            compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("Name").assertIsDisplayed()
+            val before = compose.onNodeWithContentDescription("Back").getBoundsInRoot()
+            swipeBack(0.6f)
+            compose.waitForIdle()
+            assertEquals(before, compose.onNodeWithContentDescription("Back").getBoundsInRoot())
+            compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        } finally {
+            if (oldScale.toFloatOrNull() == null) shell("settings delete global animator_duration_scale")
+            else shell("settings put global animator_duration_scale $oldScale")
+        }
     }
 }

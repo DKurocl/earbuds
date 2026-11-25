@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -24,6 +25,7 @@ object AmbientTimer {
     fun returnMode(ctx: Context): SonyProtocol.Mode = Prefs.timerReturn(ctx) ?: SonyProtocol.Mode.ANC
 
     internal const val EXTRA_UNTIL = "expires_at"
+    private var startVersion = 0L
 
     internal fun alarmIntent(ctx: Context, until: Long) = PendingIntent.getBroadcast(
         ctx, 7, Intent(ctx, AmbientTimerReceiver::class.java)
@@ -38,33 +40,56 @@ object AmbientTimer {
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.let(alarms::cancel)
     }
 
-    /**
-     * Remembers where to return, arms the alarm and switches to Ambient with the user's level.
-     * USE_EXACT_ALARM is held and canScheduleExactAlarms() is checked; lint only knows SCHEDULE_EXACT_ALARM.
-     */
+    /** Start timing once the earbuds confirm Ambient. */
+    suspend fun start(ctx: Context, minutes: Int, from: SonyProtocol.NcState): SonyProtocol.Mode? {
+        val (version, receipt) = requestStart(from)
+        if (withTimeoutOrNull(8500) { receipt.await() } != true) return null
+        return armConfirmed(ctx, minutes, from.mode, version, receipt)
+    }
+
+    @Synchronized private fun requestStart(from: SonyProtocol.NcState) =
+        ++startVersion to Headphones.request(from.copy(mode = SonyProtocol.Mode.AMBIENT))
+
+    @Synchronized
     @android.annotation.SuppressLint("MissingPermission")
-    fun start(ctx: Context, minutes: Int, from: SonyProtocol.NcState) {
-        val until = System.currentTimeMillis() + minutes * 60_000L
-        val back = if (from.mode == SonyProtocol.Mode.AMBIENT) SonyProtocol.Mode.ANC else from.mode
+    private fun armConfirmed(
+        ctx: Context, minutes: Int, from: SonyProtocol.Mode, version: Long, receipt: Deferred<Boolean>,
+    ): SonyProtocol.Mode? {
+        if (version != startVersion || !ModeControl.isCurrent(receipt)) return null
         val previous = Prefs.timerUntil(ctx)
+        val now = System.currentTimeMillis()
+        val until = now + minutes * 60_000L
+        val back = when {
+            from != SonyProtocol.Mode.AMBIENT -> from
+            previous > now -> returnMode(ctx)
+            else -> SonyProtocol.Mode.ANC
+        }
         val alarms = ctx.getSystemService(AlarmManager::class.java)
         if (previous != 0L) cancelAlarm(ctx, alarms, previous)
         Prefs.setTimer(ctx, until, back)
         if (alarms.canScheduleExactAlarms()) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, until, alarmIntent(ctx, until))
         else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, until, alarmIntent(ctx, until))
-        Headphones.request(from.copy(mode = SonyProtocol.Mode.AMBIENT))
         LiveTimer.show(ctx, until, back)
         Widgets.refreshAll(ctx)
+        return back
     }
 
-    /** The user chose a mode themselves (or wants to stay in Ambient): forget the return. */
-    fun cancel(ctx: Context) {
+    /** A manual choice or Stay also invalidates a start waiting for hardware confirmation. */
+    @Synchronized fun cancel(ctx: Context, expectedUntil: Long? = null) {
         val until = Prefs.timerUntil(ctx)
-        if (until == 0L) return
-        cancelAlarm(ctx, ctx.getSystemService(AlarmManager::class.java), until)
+        if (expectedUntil != null && until != expectedUntil) return
+        startVersion++
+        if (until != 0L) finish(ctx, until)
+    }
+
+    @Synchronized internal fun finish(ctx: Context, expectedUntil: Long): SonyProtocol.Mode? {
+        if (expectedUntil == 0L || Prefs.timerUntil(ctx) != expectedUntil) return null
+        val back = returnMode(ctx)
+        cancelAlarm(ctx, ctx.getSystemService(AlarmManager::class.java), expectedUntil)
         Prefs.clearTimer(ctx)
         LiveTimer.hide(ctx)
         Widgets.refreshAll(ctx)
+        return back
     }
 
     /** "4:12" for the countdown pill. */
@@ -85,13 +110,13 @@ class AmbientTimerReceiver : BroadcastReceiver() {
         if (activeUntil == 0L) { LiveTimer.hide(ctx); return }
         if (intent.getLongExtra(AmbientTimer.EXTRA_UNTIL, 0) != activeUntil) return
         if (intent.action == null && activeUntil > System.currentTimeMillis()) return
-        if (intent.action == LiveTimer.ACTION_STAY) { AmbientTimer.cancel(ctx); return }
-        val back = AmbientTimer.returnMode(ctx)
-        ctx.getSystemService(AlarmManager::class.java).cancel(AmbientTimer.alarmIntent(ctx, activeUntil))
-        Prefs.clearTimer(ctx)
-        LiveTimer.hide(ctx)
+        if (intent.action == LiveTimer.ACTION_STAY) {
+            AmbientTimer.cancel(ctx, expectedUntil = activeUntil)
+            return
+        }
+        val back = AmbientTimer.finish(ctx, activeUntil) ?: return
         // Earbuds already in the case: nothing to switch back, and no error buzz in the pocket.
-        if (Prefs.linked(ctx) == false) { Widgets.refreshAll(ctx); return }
+        if (Prefs.linked(ctx) == false) return
         Headphones.init(ctx)
         val pending = goAsync()
         scope.launch {

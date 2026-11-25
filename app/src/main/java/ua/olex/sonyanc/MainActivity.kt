@@ -243,6 +243,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                             ?.firstOrNull()?.let { it == 0 }?.takeIf { linked != false },
                         onSpeakToChat = { model.setSpeakToChat(it) },
                         ambientMinutes = model.ambientMinutes, ambientUntil = model.ambientUntil,
+                        ambientReturn = AmbientTimer.returnMode(ctx),
                         onAmbientFor = {
                             // The countdown can live in the status bar; ask once it is wanted.
                             if (!model.ambientForAMoment()) timerNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)

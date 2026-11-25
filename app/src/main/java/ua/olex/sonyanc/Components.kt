@@ -51,7 +51,11 @@ fun PageScaffold(
     // A page that fits the screen doesn't scroll at all: the title collapses only when there is
     // something below to scroll to.
     val column = rememberScrollState()
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(canScroll = { column.maxValue > 0 })
+    val appBarState = rememberTopAppBarState()
+    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+        state = appBarState,
+        canScroll = { column.maxValue > 0 },
+    )
     val page = Surfaces.page
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -72,8 +76,8 @@ fun PageScaffold(
         },
     ) { insets ->
         Column(
-            Modifier.padding(insets).fillMaxSize().verticalScroll(column)
-                .padding(horizontal = UiTokens.pageInset).navigationBarsPadding(),
+            Modifier.padding(insets).consumeWindowInsets(insets).fillMaxSize().verticalScroll(column)
+                .padding(horizontal = UiTokens.pageInset),
             verticalArrangement = Arrangement.spacedBy(UiTokens.pageSectionGap),
             content = { content(); Spacer(Modifier.height(12.dp)) },
         )
