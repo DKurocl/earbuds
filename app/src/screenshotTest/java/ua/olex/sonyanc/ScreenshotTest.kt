@@ -3,6 +3,8 @@ package ua.olex.sonyanc
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.SemanticsMatcher
@@ -205,6 +207,134 @@ class ScreenshotTest {
         compose.runOnIdle { manual.value = false }
         indicator.assertDoesNotExist()
         assertTrue("The refresh indicator remained after completion", idle.contentEquals(topCenterPixels()))
+    }
+
+    @Test fun modeGlyphsDrawDifferentContoursThenReturnToTheirRestingShape() {
+        val request = mutableStateOf<Int?>(null)
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                Row {
+                    SonyProtocol.Mode.entries.forEach { mode ->
+                        ModeGlyph(mode, request.value, selected = true, applying = false, color = Color.White)
+                    }
+                }
+            }
+        }
+        fun icons(pose: String? = null): List<IntArray> = compose.runOnIdle {
+            val root = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            val side = with(compose.density) { 24.dp.roundToPx() }
+            if (pose != null) {
+                val strip = Bitmap.createBitmap(bitmap, 0, 0, side * 3, side)
+                val directory = File(System.getProperty("screenshotDir")!!).apply { mkdirs() }
+                File(directory, "mode-glyphs-$pose.png").outputStream().use {
+                    strip.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                strip.recycle()
+            }
+            List(3) { index ->
+                IntArray(side * side).also { bitmap.getPixels(it, 0, side, index * side, 0, side, side) }
+            }.also { bitmap.recycle() }
+        }
+        val rest = icons("rest")
+        assertTrue(rest.all { pixels -> pixels.any { it == android.graphics.Color.WHITE } })
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { request.value = 1 }
+        compose.mainClock.advanceTimeBy(128)
+        icons() // Flush the view display list before sampling the animated draw layers.
+        compose.mainClock.advanceTimeBy(96)
+        val attack = icons("attack")
+        compose.mainClock.advanceTimeBy(80)
+        val release = icons("release")
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        icons()
+        val settled = icons("settled")
+        SonyProtocol.Mode.entries.forEachIndexed { i, mode ->
+            assertTrue("$mode should move", !rest[i].contentEquals(attack[i]))
+            assertTrue("$mode should keep moving", !attack[i].contentEquals(release[i]))
+            assertTrue("$mode should settle exactly into its original glyph", rest[i].contentEquals(settled[i]))
+        }
+    }
+
+    @Test fun noiseControlStretchesInwardAndWaitsForConfirmation() {
+        val anc = SonyProtocol.NcState(SonyProtocol.Mode.ANC)
+        val confirmed = mutableStateOf(anc)
+        val pending = mutableStateOf<SonyProtocol.NcState?>(null)
+        val requested = mutableListOf<SonyProtocol.NcState>()
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                HushScreen(
+                    status = Headphones.Status.CONNECTED, nc = confirmed.value,
+                    pending = pending.value, fresh = true, error = null,
+                    battery = SonyProtocol.Battery(80, 80, 70), granted = true, hasDevice = true,
+                    onMode = { requested.add(it); pending.value = it },
+                    onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                )
+            }
+        }
+
+        val ancButton = compose.onNodeWithContentDescription(SonyProtocol.Mode.ANC.label)
+        val offButton = compose.onNodeWithContentDescription(SonyProtocol.Mode.OFF.label)
+        val ambientButton = compose.onNodeWithContentDescription(SonyProtocol.Mode.AMBIENT.label)
+        fun dockBounds() = listOf(ancButton, ambientButton, offButton).map { it.getBoundsInRoot() }
+        val initialButtons = dockBounds()
+        val more = compose.onNodeWithText("More controls")
+        val initialMore = more.getBoundsInRoot().top
+
+        fun assertStretch(index: Int) {
+            val pressed = dockBounds()
+            val before = initialButtons[index]
+            val after = pressed[index]
+            val growth = (after.right - after.left) - (before.right - before.left)
+            assertTrue("Expected a restrained stretch, got $growth", growth > 1.dp && growth <= 9.dp)
+            assertEquals(initialButtons.first().left, pressed.first().left)
+            assertEquals(initialButtons.last().right, pressed.last().right)
+            pressed.zip(initialButtons).forEach { (current, initial) ->
+                assertEquals(initial.top, current.top)
+                assertEquals(initial.bottom, current.bottom)
+            }
+            assertTrue("Ambient needs room to keep its full label", pressed[1].right - pressed[1].left >= 104.dp)
+        }
+
+        ancButton.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(120)
+        assertStretch(0)
+        ancButton.performTouchInput { cancel() }
+        compose.mainClock.advanceTimeBy(350)
+        assertEquals(initialButtons, dockBounds())
+
+        offButton.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(120)
+        assertStretch(2)
+        offButton.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(350)
+        assertEquals(initialButtons, dockBounds())
+        ancButton.assertIsSelected()
+        offButton.assertIsNotSelected()
+        assertEquals("Applying", offButton.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        assertEquals(initialMore, more.getBoundsInRoot().top)
+        compose.runOnIdle {
+            assertEquals(listOf(SonyProtocol.Mode.OFF), requested.map { it.mode })
+        }
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            confirmed.value = requested.single()
+            pending.value = null
+        }
+        val positions = List(48) {
+            compose.mainClock.advanceTimeByFrame()
+            more.getBoundsInRoot().top.value
+        }
+        offButton.assertIsSelected()
+        assertEquals(initialButtons, dockBounds())
+        assertTrue("Options should collapse after the earbuds confirm Off", positions.last() < initialMore.value)
+        val frameSteps = (listOf(initialMore.value) + positions).zipWithNext { a, b -> kotlin.math.abs(a - b) }
+        assertTrue("The mode card lost a full section gap in a single frame: $frameSteps",
+            frameSteps.all { it < UiTokens.homeSectionGap.value })
+        assertTrue("The collapse should have visible intermediate positions", positions.distinct().size > 5)
     }
 
     @Test fun home() = shoot("home") {

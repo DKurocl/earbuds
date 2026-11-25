@@ -61,7 +61,7 @@ internal object SymbolFont {
 @Composable
 fun HushIcon(
     glyph: Glyph, modifier: Modifier = Modifier, color: Color = LocalContentColor.current,
-    filled: Boolean = false, bold: Boolean = false,
+    filled: Boolean = false, bold: Boolean = false, popOnEmphasis: Boolean = true,
 ) {
     val ctx = LocalContext.current
     val mirror = glyph == Glyph.BACK && LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -73,7 +73,7 @@ fun HushIcon(
     val first = remember { booleanArrayOf(true) }
     LaunchedEffect(emphasis) {
         if (first[0]) { first[0] = false; return@LaunchedEffect }
-        if (emphasis) { pop.snapTo(0.82f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
+        if (emphasis && popOnEmphasis) { pop.snapTo(0.82f); pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
     }
     val paint = remember {
         Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = SymbolFont.get(ctx); textAlign = Paint.Align.CENTER }
