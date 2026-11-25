@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -84,6 +85,7 @@ fun HushScreen(
     val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
     val connecting = status == Headphones.Status.CONNECTING && linked != false
     val canControl = granted && hasDevice && bluetoothOn && paired && linked != false
+    val showModeDock = granted && hasDevice && bluetoothOn && paired
     val feedback = LocalHapticFeedback.current
     fun choose(value: NcState) {
         if (haptics) feedback.performHapticFeedback(HapticFeedbackType.SegmentTick)
@@ -106,16 +108,16 @@ fun HushScreen(
             }
         }
     }) { insets ->
-        // The dock floats over the page; the page scrolls under it and ends above it.
         val density = LocalDensity.current
         var dockHeight by remember { mutableStateOf(0.dp) }
+        val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val dockClearance = if (showModeDock) (dockHeight - navigationBottom).coerceAtLeast(0.dp) else 0.dp
         Box(Modifier.padding(top = insets.calculateTopPadding()).fillMaxSize()) {
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = manualRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
-            // The page ends above the floating toolbar: nothing scrolls under it or shows behind it.
-            modifier = Modifier.fillMaxSize().padding(bottom = dockHeight),
+            modifier = Modifier.fillMaxSize(),
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = manualRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter).then(
@@ -124,7 +126,8 @@ fun HushScreen(
             },
         ) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = UiTokens.pageInset).navigationBarsPadding(),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = UiTokens.pageInset)
+                .navigationBarsPadding().padding(bottom = dockClearance),
             verticalArrangement = Arrangement.spacedBy(UiTokens.homeSectionGap),
         ) {
             // Keep connection feedback under the device name so the controls stay in place.
@@ -190,7 +193,7 @@ fun HushScreen(
         }
         }
         // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
-        if (granted && hasDevice && bluetoothOn && paired) ModeDock(
+        if (showModeDock) ModeDock(
             nc, pending, canControl, ::choose,
             Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
         )
@@ -451,14 +454,9 @@ private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockE
     }
 }
 
-/**
- * Noise control: Material 3 Expressive's floating toolbar at the bottom, where the thumb is. Only
- * the three modes, on nothing: no band of page colour behind it and nothing that slides with the
- * scroll. The page ends above it, so it never covers a row.
- */
+/** The buttons float above the scrollable page, with clear space between their pills. */
 @Composable
 private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onChoose: (NcState) -> Unit, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
     BoxWithConstraints(
         modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
         contentAlignment = Alignment.Center,
@@ -472,35 +470,33 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
         }
         val contentWidths = labelWidths.map { it + 24.dp + ToggleButtonDefaults.IconSpacing + 24.dp }
         val iconOnly = maxWidth < 320.dp || density.fontScale >= 1.3f || contentWidths.any { it > slotWidth }
-        Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
-            var iconMotion by remember { mutableStateOf<Pair<Mode, Int>?>(null) }
-            val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
-            ButtonGroup(
-                overflowIndicator = {},
-                expandedRatio = .08f,
-                modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Mode.entries.forEachIndexed { index, mode ->
-                    val contentWidth = if (iconOnly) 48.dp else contentWidths[index]
-                    // Keep room for the whole label, including the case where two neighbors press.
-                    val compression = ((slotWidth - contentWidth - 1.dp) / 2).coerceIn(0.dp, 8.dp)
-                    customItem(
-                        buttonGroupContent = {
-                            ModeButton(
-                                mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
-                                iconMotion?.takeIf { it.first == mode }?.second, interactions[index],
-                                Modifier.weight(1f).animateWidth(interactions[index], compression),
-                            ) {
-                                if (mode != (pending ?: state)?.mode) {
-                                    iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
-                                }
-                                onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
+        var iconMotion by remember { mutableStateOf<Pair<Mode, Int>?>(null) }
+        val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
+        ButtonGroup(
+            overflowIndicator = {},
+            expandedRatio = .08f,
+            modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Mode.entries.forEachIndexed { index, mode ->
+                val contentWidth = if (iconOnly) 48.dp else contentWidths[index]
+                // Keep room for the whole label, including the case where two neighbors press.
+                val compression = ((slotWidth - contentWidth - 1.dp) / 2).coerceIn(0.dp, 8.dp)
+                customItem(
+                    buttonGroupContent = {
+                        ModeButton(
+                            mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
+                            iconMotion?.takeIf { it.first == mode }?.second, interactions[index],
+                            Modifier.weight(1f).animateWidth(interactions[index], compression),
+                        ) {
+                            if (mode != (pending ?: state)?.mode) {
+                                iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
                             }
-                        },
-                        menuContent = {},
-                    )
-                }
+                            onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
+                        }
+                    },
+                    menuContent = {},
+                )
             }
         }
     }
@@ -518,11 +514,15 @@ private fun ModeButton(
         onCheckedChange = { onClick() },
         enabled = enabled,
         shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = CircleShape, checkedShape = CircleShape),
-        colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
+        colors = ToggleButtonDefaults.colors(
+            containerColor = cs.surfaceContainerHighest,
+            contentColor = cs.onSurface,
+            disabledContainerColor = cs.surfaceContainerHighest,
+        ),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
         // The screen's one hero control, as Pixel Buds' mode button: taller than a normal button.
-        modifier = modifier.heightIn(min = 64.dp)
+        modifier = modifier.heightIn(min = 64.dp).shadow(3.dp, CircleShape, clip = false)
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {
