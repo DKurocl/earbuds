@@ -2,7 +2,7 @@
 
 ## 3.0.2 candidate compared with 3.0.1
 
-Baseline: [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.
+The baseline is [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.
 
 | Input | 3.0.1 | 3.0.2 candidate |
 |---|---|---|
@@ -12,12 +12,20 @@ Baseline: [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fe
 
 The Bluetooth stream test sends an oversized frame followed by a fragmented 4096-byte escaped payload. The automation tests cover an intervening manual choice and an invalidated timer or connection, plus a widget request superseded by a later choice in the app.
 The standalone JVM run passed 42 tests across protocol, stream transport, scheduling and battery
-history and health. The Android build runs the full suite, including the mode-controller tests.
+history and health. The Android Gradle JVM run passed all 112 tests, including the mode-controller
+tests. [The first candidate run](https://github.com/DKurocl/xm5/actions/runs/45596239368) also passed
+the build, lint, goldens and 20 Android emulator tests.
 
-The launcher icon, widget layouts and committed screenshot goldens match the baseline at source
-level. The page behind the current one stays drawn for predictive back with its controls excluded
-from the accessibility tree. The instrumentation suite exercises that behavior, both swipe edges,
-and settings scroll position after resume and recreation.
+The launcher icon and widget layouts match the baseline at source level. The page behind the
+current one stays drawn for predictive back with its controls excluded from the accessibility
+tree. The instrumentation suite exercises both swipe edges and settings scroll position after
+resume and recreation.
+
+Row icon backgrounds use the same 40 dp circle for all categories, with the existing wallpaper
+colors and error tone. All 32 screenshot test cases rendered locally. Fifteen reference images
+changed, with visible pixel differences confined to the row-icon area. Compare the
+[3.0.1 settings render](https://github.com/DKurocl/xm5/blob/f9af749/app/src/screenshotTest/goldens/page-settings.png)
+with the [candidate settings render](https://github.com/DKurocl/xm5/blob/codex/earbuds-3.0.2-correctness/app/src/screenshotTest/goldens/page-settings.png).
 
 ### Pixel 10 Pro XL acceptance
 
@@ -35,7 +43,7 @@ Compare switching to another app and returning from Recents on Home, Battery, EQ
 
 For performance, run `coldLaunch` and `settingsTransitions` with the required release baseline
 profile. Run the matching `WithoutBaselineProfile` methods for a no-precompilation comparison on
-the same build. Save startup timing, frame-overrun percentiles, refresh rate and Perfetto traces. Record process memory after cold launch and repeated navigation. Use matched 24-hour sessions for phone and WF-1000XM5 battery measurements. The emulator results do not fill these entries.
+the same build. Save startup timing, frame-overrun percentiles, refresh rate and Perfetto traces. Record process memory after cold launch and repeated navigation. Use matched 24-hour sessions for phone and WF-1000XM5 battery measurements. Collect these measurements on the physical Pixel.
 
 For ecosystem acceptance, pair or reconnect real WF-1000XM5, exercise Quick Settings and Gemini, verify companion presence with the app closed, and export/restore the settings across installs. Record which actions the earbuds confirmed and which surfaces stayed in sync. The device pass, side-by-side media and owner approval are pending.
 

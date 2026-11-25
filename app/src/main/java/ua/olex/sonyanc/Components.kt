@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -128,14 +127,14 @@ private val routineGlyphs = setOf(
  */
 private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> Unit)? = glyph?.let { g -> {
     val cs = MaterialTheme.colorScheme
-    val (container, glyphColor, shape) = when {
-        danger -> Triple(cs.errorContainer, cs.onErrorContainer, RoundedCornerShape(12.dp))
-        g in linkGlyphs -> Triple(cs.secondaryFixed, cs.onSecondaryFixed, RoundedCornerShape(13.dp))
-        g in routineGlyphs -> Triple(cs.tertiaryFixedDim, cs.onTertiaryFixed, RoundedCornerShape(16.dp))
-        else -> Triple(cs.primaryFixedDim, cs.onPrimaryFixed, CircleShape)
+    val (container, glyphColor) = when {
+        danger -> cs.errorContainer to cs.onErrorContainer
+        g in linkGlyphs -> cs.secondaryFixed to cs.onSecondaryFixed
+        g in routineGlyphs -> cs.tertiaryFixedDim to cs.onTertiaryFixed
+        else -> cs.primaryFixedDim to cs.onPrimaryFixed
     }
 
-    Surface(shape = shape, color = container, contentColor = glyphColor, modifier = Modifier.size(40.dp)) {
+    Surface(shape = CircleShape, color = container, contentColor = glyphColor, modifier = Modifier.size(40.dp)) {
         Box(contentAlignment = Alignment.Center) { HushIcon(g, Modifier.size(22.dp), glyphColor) }
     }
 } }
