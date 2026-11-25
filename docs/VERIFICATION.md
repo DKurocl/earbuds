@@ -1,5 +1,19 @@
 # Verification
 
+## Pixel feedback after build 223
+
+The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/xm5/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget.
+
+| Observation | Candidate verification |
+|---|---|
+| The EQ point appeared to jump on release | The touch regression moves the 16 kHz band with the gesture still down, checks that no write occurred, then checks for one write on release. The curve draws the held point from the current pointer delta. |
+| The top refresh indicator flickered after resume | The Compose regression checks that a background battery read leaves the indicator hidden and a manual read shows it. |
+| EQ and Battery had repetitive copy | The page goldens show the shorter text and preserve the gain values, battery estimate source and last-reading status. |
+| The lock screen dashboard had oversized mode controls relative to battery readings | In the 416 × 275 dp reference, the battery rings grow from about 58 to 68 dp and the mode row changes from 64 to 54 dp. The 340 × 208 dp preview covers the compact layout. |
+| The compact home widget had too much space around its modes | At 240 × 105 dp the segment height grows from about 44 to 63 dp. The RemoteViews interaction test covers both player-slot side edges and the center mode controls. |
+
+The PNG comparisons under `app/src/screenshotTest/goldens` use the same Robolectric configuration as build 223. Physical gesture, haptic, launcher and lock screen verification for this candidate is pending.
+
 ## 3.0.2 candidate compared with 3.0.1
 
 The baseline is [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.

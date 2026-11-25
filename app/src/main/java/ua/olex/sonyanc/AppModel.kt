@@ -151,7 +151,16 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     // ---- device info ----
     fun connect() = viewModelScope.launch { Headphones.connectAndSync() }
-    fun refreshInfo() = viewModelScope.launch { Headphones.refreshInfo() }
+    var manualRefreshing by mutableStateOf(false); private set
+
+    fun refreshInfo() {
+        if (manualRefreshing) return
+        manualRefreshing = true
+        viewModelScope.launch {
+            try { Headphones.refreshInfo() }
+            finally { manualRefreshing = false }
+        }
+    }
 
     fun readDeviceInfo() = viewModelScope.launch {
         Headphones.readFirmware()

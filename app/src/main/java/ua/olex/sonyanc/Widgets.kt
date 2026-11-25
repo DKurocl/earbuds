@@ -25,7 +25,15 @@ internal object WidgetLayout {
     private const val MAX_ROW_FLAT = 64f
     private const val MAX_COLUMN_TILE = 64f
     private const val MAX_RING = 84f
-    private const val MAX_DASH_RING = 64f
+    private const val MAX_DASH_RING = 68f
+    const val HOME_SIDE_PADDING = 14f
+    const val DASH_GAP = 8f
+    const val DASH_SIDE_PADDING = 16f
+
+    fun homeModeHeight(width: Float, height: Float): Float {
+        val segmentWidth = (width - 2 * HOME_SIDE_PADDING - 4) / 3
+        return minOf(72f, height - 16f, segmentWidth * .90f).coerceAtLeast(24f)
+    }
     /** Slots at least this tall span two launcher rows. */
     private const val TWO_ROWS = 140f
 
@@ -81,18 +89,18 @@ internal object WidgetLayout {
      * @param title, value, small: measured line heights in dp (16, 14 and 13 sp).
      */
     fun dashboard(width: Float, height: Float, title: Float, value: Float, small: Float, label: Float = 54f): DashboardSpec? {
-        val w = width - 2 * 16f
-        val h = height - 2 * 16f
-        val modes = if (h >= 220f) 64f else 56f
-        val middle = h - title - 2 * 12f - modes
-        val ring = minOf(MAX_DASH_RING, middle - (6 + value), w * 0.55f / 3 - 12)
+        val w = width - 2 * DASH_SIDE_PADDING
+        val h = height - 2 * DASH_SIDE_PADDING
+        val modes = if (h >= 220f) 54f else 48f
+        val middle = h - title - 2 * DASH_GAP - modes
+        val ring = minOf(MAX_DASH_RING, middle - (6 + value), (w * .57f - 2 * DASH_GAP) / 3)
         if (w < 280f || ring < 36f) return null
         val tile = (w - 2 * GAP) / 3
         return DashboardSpec(
             estimate = middle >= 34f + 4 + 2 * small + 2,
             labels = tile >= 2 * TILE_PAD + ICON + 8 + label,
             ring = ring, modes = modes,
-            heroWidth = w - 3 * ring - 2 * 12 - 8,
+            heroWidth = w - 3 * ring - 3 * DASH_GAP,
         )
     }
 

@@ -3,6 +3,12 @@ package ua.olex.sonyanc
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.runtime.mutableStateOf
@@ -125,6 +131,55 @@ class ScreenshotTest {
         val before = compose.runOnIdle { commits() }
         compose.mainClock.advanceTimeBy(96)
         assertEquals("Composition changes during fill", before, compose.runOnIdle { commits() })
+    }
+
+    @Test fun equalizerChangesTheBandBeforeWritingItOnRelease() {
+        val writes = mutableListOf<List<Int>>()
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                EqualizerContent(
+                    state = EqualizerProtocol.State(0xA0, List(6) { 0 }),
+                    busy = false,
+                    unavailable = false,
+                    onBands = { writes.add(it) },
+                )
+            }
+        }
+        val curve = compose.onNodeWithContentDescription("Equalizer curve")
+        curve.performTouchInput {
+            down(Offset(width * .967f, centerY))
+            moveBy(Offset(0f, -height * .28f))
+        }
+        compose.onNode(SemanticsMatcher("positive 16 kHz gain") {
+            it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { value -> value.startsWith("16 kHz, +") }
+        }).assertIsDisplayed()
+        compose.runOnIdle { assertTrue(writes.isEmpty()) }
+        curve.performTouchInput { up() }
+        compose.runOnIdle {
+            assertEquals(1, writes.size)
+            assertTrue(writes.single().last() > 0)
+        }
+    }
+
+    @Test fun backgroundReadsDoNotShowTheManualRefreshIndicator() {
+        val background = mutableStateOf(true)
+        val manual = mutableStateOf(false)
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                HushScreen(
+                    status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC),
+                    pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
+                    granted = true, hasDevice = true, batteryRefreshing = background.value, manualRefreshing = manual.value,
+                    onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                )
+            }
+        }
+        val indicator = compose.onNodeWithContentDescription("Refreshing earbuds")
+        indicator.assertDoesNotExist()
+        compose.runOnIdle { manual.value = true }
+        indicator.assertIsDisplayed()
+        compose.runOnIdle { manual.value = false; background.value = true }
+        indicator.assertDoesNotExist()
     }
 
     @Test fun home() = shoot("home") {

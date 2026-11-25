@@ -246,7 +246,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         onBluetooth = ::bluetooth, onPick = { open(Page.APP) },
                         onEqualizer = { open(Page.EQUALIZER) }, onEarbuds = { open(Page.EARBUDS) }, onConnection = { open(Page.DEVICE) },
                         haptics = model.haptics, batteryRefreshing = device.batteryRefreshing, batteryFresh = device.liveBatteryParts.isNotEmpty(),
-                        onBattery = { model.refreshInfo() }, codec = device.codec, codecRefreshing = device.codecRefreshing,
+                        onBattery = { model.refreshInfo() }, codec = device.codec, manualRefreshing = model.manualRefreshing,
                         deviceName = model.displayName,
                         batteryParts = device.liveBatteryParts,
                         linked = linked, bluetoothOn = model.bluetoothOn, codecLive = device.codecLive,

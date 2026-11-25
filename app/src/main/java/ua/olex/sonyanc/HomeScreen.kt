@@ -69,7 +69,7 @@ fun HushScreen(
     onPermission: () -> Unit, onBluetooth: () -> Unit, onPick: () -> Unit, onEqualizer: () -> Unit = {}, onEarbuds: () -> Unit = {},
     onConnection: () -> Unit = {}, haptics: Boolean = true,
     batteryRefreshing: Boolean = false, batteryFresh: Boolean = true, onBattery: () -> Unit = {},
-    codec: CodecProtocol.State? = null, codecRefreshing: Boolean = false,
+    codec: CodecProtocol.State? = null, manualRefreshing: Boolean = false,
     deviceName: String = "WF-1000XM5",
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
     batterySeenAt: Long? = null,
@@ -113,12 +113,14 @@ fun HushScreen(
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
-            isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
+            isRefreshing = manualRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
             // The page ends above the floating toolbar: nothing scrolls under it or shows behind it.
             modifier = Modifier.fillMaxSize().padding(bottom = dockHeight),
             indicator = {
-                PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = batteryRefreshing || codecRefreshing,
-                    modifier = Modifier.align(Alignment.TopCenter))
+                PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = manualRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter).then(
+                        if (manualRefreshing) Modifier.semantics { contentDescription = "Refreshing earbuds" } else Modifier,
+                    ))
             },
         ) {
         Column(

@@ -190,13 +190,9 @@ class ModeWidget : AppWidgetProvider() {
          */
         private fun switch(ctx:Context,width:Float,height:Float,current:SonyProtocol.Mode?,pending:SonyProtocol.Mode?,
                            away:Boolean,interactive:Boolean):RemoteViews {
-            val slot=(width-40f-4f)/3f
-            // Tuned for the owner's slot (322 x 105 dp, beside the media player): a 60 dp group with
-            // the label under the icon, about 22 dp of bar above and below as the player has, and
-            // segments half again as wide as tall, so the chosen one is a stadium like the player's
-            // play button, never a circle.
-            val bar=minOf(60f,height-24f,slot/1.5f).coerceAtLeast(32f)
-            val stacked=bar>=56f
+            val slot = (width - 2 * WidgetLayout.HOME_SIDE_PADDING - 4f) / 3
+            val bar = WidgetLayout.homeModeHeight(width, height)
+            val stacked = bar >= 56f && width >= 276f
             val v=RemoteViews(ctx.packageName,if(stacked) R.layout.widget_group_tall else R.layout.widget_group)
             val iconSize=24f
             val widest=SonyProtocol.Mode.entries.maxOf{Widgets.textWidth(ctx,it.short,14f)}
@@ -279,9 +275,9 @@ class ModeWidget : AppWidgetProvider() {
             val heroSp=(32 downTo 18 step 2).firstOrNull{Widgets.textWidth(ctx,hero,it.toFloat(),"google-sans-medium")<=spec.heroWidth} ?: 18
             v.setTextViewTextSize(R.id.w_hero,TypedValue.COMPLEX_UNIT_SP,heroSp.toFloat())
             // Without a reading the header already says what to do; the big text names the mode.
-            v.setTextViewText(R.id.w_hero_sub,"of listening")
+            v.setTextViewText(R.id.w_hero_sub,"Listening left")
             v.setViewVisibility(R.id.w_hero_sub,if(buds!=null) View.VISIBLE else View.GONE)
-            v.setTextViewText(R.id.w_estimate,case?.let{"Case adds "+BatteryLife.short(it)} ?: "")
+            v.setTextViewText(R.id.w_estimate,case?.let{"Case +${BatteryLife.short(it)}"} ?: "")
             v.setViewVisibility(R.id.w_estimate,if(spec.estimate && case!=null) View.VISIBLE else View.GONE)
 
             val bb=b ?: SonyProtocol.Battery()

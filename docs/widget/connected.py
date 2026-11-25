@@ -125,7 +125,7 @@ def layout(stacked):
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="UselessParent" android:id="@android:id/background"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@drawable/w_bar_bg" android:paddingHorizontal="20dp" android:paddingVertical="6dp">
+    android:background="@drawable/w_bar_bg" android:paddingHorizontal="14dp" android:paddingVertical="8dp">
     <LinearLayout android:id="@+id/w_group"
         android:layout_width="match_parent" android:layout_height="48dp" android:layout_gravity="center"
         android:orientation="horizontal" android:baselineAligned="false">
@@ -139,7 +139,7 @@ def player_slot_mode(key, icon, text):
             android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
             android:clickable="true" android:focusable="true">
             <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
-                android:layout_marginHorizontal="2dp" android:layout_marginVertical="5dp"
+                android:layout_marginHorizontal="2dp" android:layout_marginVertical="3dp"
                 android:src="@drawable/w_player_pill"
                 android:scaleType="fitXY" android:duplicateParentState="true"
                 android:stateListAnimator="@animator/w_while_chosen" android:alpha="0"
@@ -170,11 +170,12 @@ def player_slot_layout():
     android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false"
     android:background="@drawable/w_bar_bg">
-    <FrameLayout android:id="@+id/w_open_left" android:layout_width="48dp" android:layout_height="match_parent" />
-    <LinearLayout android:layout_width="0dp" android:layout_height="58dp" android:layout_weight="1"
+    <FrameLayout android:id="@+id/w_open_left" android:layout_width="32dp" android:layout_height="match_parent" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+        android:layout_marginVertical="14dp"
         android:orientation="horizontal" android:baselineAligned="false">
 """ + "".join(player_slot_mode(*mode) for mode in MODES) + """    </LinearLayout>
-    <FrameLayout android:id="@+id/w_open_right" android:layout_width="48dp" android:layout_height="match_parent"
+    <FrameLayout android:id="@+id/w_open_right" android:layout_width="32dp" android:layout_height="match_parent"
         android:importantForAccessibility="no" />
 </LinearLayout>
 """
