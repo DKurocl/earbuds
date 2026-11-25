@@ -79,6 +79,24 @@ class BatteryLifeTest {
         assertEquals(emptyList<BatterySample>(), BatteryLog.decode("garbage;1,2"))
     }
 
+    @Test fun alternatingCaseAndBudsDeduplicateWithoutHidingChanges() {
+        val buds = sample(0, 80).copy(left = 80, right = 87)
+        val case = sample(1, 0).copy(level = null, case = 92)
+        var log = listOf(buds, case)
+        for (minute in 2..9) {
+            log = BatteryLog.add(log, buds.copy(at = minute * 60_000L))
+            log = BatteryLog.add(log, case.copy(at = minute * 60_000L))
+        }
+        assertEquals(listOf(buds, case), log)
+
+        val changed = buds.copy(at = 9 * 60_000L, right = 86)
+        assertEquals(log + changed, BatteryLog.add(log, changed))
+        val nextSession = buds.copy(at = 9 * 60_000L, session = buds.session + 1)
+        assertEquals(log + nextSession, BatteryLog.add(log, nextSession))
+        val later = buds.copy(at = 10 * 60_000L)
+        assertEquals(log + later, BatteryLog.add(log, later))
+    }
+
     @Test fun oldFiveFieldLogsStillReadAndTheCaseIsKept() {
         val old = BatteryLog.decode("60000,80,0,ANC,1")
         assertEquals(listOf(BatterySample(60000, 80, false, Mode.ANC, 1, null)), old)

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performSemanticsAction
@@ -524,13 +525,54 @@ class ScreenshotTest {
         EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)
     }
 
+    private val batteryFixture = DeviceState(
+        battery = SonyProtocol.Battery(84, 81, 70),
+        liveBatteryParts = setOf(0, 1, 2),
+        nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12),
+    )
+
     @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
     @Test fun batteryPage() = shoot("page-battery") {
-        BatteryContent(weekOfUse(), NOW, health = listOf(WeekHealth(2800, 430, 9), WeekHealth(2801, 425, 12), WeekHealth(2820, 372, 11)))
+        BatteryContent(
+            weekOfUse(), NOW, device = batteryFixture,
+            health = listOf(WeekHealth(2800, 430, 9), WeekHealth(2801, 425, 12), WeekHealth(2820, 372, 11)),
+        )
     }
 
     @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
-    @Test fun batteryPageLight() = shoot("page-battery-light") { BatteryContent(weekOfUse(), NOW) }
+    @Test fun batteryPageLight() = shoot("page-battery-light") {
+        BatteryContent(weekOfUse().takeLast(16), NOW, device = batteryFixture)
+    }
+
+    @Test fun batteryHistorySwitchesSeriesAndPicksActualReadings() {
+        val samples = listOf(
+            BatterySample(NOW - 36 * 60_000L, 60, false, SonyProtocol.Mode.ANC, 1, 90, 60, 64),
+            BatterySample(NOW - 60_000L, 46, false, SonyProtocol.Mode.ANC, 1, 85, 46, 50),
+        )
+        compose.setContent { AppTheme(dynamic = false) { BatteryContent(samples, NOW) } }
+        compose.onNodeWithText("Left").assertIsSelected()
+        compose.onNodeWithText("46%").assertIsDisplayed()
+        compose.onNodeWithText("Right").performClick().assertIsSelected()
+        compose.onNodeWithText("50%").assertIsDisplayed()
+        compose.onNodeWithText("Case").performClick().assertIsSelected()
+        compose.onNodeWithText("85%").assertIsDisplayed()
+        val history = compose.onNodeWithContentDescription("Case charge history")
+        history.performTouchInput { click(Offset(width * .25f, centerY)) }
+        compose.onNodeWithText("90%").assertIsDisplayed()
+        history.performTouchInput { click(Offset(width * .98f, centerY)) }
+        compose.onNodeWithText("85%").assertIsDisplayed()
+        compose.onNodeWithText("Noise control off").assertDoesNotExist()
+        compose.onNodeWithText("Battery details").performClick()
+        compose.onNodeWithText("Noise control off").assertExists()
+    }
+
+    @Test fun batteryHistoryDisplaysOneReadingAndNamesMissingParts() {
+        val reading = BatterySample(NOW - 60_000L, 68, false, null, 1, left = 68)
+        compose.setContent { AppTheme(dynamic = false) { BatteryContent(listOf(reading), NOW) } }
+        compose.onNodeWithText("68%").assertIsDisplayed()
+        compose.onNodeWithText("Case").performClick()
+        compose.onNodeWithText("No readings yet").assertIsDisplayed()
+    }
 
     @Test fun cachedBatteryPageIdentifiesTheLastReading() {
         compose.setContent {

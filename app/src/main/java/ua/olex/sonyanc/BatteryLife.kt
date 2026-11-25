@@ -120,10 +120,20 @@ object BatteryLog {
 
     /** Appends a reading; repeats of the same level within ten minutes add nothing. */
     fun add(samples: List<BatterySample>, s: BatterySample): List<BatterySample> {
-        val last = samples.lastOrNull()
-        if (last != null && last.session == s.session && last.level == s.level && last.case == s.case &&
-            last.left == s.left && last.right == s.right && last.charging == s.charging && last.mode == s.mode &&
-            s.at - last.at in 0 until 10 * 60_000L) return samples
+        // Bud and case notifications can alternate within the same read. Check the most recent
+        // comparable packet so stable charge does not rewrite history for every pair of replies.
+        val caseOnly = s.level == null
+        val budsOnly = s.case == null
+        for (index in samples.indices.reversed()) {
+            val previous = samples[index]
+            if (previous.session != s.session || previous.mode != s.mode ||
+                s.at - previous.at !in 0 until 10 * 60_000L) break
+            val otherPart = (caseOnly && previous.case == null) || (budsOnly && previous.level == null)
+            if (otherPart) continue
+            if (previous.level == s.level && previous.case == s.case &&
+                previous.left == s.left && previous.right == s.right && previous.charging == s.charging) return samples
+            break
+        }
         return (samples.filter { s.at - it.at <= KEEP_MS } + s).takeLast(MAX)
     }
 

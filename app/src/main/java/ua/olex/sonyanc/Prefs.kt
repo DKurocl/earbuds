@@ -86,6 +86,7 @@ object Prefs {
             "battery_log", "battery_health", "buds_reminded_session",
         ).forEach { editor.remove(it) }
         editor.apply()
+        batteryHistory = null
     }
 
     // ---- Android's Bluetooth link, from ACL broadcasts (see ConnectionReceiver) ----
@@ -199,8 +200,22 @@ object Prefs {
     }
 
     // ---- real battery use (BatteryLog) ----
-    fun batteryLog(ctx: Context) = BatteryLog.decode(p(ctx).getString("battery_log", null))
-    fun addBatterySample(ctx: Context, s: BatterySample) {
+    private class BatteryHistory(val encoded: String?, val samples: List<BatterySample>) {
+        val noiseControl by lazy { BatteryLog.rate(samples, SonyProtocol.Mode.ANC) }
+        val off by lazy { BatteryLog.rate(samples, SonyProtocol.Mode.OFF) }
+    }
+
+    private var batteryHistory: BatteryHistory? = null
+
+    @Synchronized private fun batteryHistory(ctx: Context): BatteryHistory {
+        val encoded = p(ctx).getString("battery_log", null)
+        return batteryHistory?.takeIf { it.encoded == encoded }
+            ?: BatteryHistory(encoded, BatteryLog.decode(encoded)).also { batteryHistory = it }
+    }
+
+    fun batteryLog(ctx: Context): List<BatterySample> = batteryHistory(ctx).samples
+
+    @Synchronized fun addBatterySample(ctx: Context, s: BatterySample) {
         val log = batteryLog(ctx)
         val next = BatteryLog.add(log, s)
         if (next === log) return
@@ -208,11 +223,17 @@ object Prefs {
         val week = BatteryHealth.weekOf(s.at)
         val thisWeek = next.filter { BatteryHealth.weekOf(it.at) == week }
         val health = BatteryHealth.record(batteryHealth(ctx), week, BatteryLog.drain(thisWeek, SonyProtocol.Mode.ANC))
-        p(ctx).edit().putString("battery_log", BatteryLog.encode(next)).putString("battery_health", BatteryHealth.encode(health)).apply()
+        val encoded = BatteryLog.encode(next)
+        p(ctx).edit().putString("battery_log", encoded).putString("battery_health", BatteryHealth.encode(health)).apply()
+        batteryHistory = BatteryHistory(encoded, next)
     }
     fun batteryHealth(ctx: Context) = BatteryHealth.decode(p(ctx).getString("battery_health", null))
     /** Measured percent per minute for [mode], or null while there is too little real use. */
-    fun drainRate(ctx: Context, mode: SonyProtocol.Mode?) = BatteryLog.rate(batteryLog(ctx), mode)
+    fun drainRate(ctx: Context, mode: SonyProtocol.Mode?): Double? = when (mode) {
+        null -> null
+        SonyProtocol.Mode.OFF -> batteryHistory(ctx).off
+        SonyProtocol.Mode.ANC, SonyProtocol.Mode.AMBIENT -> batteryHistory(ctx).noiseControl
+    }
     fun session(ctx: Context) = p(ctx).getInt("session", 0)
     fun nextSession(ctx: Context) = p(ctx).edit().putInt("session", session(ctx) + 1).apply()
 
