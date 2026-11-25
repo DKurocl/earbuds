@@ -11,11 +11,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 
 /**
@@ -24,9 +26,9 @@ import androidx.compose.ui.unit.dp
  * and optical size follow each Material style; display and headline text get the rounded cut
  * (ROND 100) that Material 3 Expressive uses for large type, smaller text stays crisp (ROND 0).
  */
-private fun flex(style: TextStyle, round: Boolean): TextStyle {
+private fun Density.flex(style: TextStyle, round: Boolean): TextStyle {
     val weight = style.fontWeight ?: FontWeight.Normal
-    val size = if (style.fontSize.isSp) style.fontSize.value else 14f
+    val size = if (style.fontSize.isSp) style.fontSize.toDp().value else 14f
     val family = FontFamily(
         Font(
             R.font.google_sans_flex, weight = weight,
@@ -41,23 +43,28 @@ private fun flex(style: TextStyle, round: Boolean): TextStyle {
 }
 
 @Composable
-private fun appTypography(): Typography = remember {
-    val t = Typography()
-    Typography(
-        displayLarge = flex(t.displayLarge, true), displayMedium = flex(t.displayMedium, true), displaySmall = flex(t.displaySmall, true),
-        headlineLarge = flex(t.headlineLarge, true), headlineMedium = flex(t.headlineMedium, true), headlineSmall = flex(t.headlineSmall, true),
-        titleLarge = flex(t.titleLarge, true), titleMedium = flex(t.titleMedium, false), titleSmall = flex(t.titleSmall, false),
-        bodyLarge = flex(t.bodyLarge, false), bodyMedium = flex(t.bodyMedium, false), bodySmall = flex(t.bodySmall, false),
-        labelLarge = flex(t.labelLarge, false), labelMedium = flex(t.labelMedium, false), labelSmall = flex(t.labelSmall, false),
-        displayLargeEmphasized = flex(t.displayLargeEmphasized, true), displayMediumEmphasized = flex(t.displayMediumEmphasized, true),
-        displaySmallEmphasized = flex(t.displaySmallEmphasized, true), headlineLargeEmphasized = flex(t.headlineLargeEmphasized, true),
-        headlineMediumEmphasized = flex(t.headlineMediumEmphasized, true), headlineSmallEmphasized = flex(t.headlineSmallEmphasized, true),
-        titleLargeEmphasized = flex(t.titleLargeEmphasized, true), titleMediumEmphasized = flex(t.titleMediumEmphasized, false),
-        titleSmallEmphasized = flex(t.titleSmallEmphasized, false), bodyLargeEmphasized = flex(t.bodyLargeEmphasized, false),
-        bodyMediumEmphasized = flex(t.bodyMediumEmphasized, false), bodySmallEmphasized = flex(t.bodySmallEmphasized, false),
-        labelLargeEmphasized = flex(t.labelLargeEmphasized, false), labelMediumEmphasized = flex(t.labelMediumEmphasized, false),
-        labelSmallEmphasized = flex(t.labelSmallEmphasized, false),
-    )
+private fun appTypography(): Typography {
+    val density = LocalDensity.current
+    return remember(density) {
+        with(density) {
+            val t = Typography()
+            Typography(
+                displayLarge = flex(t.displayLarge, true), displayMedium = flex(t.displayMedium, true), displaySmall = flex(t.displaySmall, true),
+                headlineLarge = flex(t.headlineLarge, true), headlineMedium = flex(t.headlineMedium, true), headlineSmall = flex(t.headlineSmall, true),
+                titleLarge = flex(t.titleLarge, true), titleMedium = flex(t.titleMedium, false), titleSmall = flex(t.titleSmall, false),
+                bodyLarge = flex(t.bodyLarge, false), bodyMedium = flex(t.bodyMedium, false), bodySmall = flex(t.bodySmall, false),
+                labelLarge = flex(t.labelLarge, false), labelMedium = flex(t.labelMedium, false), labelSmall = flex(t.labelSmall, false),
+                displayLargeEmphasized = flex(t.displayLargeEmphasized, true), displayMediumEmphasized = flex(t.displayMediumEmphasized, true),
+                displaySmallEmphasized = flex(t.displaySmallEmphasized, true), headlineLargeEmphasized = flex(t.headlineLargeEmphasized, true),
+                headlineMediumEmphasized = flex(t.headlineMediumEmphasized, true), headlineSmallEmphasized = flex(t.headlineSmallEmphasized, true),
+                titleLargeEmphasized = flex(t.titleLargeEmphasized, true), titleMediumEmphasized = flex(t.titleMediumEmphasized, false),
+                titleSmallEmphasized = flex(t.titleSmallEmphasized, false), bodyLargeEmphasized = flex(t.bodyLargeEmphasized, false),
+                bodyMediumEmphasized = flex(t.bodyMediumEmphasized, false), bodySmallEmphasized = flex(t.bodySmallEmphasized, false),
+                labelLargeEmphasized = flex(t.labelLargeEmphasized, false), labelMediumEmphasized = flex(t.labelMediumEmphasized, false),
+                labelSmallEmphasized = flex(t.labelSmallEmphasized, false),
+            )
+        }
+    }
 }
 
 // Material tonal colors derived from the coral launcher mark for use without wallpaper colors.

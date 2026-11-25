@@ -84,6 +84,35 @@ fun PageScaffold(
     }
 }
 
+internal data class HeaderAction(val glyph: Glyph, val label: String, val onClick: () -> Unit)
+
+/** Connect two related app-level actions, while each keeps its own touch and accessibility target. */
+@Composable
+internal fun HeaderActionPair(start: HeaderAction, end: HeaderAction, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val colors = IconButtonDefaults.filledTonalIconButtonColors(
+        containerColor = cs.surfaceContainerHigh,
+        contentColor = cs.onSurfaceVariant,
+    )
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+        @Composable fun Button(action: HeaderAction, leading: Boolean) {
+            fun corners(outer: Int, inner: Int): RoundedCornerShape {
+                val near = if (leading) outer.dp else inner.dp
+                val far = if (leading) inner.dp else outer.dp
+                return RoundedCornerShape(topStart = near, topEnd = far, bottomStart = near, bottomEnd = far)
+            }
+            FilledTonalIconButton(
+                onClick = action.onClick,
+                colors = colors,
+                shapes = IconButtonDefaults.shapes(shape = corners(24, 7), pressedShape = corners(18, 5)),
+                modifier = Modifier.size(UiTokens.minTouchTarget).semantics { contentDescription = action.label },
+            ) { HushIcon(action.glyph, Modifier.size(22.dp)) }
+        }
+        Button(start, leading = true)
+        Button(end, leading = false)
+    }
+}
+
 class GroupScope {
     internal val items = mutableListOf<@Composable (ListItemShapes) -> Unit>()
     fun item(content: @Composable (ListItemShapes) -> Unit) { items += content }

@@ -143,12 +143,16 @@ object BatteryLog {
         else -> 0
     }
 
-    private fun intervals(samples: List<BatterySample>) = samples.asSequence()
-        .filter { it.level != null }
+    private fun intervals(
+        samples: List<BatterySample>,
+        level: (BatterySample) -> Int? = BatterySample::level,
+        requireSameParts: Boolean = true,
+    ) = samples.asSequence()
+        .filter { level(it) != null }
         .zipWithNext()
         .filter { (a, b) ->
             a.session == b.session && !a.charging && !b.charging && b.at - a.at in 1..MAX_GAP &&
-                (a.left != null) == (b.left != null) && (a.right != null) == (b.right != null)
+                (!requireSameParts || ((a.left != null) == (b.left != null) && (a.right != null) == (b.right != null)))
         }
 
     /** Estimated connected minutes for the last week and the portion attributed to noise cancelling. */
@@ -181,19 +185,21 @@ object BatteryLog {
     }
 
     internal fun perEarbudDrain(samples: List<BatterySample>, mode: Mode?): EarbudDrain? {
-        val left = measure(samples, mode, BatterySample::left) ?: return null
-        val right = measure(samples, mode, BatterySample::right) ?: return null
+        val left = measure(samples, mode, BatterySample::left, requireSameParts = false) ?: return null
+        val right = measure(samples, mode, BatterySample::right, requireSameParts = false) ?: return null
         return EarbudDrain(left, right)
     }
 
     /** The measured drain and how much use it rests on, or null until there is enough. */
     fun drain(samples: List<BatterySample>, mode: Mode?): Drain? = measure(samples, mode, BatterySample::level)
 
-    private fun measure(samples: List<BatterySample>, mode: Mode?, level: (BatterySample) -> Int?): Drain? {
+    private fun measure(
+        samples: List<BatterySample>, mode: Mode?, level: (BatterySample) -> Int?, requireSameParts: Boolean = true,
+    ): Drain? {
         var minutes = 0.0
         var drop = 0
         val modeBucket = bucket(mode) ?: return null
-        for ((a, b) in intervals(samples)) {
+        for ((a, b) in intervals(samples, level, requireSameParts)) {
             val start = level(a) ?: continue
             val end = level(b) ?: continue
             if (end > start || bucket(a.mode) != modeBucket || bucket(b.mode) != modeBucket) continue

@@ -79,6 +79,19 @@ class BatteryLifeTest {
         assertEquals(emptyList<BatterySample>(), BatteryLog.decode("garbage;1,2"))
     }
 
+    @Test fun separateDrainAcceptsChangingPacketShapesAndIgnoresCase() {
+        val log = listOf(
+            sample(0, 90).copy(left = 90, right = 95),
+            sample(20, 0).copy(level = null, charging = true, case = 65),
+            sample(60, 75).copy(left = 75),
+            sample(90, 86).copy(right = 86),
+        )
+        val drain = BatteryLog.perEarbudDrain(log, Mode.ANC)!!
+        assertEquals(.25, drain.left.rate, 1e-9)
+        assertEquals(.1, drain.right.rate, 1e-9)
+        assertNull(BatteryLog.rate(log, Mode.ANC))
+    }
+
     @Test fun alternatingCaseAndBudsDeduplicateWithoutHidingChanges() {
         val buds = sample(0, 80).copy(left = 80, right = 87)
         val case = sample(1, 0).copy(level = null, case = 92)

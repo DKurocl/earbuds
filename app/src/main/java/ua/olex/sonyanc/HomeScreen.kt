@@ -96,14 +96,15 @@ fun HushScreen(
             Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
-            // Top actions in tonal circles, as Google's Expressive apps draw them.
-            val tonal = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.surfaceContainerHigh)
-            if (onProfiles != null) FilledTonalIconButton(onClick = onProfiles, colors = tonal,
-                modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Personal profiles" },
-            ) { HushIcon(Glyph.TUNE, color = cs.onSurfaceVariant) }
-            Spacer(Modifier.width(4.dp))
-            FilledTonalIconButton(onClick = onSettings, colors = tonal, modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
-                HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
+            val settings = HeaderAction(Glyph.SETTINGS, "Settings", onSettings)
+            if (onProfiles != null) {
+                HeaderActionPair(HeaderAction(Glyph.TUNE, "Personal profiles", onProfiles), settings, Modifier.introFade())
+            } else {
+                val tonal = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.surfaceContainerHigh)
+                FilledTonalIconButton(onClick = onSettings, colors = tonal,
+                    modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
+                    HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
+                }
             }
         }
     }) { insets ->

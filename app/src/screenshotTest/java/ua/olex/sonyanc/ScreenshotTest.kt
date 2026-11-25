@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -171,6 +172,23 @@ class ScreenshotTest {
             assertTrue(writes.single().last() > 0)
             assertEquals(3, writes.single().first())
         }
+    }
+
+    @Test fun equalizerOffKeepsTheGraphAndBassInPlaceWithoutEditableValues() {
+        val state = mutableStateOf(EqualizerProtocol.State(0xA0, listOf(3, 1, 0, 0, 0, -2)))
+        compose.setContent { AppTheme(dynamic = false) {
+            EqualizerContent(state.value, busy = false, unavailable = false)
+        } }
+        val curve = compose.onNodeWithContentDescription("Equalizer curve")
+        val bass = compose.onNodeWithContentDescription("Clear Bass")
+        val bounds = curve.getBoundsInRoot()
+        val bassBounds = bass.getBoundsInRoot()
+        compose.runOnIdle { state.value = EqualizerProtocol.State(0, emptyList()) }
+        assertEquals(bounds, curve.getBoundsInRoot())
+        assertEquals(bassBounds, bass.getBoundsInRoot())
+        bass.assertIsNotEnabled()
+        compose.onNodeWithContentDescription("400 Hz, unavailable").assertIsDisplayed()
+        compose.onNodeWithText("Turn on to edit bands").assertIsDisplayed()
     }
 
     @Test fun batteryRingsDoNotRequestRefreshAndBackgroundReadsDoNotShowIt() {
@@ -576,8 +594,11 @@ class ScreenshotTest {
         val reading = BatterySample(NOW - 60_000L, 68, false, null, 1, left = 68)
         compose.setContent { AppTheme(dynamic = false) { BatteryContent(listOf(reading), NOW) } }
         compose.onNodeWithText("68%").assertIsDisplayed()
+        val left = compose.onNodeWithContentDescription("Left charge history").getBoundsInRoot()
+        assertTrue(compose.onNodeWithText("68%").getBoundsInRoot().bottom <= left.top)
         compose.onNodeWithText("Case").performClick()
         compose.onNodeWithText("No readings yet").assertIsDisplayed()
+        assertEquals(left, compose.onNodeWithContentDescription("Case charge history").getBoundsInRoot())
     }
 
     @Test fun cachedBatteryPageIdentifiesTheLastReading() {
