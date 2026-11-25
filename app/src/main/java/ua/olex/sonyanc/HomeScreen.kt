@@ -464,14 +464,21 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
     ) {
         val iconOnly = maxWidth < 320.dp || LocalDensity.current.fontScale >= 1.3f
         Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
+            var iconMotion by remember { mutableStateOf<Pair<Mode, Int>?>(null) }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Mode.entries.forEach { mode ->
                     ModeButton(
-                        mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly, Modifier.weight(1f),
-                    ) { onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode)) }
+                        mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
+                        iconMotion?.takeIf { it.first == mode }?.second, Modifier.weight(1f),
+                    ) {
+                        if (mode != (pending ?: state)?.mode) {
+                            iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
+                        }
+                        onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
+                    }
                 }
             }
         }
@@ -482,17 +489,9 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
 @Composable
 private fun ModeButton(
     mode: Mode, selected: Boolean, applying: Boolean, enabled: Boolean, iconOnly: Boolean,
-    modifier: Modifier, onClick: () -> Unit,
+    motionRequest: Int?, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val motionEnabled = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
-    val iconScale = animateFloatAsState(
-        targetValue = if (motionEnabled && pressed) .85f else 1f,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "mode icon press",
-    )
     ToggleButton(
         checked = selected,
         onCheckedChange = { onClick() },
@@ -500,22 +499,12 @@ private fun ModeButton(
         shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = CircleShape, checkedShape = CircleShape),
         colors = ToggleButtonDefaults.colors(containerColor = Color.Transparent, contentColor = cs.onSurface),
         contentPadding = PaddingValues(horizontal = 12.dp),
-        interactionSource = interaction,
         // The screen's one hero control, as Pixel Buds' mode button: taller than a normal button.
         modifier = modifier.heightIn(min = 64.dp)
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {
-        HushIcon(
-            mode.glyph,
-            Modifier.size(24.dp).graphicsLayer {
-                scaleX = iconScale.value
-                scaleY = iconScale.value
-                alpha = if (applying && !selected) .65f else 1f
-            },
-            LocalContentColor.current,
-            bold = selected,
-        )
+        ModeGlyph(mode, motionRequest, selected, applying, LocalContentColor.current)
         if (!iconOnly) {
             Spacer(Modifier.width(ToggleButtonDefaults.IconSpacing))
             Text(mode.short, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false,

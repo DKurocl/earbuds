@@ -209,6 +209,55 @@ class ScreenshotTest {
         assertTrue("The refresh indicator remained after completion", idle.contentEquals(topCenterPixels()))
     }
 
+    @Test fun modeGlyphsDrawDifferentContoursThenReturnToTheirRestingShape() {
+        val request = mutableStateOf<Int?>(null)
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                Row {
+                    SonyProtocol.Mode.entries.forEach { mode ->
+                        ModeGlyph(mode, request.value, selected = true, applying = false, color = Color.White)
+                    }
+                }
+            }
+        }
+        fun icons(pose: String? = null): List<IntArray> = compose.runOnIdle {
+            val root = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            val side = with(compose.density) { 24.dp.roundToPx() }
+            if (pose != null) {
+                val strip = Bitmap.createBitmap(bitmap, 0, 0, side * 3, side)
+                val directory = File(System.getProperty("screenshotDir")!!).apply { mkdirs() }
+                File(directory, "mode-glyphs-$pose.png").outputStream().use {
+                    strip.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                strip.recycle()
+            }
+            List(3) { index ->
+                IntArray(side * side).also { bitmap.getPixels(it, 0, side, index * side, 0, side, side) }
+            }.also { bitmap.recycle() }
+        }
+        val rest = icons("rest")
+        assertTrue(rest.all { pixels -> pixels.any { it == android.graphics.Color.WHITE } })
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { request.value = 1 }
+        compose.mainClock.advanceTimeBy(128)
+        icons() // Flush the view display list before sampling the animated draw layers.
+        compose.mainClock.advanceTimeBy(96)
+        val attack = icons("attack")
+        compose.mainClock.advanceTimeBy(80)
+        val release = icons("release")
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        icons()
+        val settled = icons("settled")
+        SonyProtocol.Mode.entries.forEachIndexed { i, mode ->
+            assertTrue("$mode should move", !rest[i].contentEquals(attack[i]))
+            assertTrue("$mode should keep moving", !attack[i].contentEquals(release[i]))
+            assertTrue("$mode should settle exactly into its original glyph", rest[i].contentEquals(settled[i]))
+        }
+    }
+
     @Test fun noiseControlKeepsItsBoundsAndWaitsForConfirmation() {
         val anc = SonyProtocol.NcState(SonyProtocol.Mode.ANC)
         val confirmed = mutableStateOf(anc)
