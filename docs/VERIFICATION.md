@@ -10,7 +10,9 @@ Baseline: [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fe
 | Legacy right-only report at 85% with a cached left level of 20% | Minimum recorded as 20% | Right-earbud observation recorded at 85% |
 | Left unavailable with a charging flag and right at 72% | Cached left level was reported as charging | Left keeps its cached level and loses charging and live status |
 
-The Bluetooth stream test sends an oversized frame followed by a fragmented 4096-byte escaped payload. The automation tests cover an intervening manual choice and an invalidated timer or connection. These are transport and command regressions on the JVM.
+The Bluetooth stream test sends an oversized frame followed by a fragmented 4096-byte escaped payload. The automation tests cover an intervening manual choice and an invalidated timer or connection, plus a widget request superseded by a later choice in the app.
+The standalone JVM run passed 42 tests across protocol, stream transport, scheduling and battery
+history and health. The Android build runs the full suite, including the mode-controller tests.
 
 The launcher icon, widget layouts, navigation code and the committed screenshot goldens match the baseline at source level. Home and Battery still use the approved composition. Runtime rendering and accessibility are measured by the screenshot and instrumentation jobs.
 

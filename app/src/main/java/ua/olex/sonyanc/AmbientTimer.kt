@@ -102,7 +102,7 @@ class AmbientTimerReceiver : BroadcastReceiver() {
                     Prefs.timerUntil(ctx) == 0L && Prefs.linked(ctx) != false
                 } ?: return@launch
                 val ok = withTimeoutOrNull(8500) { receipt.await() } ?: false
-                if (Prefs.haptics(ctx) && ModeControl.revision == revision + 1) {
+                if (Prefs.haptics(ctx) && ModeControl.isCurrent(receipt)) {
                     if (ok) Haptics.confirm(ctx, back) else Haptics.reject(ctx)
                 }
             } finally {

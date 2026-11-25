@@ -16,7 +16,6 @@ import android.widget.RemoteViews
 import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicLong
@@ -44,16 +43,14 @@ class ModeWidget : AppWidgetProvider() {
         val generation=latestTap.incrementAndGet()
         // The highlight moves (animated) on the tap itself; only the command waits for a burst to settle.
         busyMode=mode
+        Headphones.hold(foreground = false)
+        val base = Headphones.state.value.shownNc ?: SonyProtocol.NcState(mode)
+        val receipt = Headphones.request(base.copy(mode = mode))
         Widgets.refreshModes(ctx)
         CoroutineScope(Dispatchers.IO).launch {
-            Headphones.hold(foreground=false)
             try {
-                delay(70)
-                if(latestTap.get()!=generation) return@launch
-                val base=Headphones.state.value.shownNc ?: SonyProtocol.NcState(mode)
-                val receipt = Headphones.request(base.copy(mode = mode))
                 val confirmed = withTimeoutOrNull(8500) { receipt.await() } == true
-                if (latestTap.get() == generation) {
+                if (latestTap.get() == generation && ModeControl.isCurrent(receipt)) {
                     if (confirmed) {
                         if (Prefs.haptics(ctx)) Haptics.confirm(ctx, mode)
                     } else {
@@ -62,7 +59,7 @@ class ModeWidget : AppWidgetProvider() {
                     }
                 }
             } catch(e:Exception) {
-                if(latestTap.get()==generation) showFailure(ctx)
+                if (latestTap.get() == generation && ModeControl.isCurrent(receipt)) showFailure(ctx)
             } finally {
                 if(latestTap.get()==generation) {busyMode=null;Widgets.refreshModes(ctx)}
                 Headphones.release(foreground=false)

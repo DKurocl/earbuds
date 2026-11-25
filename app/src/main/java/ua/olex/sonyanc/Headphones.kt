@@ -214,8 +214,12 @@ object Headphones {
                 withTimeoutOrNull(3000) { DeviceReads.queryBattery(priority = CommandScheduler.Priority.BACKGROUND) }
                 batteryDue = DeviceReads.now() + STAY_BATTERY_MS
             }
-            val wait = if (DeviceReads.batteryPushed) Long.MAX_VALUE else (batteryDue - DeviceReads.now()).coerceAtLeast(1_000L)
-            val dropped = withTimeoutOrNull(wait) { _state.first { !it.connected } } != null
+            val pushed = DeviceReads.batteryPushed
+            val wait = if (pushed) Long.MAX_VALUE else (batteryDue - DeviceReads.now()).coerceAtLeast(1_000L)
+            val signal = withTimeoutOrNull(wait) {
+                _state.first { !it.connected || (pushed && !DeviceReads.batteryPushed) }
+            }
+            val dropped = signal?.connected == false
             // A screen polls on its own (startInfoLoop); in the background read once per period.
             if (!dropped && usage.staying && !DeviceReads.batteryPushed) {
                 if (!usage.foreground) DeviceReads.queryBattery()

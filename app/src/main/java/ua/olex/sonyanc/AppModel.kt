@@ -124,7 +124,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         val mine = ++tapGeneration
         viewModelScope.launch {
             val ok = receipt.await()
-            if (!haptics || mine != tapGeneration) return@launch
+            if (!haptics || mine != tapGeneration || !ModeControl.isCurrent(receipt)) return@launch
             if (ok) Haptics.confirm(ctx, if (state.mode != before) state.mode else null) else Haptics.reject(ctx)
         }
     }
