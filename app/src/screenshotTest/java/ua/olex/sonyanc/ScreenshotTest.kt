@@ -174,6 +174,33 @@ class ScreenshotTest {
         }
     }
 
+    @Config(qualifiers = "w432dp-h880dp-night-xxhdpi")
+    @Test fun equalizerFitsPresetsAndKeepsTheirPositionDuringReadBack() {
+        val original = EqualizerProtocol.State(0xA0, List(6) { 0 })
+        val state = mutableStateOf(original)
+        val reading = mutableStateOf(false)
+        compose.setContent { AppTheme(dynamic = false) {
+            EqualizerContent(state.value, busy = false, unavailable = false,
+                applyingPreset = reading.value, pendingBands = original.bands.takeIf { reading.value })
+        } }
+        val curve = compose.onNodeWithContentDescription("Equalizer curve")
+        val bass = compose.onNodeWithContentDescription("Clear Bass")
+        val lastPreset = compose.onNodeWithText("Bass boost").assertIsDisplayed()
+        val before = listOf(curve.getBoundsInRoot(), bass.getBoundsInRoot(), lastPreset.getBoundsInRoot())
+        assertTrue("Last preset is clipped", before.last().bottom - before.last().top >= 48.dp)
+        compose.runOnIdle {
+            reading.value = true
+            state.value = EqualizerProtocol.State(0x15, emptyList())
+        }
+        compose.onNodeWithText("Applying preset").assertDoesNotExist()
+        assertEquals(before, listOf(curve.getBoundsInRoot(), bass.getBoundsInRoot(), lastPreset.getBoundsInRoot()))
+        compose.runOnIdle {
+            reading.value = false
+            state.value = EqualizerProtocol.State(0x15, listOf(3, 1, 0, 0, 2, 4))
+        }
+        assertEquals(before, listOf(curve.getBoundsInRoot(), bass.getBoundsInRoot(), lastPreset.getBoundsInRoot()))
+    }
+
     @Test fun equalizerOffKeepsTheGraphAndBassInPlaceWithoutEditableValues() {
         val state = mutableStateOf(EqualizerProtocol.State(0xA0, listOf(3, 1, 0, 0, 0, -2)))
         compose.setContent { AppTheme(dynamic = false) {
@@ -544,7 +571,7 @@ class ScreenshotTest {
         EarbudSettingsContent(settingsFixture, DeviceSettingsProtocol.Feature.entries.associateWith { true })
     }
 
-    @Config(qualifiers = "w448dp-h1100dp-night-xxhdpi")
+    @Config(qualifiers = "w432dp-h880dp-night-xxhdpi")
     @Test fun equalizer() = shoot("page-equalizer") {
         EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)
     }

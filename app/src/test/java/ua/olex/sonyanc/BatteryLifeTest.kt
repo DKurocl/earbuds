@@ -64,6 +64,15 @@ class BatteryLifeTest {
         assertEquals(600, BatteryLife.fullChargeMinutes(Mode.OFF, BatteryLog.rate(log, Mode.OFF)))
     }
 
+    @Test fun fallbackUsesTheSonyLdacRatingWithoutReplacingLearnedDrain() {
+        val ldac = CodecProtocol.LDAC
+        val battery = SonyProtocol.Battery(50, 75, 50)
+        assertEquals(150, BatteryLife.budsMinutes(battery, Mode.ANC, codec = ldac))
+        assertEquals(240, BatteryLife.budsMinutes(battery, Mode.OFF, codec = ldac))
+        assertEquals(300, BatteryLife.caseMinutes(battery, Mode.ANC, codec = ldac))
+        assertEquals(200, BatteryLife.budsMinutes(battery, Mode.ANC, rate = .25, codec = ldac))
+    }
+
     @Test fun anOddSessionCannotPushTheEstimateFarFromTheRating() {
         assertEquals(240, BatteryLife.fullChargeMinutes(Mode.ANC, 5.0))   // would be 20 min
         assertEquals(720, BatteryLife.fullChargeMinutes(Mode.ANC, 0.01))  // would be 166 h

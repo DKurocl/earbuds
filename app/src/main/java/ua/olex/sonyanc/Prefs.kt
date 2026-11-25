@@ -200,34 +200,55 @@ object Prefs {
     }
 
     // ---- real battery use (BatteryLog) ----
-    private class BatteryHistory(val encoded: String?, val samples: List<BatterySample>) {
+    private class BatteryHistory(
+        val encoded: String?, val samples: List<BatterySample>, val checkedAt: Long,
+    ) {
+        val expiresAt = samples.minOfOrNull { it.at + BatteryLog.KEEP_MS + 1 } ?: Long.MAX_VALUE
         val noiseControl by lazy { BatteryLog.rate(samples, SonyProtocol.Mode.ANC) }
         val off by lazy { BatteryLog.rate(samples, SonyProtocol.Mode.OFF) }
     }
 
     private var batteryHistory: BatteryHistory? = null
 
-    @Synchronized private fun batteryHistory(ctx: Context): BatteryHistory {
-        val encoded = p(ctx).getString("battery_log", null)
-        return batteryHistory?.takeIf { it.encoded == encoded }
-            ?: BatteryHistory(encoded, BatteryLog.decode(encoded)).also { batteryHistory = it }
+    @Synchronized private fun batteryHistory(ctx: Context, now: Long = System.currentTimeMillis()): BatteryHistory {
+        val prefs = p(ctx)
+        val encoded = prefs.getString("battery_log", null)
+        val previous = batteryHistory?.takeIf { it.encoded == encoded }
+        if (previous != null && now in previous.checkedAt until previous.expiresAt) return previous
+        val samples = previous?.samples ?: BatteryLog.decode(encoded)
+        val recent = BatteryLog.recent(samples, now)
+        val stored = if (recent === samples) encoded else BatteryLog.encode(recent).ifEmpty { null }
+        if (stored != encoded) prefs.edit().putString("battery_log", stored).apply()
+        return BatteryHistory(stored, recent, now).also { batteryHistory = it }
     }
 
     fun batteryLog(ctx: Context): List<BatterySample> = batteryHistory(ctx).samples
 
     @Synchronized fun addBatterySample(ctx: Context, s: BatterySample) {
-        val log = batteryLog(ctx)
+        val log = batteryHistory(ctx, s.at).samples
         val next = BatteryLog.add(log, s)
         if (next === log) return
         // This week's measured full charge, for the months-long health view.
         val week = BatteryHealth.weekOf(s.at)
         val thisWeek = next.filter { BatteryHealth.weekOf(it.at) == week }
-        val health = BatteryHealth.record(batteryHealth(ctx), week, BatteryLog.drain(thisWeek, SonyProtocol.Mode.ANC))
+        val prefs = p(ctx)
+        val health = BatteryHealth.decode(prefs.getString("battery_health", null))
+        val updatedHealth = BatteryHealth.record(health, week, BatteryLog.drain(thisWeek, SonyProtocol.Mode.ANC))
         val encoded = BatteryLog.encode(next)
-        p(ctx).edit().putString("battery_log", encoded).putString("battery_health", BatteryHealth.encode(health)).apply()
-        batteryHistory = BatteryHistory(encoded, next)
+        val edit = prefs.edit().putString("battery_log", encoded)
+        if (updatedHealth != health) edit.putString("battery_health", BatteryHealth.encode(updatedHealth))
+        edit.apply()
+        batteryHistory = BatteryHistory(encoded, next, s.at)
     }
-    fun batteryHealth(ctx: Context) = BatteryHealth.decode(p(ctx).getString("battery_health", null))
+
+    @Synchronized fun batteryHealth(ctx: Context): List<WeekHealth> {
+        val prefs = p(ctx)
+        val health = BatteryHealth.decode(prefs.getString("battery_health", null))
+        val recent = BatteryHealth.recent(health, BatteryHealth.weekOf(System.currentTimeMillis()))
+        if (recent !== health) prefs.edit().putString("battery_health", BatteryHealth.encode(recent).ifEmpty { null }).apply()
+        return recent
+    }
+
     /** Measured percent per minute for [mode], or null while there is too little real use. */
     fun drainRate(ctx: Context, mode: SonyProtocol.Mode?): Double? = when (mode) {
         null -> null

@@ -47,7 +47,7 @@ class StatusWidget : AppWidgetProvider() {
                 v.setTextViewText(R.id.w_mode_text, mode.short)
             } else v.setViewVisibility(R.id.w_mode, View.GONE)
             val rate = Prefs.drainRate(ctx, mode)
-            val buds = b?.let { BatteryLife.budsMinutes(it, mode, rate) }
+            val buds = b?.let { BatteryLife.budsMinutes(it, mode, rate, Prefs.lastCodec(ctx)) }
             v.setTextViewText(R.id.w_status, when {
                 linked == false -> "Not connected"
                 buds != null -> BatteryLife.short(buds) + " left"

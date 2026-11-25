@@ -3,8 +3,8 @@ package ua.olex.sonyanc
 import ua.olex.sonyanc.SonyProtocol.Mode
 
 /**
- * Listening time. Starts from Sony's rated WF-1000XM5 battery life (8 h with noise cancelling or
- * ambient sound, 12 h with noise control off; the case holds two more full charges) and switches
+ * Listening time. Starts from Sony's WF-1000XM5 playback ratings for the last reported codec,
+ * with a two-charge case reserve, and switches
  * to the owner's own measured drain once [BatteryLog] has seen enough real use, so LDAC, DSEE
  * and volume are accounted for. Still an estimate.
  */
@@ -15,15 +15,16 @@ object BatteryLife {
      * Minutes from 100 % to empty for [mode]: measured when [rate] (percent per minute) is known,
      * kept within half to one and a half times the rating so one odd session cannot mislead.
      */
-    fun fullChargeMinutes(mode: Mode?, rate: Double? = null): Int {
+    fun fullChargeMinutes(mode: Mode?, rate: Double? = null, codec: Int? = null): Int {
         val rated = ratedBudMinutes(mode)
-        return rate?.takeIf { it > 0 }?.let { (100 / it).toInt().coerceIn(rated / 2, rated * 3 / 2) } ?: rated
+        val measured = rate?.takeIf { it > 0 }?.let { (100 / it).toInt().coerceIn(rated / 2, rated * 3 / 2) }
+        return measured ?: if (codec == CodecProtocol.LDAC) (if (mode == Mode.OFF) 8 else 5) * 60 else rated
     }
 
     /** Minutes left in the earbuds: the emptier bud decides. */
-    fun budsMinutes(b: SonyProtocol.Battery, mode: Mode?, rate: Double? = null): Int? {
+    fun budsMinutes(b: SonyProtocol.Battery, mode: Mode?, rate: Double? = null, codec: Int? = null): Int? {
         val level = listOfNotNull(b.left, b.right).minOrNull() ?: return null
-        return fullChargeMinutes(mode, rate) * level / 100
+        return fullChargeMinutes(mode, rate, codec) * level / 100
     }
 
     /** Estimates use the current buds when at least one has reported, or the last known pair. */
@@ -36,8 +37,8 @@ object BatteryLife {
     }
 
     /** Extra listening the case can add by recharging the earbuds. */
-    fun caseMinutes(b: SonyProtocol.Battery, mode: Mode?, rate: Double? = null): Int? =
-        b.case?.let { 2 * fullChargeMinutes(mode, rate) * it / 100 }
+    fun caseMinutes(b: SonyProtocol.Battery, mode: Mode?, rate: Double? = null, codec: Int? = null): Int? =
+        b.case?.let { 2 * fullChargeMinutes(mode, rate, codec) * it / 100 }
 
     /** "6 h 30 min", rounded down to 10 minutes (callers handle anything under 10 minutes). */
     fun format(minutes: Int): String {
@@ -118,6 +119,12 @@ object BatteryLog {
         BatterySample(at, level, p[2] == "1", Mode.entries.firstOrNull { it.name == p[3] }, session, case, left, right)
     }
 
+    fun recent(samples: List<BatterySample>, now: Long): List<BatterySample> {
+        val range = (now - KEEP_MS)..now
+        if (samples.size <= MAX && samples.all { it.at in range }) return samples
+        return samples.filter { it.at in range }.takeLast(MAX)
+    }
+
     /** Appends a reading; repeats of the same level within ten minutes add nothing. */
     fun add(samples: List<BatterySample>, s: BatterySample): List<BatterySample> {
         // Bud and case notifications can alternate within the same read. Check the most recent
@@ -134,7 +141,7 @@ object BatteryLog {
                 previous.left == s.left && previous.right == s.right && previous.charging == s.charging) return samples
             break
         }
-        return (samples.filter { s.at - it.at <= KEEP_MS } + s).takeLast(MAX)
+        return recent(samples + s, s.at)
     }
 
     private fun bucket(mode: Mode?) = when (mode) {
@@ -233,13 +240,20 @@ object BatteryHealth {
         if (p.size != 3 || p[1] <= 0) null else WeekHealth(p[0], p[1].toInt(), p[2].toInt())
     }
 
+    fun recent(history: List<WeekHealth>, week: Long): List<WeekHealth> {
+        val window = (week - MAX_WEEKS + 1)..week
+        return if (history.size <= MAX_WEEKS && history.all { it.week in window }) history
+        else history.filter { it.week in window }.takeLast(MAX_WEEKS)
+    }
+
     /** Replaces this week's figure with the latest measurement, once it rests on enough use. */
     fun record(history: List<WeekHealth>, week: Long, drain: Drain?): List<WeekHealth> {
-        drain ?: return history
+        val recent = recent(history, week)
+        drain ?: return recent
         val hours = (drain.minutes / 60).toInt()
-        if (hours < MIN_HOURS) return history
+        if (hours < MIN_HOURS) return recent
         val minutes = BatteryLife.fullChargeMinutes(Mode.ANC, drain.rate)
-        return (history.filter { it.week != week } + WeekHealth(week, minutes, hours)).sortedBy { it.week }.takeLast(MAX_WEEKS)
+        return (recent.filter { it.week != week } + WeekHealth(week, minutes, hours)).sortedBy { it.week }
     }
 
     sealed interface Verdict {

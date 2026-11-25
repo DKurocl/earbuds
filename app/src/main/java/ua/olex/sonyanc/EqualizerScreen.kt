@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -48,15 +50,15 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
     // Only the first live read gates editing. Refreshes leave active controls in place.
     var busy by remember { mutableStateOf(eq == null) }
     var failed by remember { mutableStateOf(false) }
-    var refused by remember { mutableStateOf(false) }
+    val showMessage by rememberUpdatedState(LocalMessages.current)
     var pending by remember { mutableStateOf<EqualizerWrite?>(null) }
     val writes = remember { Channel<EqualizerWrite>(Channel.CONFLATED) }
     LaunchedEffect(writes) {
         for (request in writes) {
             val confirmed = Headphones.writeEqualizer(request.preset, request.bands)
             if (pending === request) {
-                refused = !confirmed
                 pending = null
+                if (!confirmed) showMessage("Change not confirmed")
             }
         }
     }
@@ -75,7 +77,6 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
             else EqualizerProtocol.State(requireNotNull(preset), emptyList())
         val request = EqualizerWrite(shown, preset, bands)
         pending = request
-        refused = false
         writes.trySend(request)
     }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -113,7 +114,6 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
         onPreset = { write(preset = it) },
         onBands = { write(bands = it) },
         onToggle = { write(preset = if (it) Prefs.lastEnabledEqualizerPreset(ctx) else OFF) },
-        refused = refused,
         applyingPreset = pending?.preset != null,
         exportReady = pending == null && eq?.bands?.size == 6,
         pendingBands = eq?.bands.takeIf { pending?.preset != null },
@@ -159,14 +159,14 @@ private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 @Composable
 fun EqualizerContent(
     state: EqualizerProtocol.State?, busy: Boolean, unavailable: Boolean, onBack: () -> Unit = {},
-    onRetry: () -> Unit = {}, onPreset: (Int) -> Unit = {}, onBands: (List<Int>) -> Unit = {}, refused: Boolean = false,
+    onRetry: () -> Unit = {}, onPreset: (Int) -> Unit = {}, onBands: (List<Int>) -> Unit = {},
     onExport: () -> Unit = {}, onImport: () -> Unit = {},
     applyingPreset: Boolean = false, exportReady: Boolean = state?.bands?.size == 6, pendingBands: List<Int>? = null,
     haptics: Boolean = true,
     onToggle: (Boolean) -> Unit = { onPreset(if (it) CUSTOM else OFF) },
 ) {
     val cs = MaterialTheme.colorScheme
-    PageScaffold("Equalizer", onBack, actions = {
+    PageScaffold("Equalizer", onBack, compact = true, actions = {
         if (busy) LoadingIndicator(Modifier.padding(end = 4.dp).size(32.dp))
         var menu by remember { mutableStateOf(false) }
         Box {
@@ -218,59 +218,59 @@ fun EqualizerContent(
                     else -> EqualizerProtocol.presets[state.preset] ?: "Custom"
                 }
 
-                SoundCard {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text(presetName, style = MaterialTheme.typography.headlineSmallEmphasized)
-                            if (applyingPreset || refused) {
-                                Text(
-                                    if (refused) "Change not confirmed" else "Applying preset",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (refused) cs.error else cs.onSurfaceVariant,
-                                )
+                Surface(
+                    shape = UiTokens.cardShape,
+                    color = cs.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column {
+                        Surface(color = cs.primaryContainer, contentColor = cs.onPrimaryContainer) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .heightIn(min = UiTokens.minTouchTarget),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(presetName, Modifier.weight(1f), style = MaterialTheme.typography.titleLargeEmphasized)
+                                Switch(checked = on, enabled = !busy, onCheckedChange = onToggle,
+                                    thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
+                                    modifier = Modifier.semantics { contentDescription = "Equalizer" })
                             }
                         }
-                        Switch(checked = on, enabled = !busy, onCheckedChange = onToggle,
-                            thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                            modifier = Modifier.semantics { contentDescription = "Equalizer" })
-                    }
-                    Box(contentAlignment = Alignment.Center) {
-                        EqCurve(
-                            gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
-                            activeBand = activeBand, haptics = haptics,
-                            onGain = { index, value -> edit = EqEdit(index + 1, value) },
-                            onFinish = { index, value -> if (value != null) commit(index + 1, value) else edit = null },
-                        )
-                        if (shownBands == null && !applyingPreset) {
-                            Text(
-                                when {
-                                    !on -> "Turn on to edit bands"
-                                    else -> "Choose Custom to edit bands"
-                                },
-                                style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            )
+                        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                EqCurve(
+                                    gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
+                                    activeBand = activeBand, haptics = haptics,
+                                    onGain = { index, value -> edit = EqEdit(index + 1, value) },
+                                    onFinish = { index, value -> if (value != null) commit(index + 1, value) else edit = null },
+                                )
+                                if (shownBands == null && !applyingPreset) {
+                                    Text(
+                                        if (!on) "Turn on to edit bands" else "Choose Custom to edit bands",
+                                        style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            BandReadouts(displayed, activeBand, controlsReady && edit == null) { index, gain -> commit(index + 1, gain) }
                         }
                     }
-                    BandReadouts(displayed, activeBand, controlsReady && edit == null) { index, gain -> commit(index + 1, gain) }
                 }
-                SoundCard {
-                    ClearBass(
-                        gain = displayed?.first(),
-                        enabled = controlsReady && (edit == null || edit?.index == 0),
-                        editing = edit?.index == 0, haptics = haptics,
-                        onGain = { edit = EqEdit(0, it) },
-                        onFinish = { commit(0, it) },
-                    )
-                }
-                SoundCard {
-                    PresetGroups(
-                        active = state.preset, flat = flat,
-                        enabled = !busy && edit == null,
-                        onPreset = onPreset,
-                        onFlat = { onBands(listOf(gains?.first() ?: 0) + List(5) { 0 }) },
-                    )
-                }
+                ClearBass(
+                    gain = displayed?.first(),
+                    enabled = controlsReady && (edit == null || edit?.index == 0),
+                    editing = edit?.index == 0, haptics = haptics,
+                    onGain = { edit = EqEdit(0, it) },
+                    onFinish = { commit(0, it) },
+                )
+                PresetGroups(
+                    active = state.preset, flat = flat,
+                    enabled = !busy && edit == null,
+                    onPreset = onPreset,
+                    onFlat = { onBands(listOf(gains?.first() ?: 0) + List(5) { 0 }) },
+                )
             }
         }
     }
@@ -302,7 +302,10 @@ private fun BandReadouts(gains: List<Int>?, active: Int?, editable: Boolean, onG
                     }
                 },
             ) {
-                Column(Modifier.padding(horizontal = 2.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier.heightIn(min = UiTokens.minTouchTarget).padding(horizontal = 2.dp, vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
                     Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1,
                         autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(9.sp, MaterialTheme.typography.labelSmall.fontSize, .5.sp))
                     Text(gain?.let(::signed) ?: "–", style = MaterialTheme.typography.labelLarge.withTabularFigures(), maxLines = 1)
@@ -315,31 +318,60 @@ private fun BandReadouts(gains: List<Int>?, active: Int?, editable: Boolean, onG
 @Composable
 private fun ClearBass(gain: Int?, enabled: Boolean, editing: Boolean, haptics: Boolean, onGain: (Int) -> Unit, onFinish: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Clear Bass", style = MaterialTheme.typography.titleMediumEmphasized, modifier = Modifier.weight(1f))
-        Text(gain?.let(::signed) ?: "–", style = MaterialTheme.typography.titleMedium.withTabularFigures(),
-            color = if (gain != null && gain != 0) cs.primary else cs.onSurfaceVariant)
-    }
     val slider = remember { SliderState(value = gain?.toFloat() ?: 0f, steps = 19, trackRange = -10f..10f) }
     LaunchedEffect(gain, editing) {
         if (!editing) slider.value = gain?.toFloat() ?: 0f
     }
     val feedback = LocalHapticFeedback.current
-    Slider(
-        state = slider, enabled = enabled,
-        onValueChange = {
-            val old = slider.value.roundToInt()
-            slider.value = it
-            val step = slider.value.roundToInt()
-            if (step != old) {
-                if (haptics) feedback.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
-                onGain(step)
-            }
-        },
-        onValueChangeFinished = { onFinish(slider.value.roundToInt()) },
-        track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = enabled, drawTick = { _, _ -> }) },
-        modifier = Modifier.semantics { contentDescription = "Clear Bass" },
+    val colors = SliderDefaults.colors(
+        thumbColor = cs.onTertiaryContainer, activeTrackColor = cs.onTertiaryContainer,
+        inactiveTrackColor = cs.onTertiaryContainer.copy(alpha = .26f),
     )
+    val control: @Composable (Modifier) -> Unit = { modifier ->
+        Slider(
+            state = slider, enabled = enabled,
+            onValueChange = {
+                val old = slider.value.roundToInt()
+                slider.value = it
+                val step = slider.value.roundToInt()
+                if (step != old) {
+                    if (haptics) feedback.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
+                    onGain(step)
+                }
+            },
+            onValueChangeFinished = { onFinish(slider.value.roundToInt()) },
+            colors = colors,
+            track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = enabled, drawTick = { _, _ -> }, colors = colors) },
+            modifier = modifier.semantics { contentDescription = "Clear Bass" },
+        )
+    }
+    val largeText = LocalDensity.current.fontScale >= 1.3f
+    Surface(
+        shape = UiTokens.compactCardShape, color = cs.tertiaryContainer, contentColor = cs.onTertiaryContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        val label: @Composable (Modifier) -> Unit = { modifier ->
+            Text("Clear Bass", modifier, style = MaterialTheme.typography.titleSmallEmphasized)
+        }
+        val value: @Composable () -> Unit = {
+            Text(gain?.let(::signed) ?: "–", style = MaterialTheme.typography.titleSmall.withTabularFigures())
+        }
+        if (largeText) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) { label(Modifier.weight(1f)); value() }
+                control(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(
+                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                label(Modifier)
+                control(Modifier.weight(1f))
+                Box(Modifier.widthIn(min = 22.dp), contentAlignment = Alignment.CenterEnd) { value() }
+            }
+        }
+    }
 }
 
 @Composable
@@ -361,8 +393,15 @@ private fun PresetGroups(active: Int, flat: Boolean, enabled: Boolean, onPreset:
             }
         }
     }
-    Group("Your sound", listOf(listOf(CUSTOM, -1, 0xA1, 0xA2)))
-    Group("Presets", listOf(listOf(0x10, 0x11, 0x12), listOf(0x13, 0x14, 0x17), listOf(0x15, 0x16)))
+    val largeText = LocalDensity.current.fontScale >= 1.3f
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Group("Your sound", listOf(listOf(CUSTOM, -1, 0xA1, 0xA2)))
+        Group("Presets", if (largeText) {
+            listOf(listOf(0x10, 0x11, 0x12), listOf(0x13, 0x14, 0x17), listOf(0x15, 0x16))
+        } else {
+            listOf(listOf(0x10, 0x11, 0x12, 0x13), listOf(0x14, 0x17, 0x15, 0x16))
+        })
+    }
 }
 
 /** A rounded card for one part of the sound, as in Music. */
@@ -384,8 +423,11 @@ private fun PresetButton(name: String, selected: Boolean, enabled: Boolean, inde
     val cs = MaterialTheme.colorScheme
     ToggleButton(
         checked = selected, onCheckedChange = { if (!selected) onClick() }, enabled = enabled, shapes = shapes,
-        colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurfaceVariant),
-        contentPadding = PaddingValues(horizontal = 8.dp),
+        colors = ToggleButtonDefaults.colors(
+            containerColor = cs.surfaceContainer, contentColor = cs.onSurfaceVariant,
+            checkedContainerColor = cs.secondaryContainer, checkedContentColor = cs.onSecondaryContainer,
+        ),
+        contentPadding = PaddingValues(horizontal = 4.dp),
         modifier = modifier.heightIn(min = UiTokens.minTouchTarget).semantics { role = Role.RadioButton; this.selected = selected },
     ) {
         Text(name, style = MaterialTheme.typography.labelLarge, maxLines = 1,
@@ -420,8 +462,9 @@ private fun EqCurve(
     var dragPoint by remember { mutableStateOf<Pair<Int, Float>?>(null) }
     val radius = animateFloatAsState(if (activeBand != null && activeBand >= 0) 8f else 5f, motion.fastSpatialSpec(), label = "Band handle")
     val range = 10f
-    val padding = 24.dp
-    Box(Modifier.fillMaxWidth().height(216.dp)) {
+    val padding = 20.dp
+    val plotHeight = (LocalConfiguration.current.screenHeightDp - 590).coerceIn(156, 228).dp
+    Box(Modifier.fillMaxWidth().height(plotHeight)) {
         Spacer(
             Modifier.matchParentSize().semantics { contentDescription = "Equalizer curve" }
                 .pointerInput(enabled) {
@@ -487,7 +530,7 @@ private fun EqCurve(
                     val area = Path()
                     val stroke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round)
                     val grid = cs.outlineVariant.copy(alpha = .6f)
-                    val tone = if (enabled) cs.primary else cs.outline
+                    val tone = cs.primary
                     onDrawBehind {
                         for (x in xs) drawLine(grid, Offset(x, mid - range * perDb), Offset(x, mid + range * perDb), 1.dp.toPx())
                         for (db in gridValues) {

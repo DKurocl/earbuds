@@ -89,8 +89,8 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
                     val anc = if (observed.anc > 0) "${BatteryLife.short(observed.anc)} with noise cancelling" else null
                     InfoRow(it, null, "This week", listOfNotNull("About ${BatteryLife.short(observed.minutes)} connected", anc).joinToString(" · "))
                 }
-                item { DrainRow(it, "Noise cancelling & ambient", log, Mode.ANC) }
-                item { DrainRow(it, "Noise control off", log, Mode.OFF) }
+                item { DrainRow(it, "Noise cancelling & ambient", log, Mode.ANC, device?.codec?.code) }
+                item { DrainRow(it, "Noise control off", log, Mode.OFF, device?.codec?.code) }
             }
         }
     }
@@ -102,17 +102,22 @@ private fun ListeningEstimate(log: List<BatterySample>, device: DeviceState) {
     val mode = device.nc?.mode
     val measured = remember(log, mode) { BatteryLog.drain(log, mode) }
     val perEar = remember(log, mode) { BatteryLog.perEarbudDrain(log, mode) }
-    val minutes = perEar?.minutesLeft(battery, mode) ?: BatteryLife.budsMinutes(battery, mode, measured?.rate)
-    val reserve = BatteryLife.caseMinutes(battery, mode, measured?.rate)?.takeIf { it >= 10 }
+    val codec = device.codec?.code
+    val minutes = perEar?.minutesLeft(battery, mode) ?: BatteryLife.budsMinutes(battery, mode, measured?.rate, codec)
+    val reserve = BatteryLife.caseMinutes(battery, mode, measured?.rate, codec)?.takeIf { it >= 10 }
     if (minutes == null && reserve == null) return
     val budsLive = 0 in device.liveBatteryParts || 1 in device.liveBatteryParts
     val caseLive = 2 in device.liveBatteryParts
     val cs = MaterialTheme.colorScheme
-    val source = if (measured != null || perEar != null) "Based on your use" else "Sony estimate"
+    val source = when {
+        measured != null || perEar != null -> "Based on your use"
+        codec == CodecProtocol.LDAC -> "Sony rating · LDAC"
+        else -> "Sony rating"
+    }
     Surface(shape = UiTokens.cardShape, color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (minutes != null) {
-                Text(if (budsLive) "Listening left" else "Last reading", style = MaterialTheme.typography.titleMedium)
+                Text(if (budsLive) "Estimated listening left" else "Last reading", style = MaterialTheme.typography.titleMedium)
                 Text(
                     BatteryLife.short(minutes), style = MaterialTheme.typography.displayLargeEmphasized.withTabularFigures(),
                     color = cs.primary,
@@ -324,9 +329,9 @@ private fun HistoryChart(part: Part, readings: List<Reading>, start: Long, end: 
 }
 
 @Composable
-private fun DrainRow(shape: ListItemShapes, title: String, log: List<BatterySample>, mode: Mode) {
+private fun DrainRow(shape: ListItemShapes, title: String, log: List<BatterySample>, mode: Mode, codec: Int?) {
     val drain = remember(log, mode) { BatteryLog.drain(log, mode) }
-    val rated = BatteryLife.format(BatteryLife.fullChargeMinutes(mode))
+    val rated = BatteryLife.format(BatteryLife.fullChargeMinutes(mode, codec = codec))
     val value = if (drain == null) "Rated $rated per charge"
         else "About ${BatteryLife.format(BatteryLife.fullChargeMinutes(mode, drain.rate))} per charge · rated $rated"
     InfoRow(shape, null, title, value)

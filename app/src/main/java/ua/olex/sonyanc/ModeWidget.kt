@@ -285,8 +285,9 @@ class ModeWidget : AppWidgetProvider() {
 
             // The big number: how long you can listen; the case adds the second line.
             val rate=Prefs.drainRate(ctx,current)
-            val buds=b?.let{BatteryLife.budsMinutes(it,current,rate)}
-            val case=b?.let{BatteryLife.caseMinutes(it,current,rate)}?.takeIf{it>=10}
+            val codec=Prefs.lastCodec(ctx)
+            val buds=b?.let{BatteryLife.budsMinutes(it,current,rate,codec)}
+            val case=b?.let{BatteryLife.caseMinutes(it,current,rate,codec)}?.takeIf{it>=10}
             val hero=buds?.let{BatteryLife.short(it)} ?: (current?.label ?: "Earbuds")
             v.setTextViewText(R.id.w_hero,hero)
             v.setTextColor(R.id.w_hero,ctx.getColor(if(buds!=null && buds<60) R.color.w_low else R.color.w_off_text))

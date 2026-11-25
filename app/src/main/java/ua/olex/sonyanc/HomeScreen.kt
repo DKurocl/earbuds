@@ -73,7 +73,7 @@ fun HushScreen(
     manualRefreshing: Boolean = false,
     deviceName: String = "WF-1000XM5",
     batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(),
-    batterySeenAt: Long? = null,
+    batterySeenAt: Long? = null, batteryCodec: Int? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null, onBatteryDetails: () -> Unit = {},
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, ambientUntil: Long? = null, ambientReturn: Mode = Mode.ANC, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
@@ -160,7 +160,7 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, onClick = onBatteryDetails,
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, onClick = onBatteryDetails,
                             )
                         }
                     }
@@ -677,13 +677,13 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
  * case adds. Big numbers on tonal icons, centered; the age of the reading only when it is old.
  */
 @Composable
-private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, onClick: () -> Unit) {
+private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, onClick: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // The owner's measured drain once known; Sony's rating until then.
     val rate = remember(battery, mode) { Prefs.drainRate(ctx, mode) }
-    val buds = battery?.let { BatteryLife.budsMinutes(it, mode, rate) } ?: return
+    val buds = battery?.let { BatteryLife.budsMinutes(it, mode, rate, codec) } ?: return
     // Shown whenever the case's level is known, even when it adds little: tiles never come and go.
-    val case = BatteryLife.caseMinutes(battery, mode, rate)
+    val case = BatteryLife.caseMinutes(battery, mode, rate, codec)
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Both tiles have the same parts, so they come out the same height without intrinsics
         // (which the rolling digits, built on AnimatedContent, cannot answer).

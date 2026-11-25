@@ -135,7 +135,7 @@ object BatteryWords {
             rightCharging = known.rightCharging && 1 in fresh,
         )
         val charging = live.leftCharging || live.rightCharging
-        val minutes = BatteryLife.budsMinutes(live, state.nc?.mode, rate).takeUnless { charging }
+        val minutes = BatteryLife.budsMinutes(live, state.nc?.mode, rate, state.codec?.code).takeUnless { charging }
         val current = when {
             live.left != null || live.right != null -> sentence(live, minutes?.let(BatteryLife::short), linked = true)
             live.case != null -> "Case battery ${live.case}%."

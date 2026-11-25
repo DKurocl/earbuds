@@ -2,6 +2,7 @@ package ua.olex.sonyanc
 
 /** Sony V2 audio codec inquiry. Describes the reported codec, never a preferred codec. */
 object CodecProtocol {
+    const val LDAC = 0x10
     val get = byteArrayOf(0x12, 0x02)
 
     data class State(val code: Int) {
@@ -9,7 +10,7 @@ object CodecProtocol {
             0x00 -> "Not reported"
             0x01 -> "SBC"
             0x02 -> "AAC"
-            0x10 -> "LDAC"
+            LDAC -> "LDAC"
             0x20 -> "aptX"
             0x21 -> "aptX HD"
             else -> "Unknown (0x%02X)".format(code)

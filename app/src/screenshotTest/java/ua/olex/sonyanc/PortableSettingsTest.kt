@@ -34,6 +34,26 @@ class PortableSettingsTest {
         assertEquals(0xA0, Prefs.lastEnabledEqualizerPreset(ctx))
     }
 
+    @Test fun oldBatteryHistoryExpiresEvenWithoutANewReading() {
+        val now = System.currentTimeMillis()
+        val mode = SonyProtocol.Mode.ANC
+        val older = now - BatteryLog.KEEP_MS - 120 * 60_000L
+        val oldLog = listOf(
+            BatterySample(older, 95, false, mode, 1),
+            BatterySample(older + 60 * 60_000L, 80, false, mode, 1),
+        )
+        val oldHealth = listOf(WeekHealth(BatteryHealth.weekOf(now) - BatteryHealth.MAX_WEEKS, 420, 8))
+        Prefs.p(ctx).edit()
+            .putString("battery_log", BatteryLog.encode(oldLog))
+            .putString("battery_health", BatteryHealth.encode(oldHealth)).apply()
+        assertNotNull(BatteryLog.rate(oldLog, mode))
+        assertNull(Prefs.drainRate(ctx, mode))
+        assertTrue(Prefs.batteryLog(ctx).isEmpty())
+        assertTrue(Prefs.batteryHealth(ctx).isEmpty())
+        assertFalse(Prefs.p(ctx).contains("battery_log"))
+        assertFalse(Prefs.p(ctx).contains("battery_health"))
+    }
+
     @Test fun backupRoundTripRestoresPortableSettingsWithoutReplacingThePairedDevice() {
         val profile = PersonalProfile(SonyProtocol.NcState(SonyProtocol.Mode.ANC), null, mapOf(Feature.DSEE to true))
         Prefs.savePersonalProfile(ctx, 1, profile)

@@ -251,7 +251,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         batteryParts = device.liveBatteryParts,
                         linked = linked, bluetoothOn = model.bluetoothOn,
                         paired = model.saved == null || model.devices.any { it.address == model.saved },
-                        batterySeenAt = device.batterySeenAt,
+                        batterySeenAt = device.batterySeenAt, batteryCodec = device.codec?.code,
                         onFind = ::findHub, onBatteryDetails = { open(Page.BATTERY) },
                         speakToChat = (advanced[AdvancedSettings.Key.CHAT] ?: cachedAdvanced[AdvancedSettings.Key.CHAT])
                             ?.firstOrNull()?.let { it == 0 }?.takeIf { linked != false },

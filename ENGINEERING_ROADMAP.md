@@ -10,6 +10,11 @@
 - [ ] Persistence. Exercise process death, backup/restore, profile read-back and automation conflicts with real hardware.
 - [ ] Startup. Compare cold starts on Pixel with and without the baseline profile.
 
+## Compact EQ and estimates
+
+- [x] Fit all EQ presets at regular Pixel text size. Use primary for the preset header, tertiary for Clear Bass and secondary for preset selection. Keep the control layout fixed through read-back and surface errors in the snackbar.
+- [x] Drop expired readings when used and keep only 52 calendar weeks of health summaries. Use Sony's LDAC rating when a device reports LDAC and recent drain is unavailable.
+
 ## Battery and idle efficiency
 
 - [x] Battery history. Select L/R/Case independently, keep observed gaps and timestamp each point. Cache one parsed history and its drain rates. Deduplicate interleaved unchanged packets within the existing ten-minute window.
