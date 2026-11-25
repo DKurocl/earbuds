@@ -1,5 +1,6 @@
 package ua.olex.sonyanc.benchmark
 
+import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.StartupMode
@@ -16,14 +17,18 @@ import org.junit.runner.RunWith
 class StartupBenchmark {
     @get:Rule val benchmark = MacrobenchmarkRule()
 
-    @Test fun coldLaunch() = startup(StartupMode.COLD)
+    private val withBaselineProfile = CompilationMode.Partial(BaselineProfileMode.Require)
 
-    @Test fun warmLaunch() = startup(StartupMode.WARM)
+    @Test fun coldLaunch() = startup(StartupMode.COLD, withBaselineProfile)
 
-    private fun startup(mode: StartupMode) = benchmark.measureRepeated(
+    @Test fun coldLaunchWithoutBaselineProfile() = startup(StartupMode.COLD, CompilationMode.None())
+
+    @Test fun warmLaunch() = startup(StartupMode.WARM, withBaselineProfile)
+
+    private fun startup(mode: StartupMode, compilation: CompilationMode) = benchmark.measureRepeated(
         packageName = "ua.olex.sonyanc",
         metrics = listOf(StartupTimingMetric()),
-        compilationMode = CompilationMode.Partial(),
+        compilationMode = compilation,
         startupMode = mode,
         iterations = 10,
         setupBlock = { pressHome() },
@@ -31,10 +36,14 @@ class StartupBenchmark {
         startActivityAndWait()
     }
 
-    @Test fun settingsTransitions() = benchmark.measureRepeated(
+    @Test fun settingsTransitions() = settingsTransitions(withBaselineProfile)
+
+    @Test fun settingsTransitionsWithoutBaselineProfile() = settingsTransitions(CompilationMode.None())
+
+    private fun settingsTransitions(compilation: CompilationMode) = benchmark.measureRepeated(
         packageName = "ua.olex.sonyanc",
         metrics = listOf(FrameTimingMetric()),
-        compilationMode = CompilationMode.Partial(),
+        compilationMode = compilation,
         iterations = 10,
         setupBlock = {
             pressHome()

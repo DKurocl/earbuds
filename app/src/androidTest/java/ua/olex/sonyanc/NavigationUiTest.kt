@@ -14,14 +14,18 @@ class NavigationUiTest {
     @Test fun productionGearOpensAppSettingsInOneTap() {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Name").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Settings").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }
 
-    private fun swipeBack(progress: Float) = compose.runOnUiThread {
+    private fun swipeBack(progress: Float, edge: Int = BackEventCompat.EDGE_LEFT) = compose.runOnUiThread {
         val back = compose.activity.onBackPressedDispatcher
-        back.dispatchOnBackStarted(BackEventCompat(8f, 900f, 0f, BackEventCompat.EDGE_LEFT))
-        back.dispatchOnBackProgressed(BackEventCompat(240f, 980f, progress, BackEventCompat.EDGE_LEFT))
+        val width = compose.activity.window.decorView.width.toFloat()
+        val from = if (edge == BackEventCompat.EDGE_LEFT) 8f else width - 8f
+        val to = if (edge == BackEventCompat.EDGE_LEFT) 240f else width - 240f
+        back.dispatchOnBackStarted(BackEventCompat(from, 900f, 0f, edge))
+        back.dispatchOnBackProgressed(BackEventCompat(to, 980f, progress, edge))
     }
 
     @Test fun cancelledBackSwipePutsThePageBack() {
@@ -43,7 +47,7 @@ class NavigationUiTest {
     @Test fun finishedBackSwipeReturnsHome() {
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("Name").assertIsDisplayed()
-        swipeBack(0.5f)
+        swipeBack(0.5f, BackEventCompat.EDGE_RIGHT)
         compose.waitForIdle()
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
@@ -58,4 +62,19 @@ class NavigationUiTest {
         compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
     }
 
+    @Test fun settingsKeepsItsScrollPositionAfterResumeAndRecreation() {
+        val scenario = compose.activityRule.scenario
+        compose.onNodeWithContentDescription("Settings").performClick()
+        val row = compose.onNodeWithText("Wallpaper colors")
+        row.performScrollTo().assertIsDisplayed()
+        val before = row.getBoundsInRoot()
+        scenario.moveToState(Lifecycle.State.CREATED)
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        row.assertIsDisplayed()
+        assertEquals(before.top.value, row.getBoundsInRoot().top.value, 0.5f)
+
+        scenario.recreate()
+        row.assertIsDisplayed()
+        assertEquals(before.top.value, row.getBoundsInRoot().top.value, 0.5f)
+    }
 }

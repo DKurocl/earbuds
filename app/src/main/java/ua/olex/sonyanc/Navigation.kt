@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Density
@@ -225,7 +226,8 @@ internal fun PageLayers(shown: List<String>, pose: PagePose, content: @Composabl
             Box(
                 Modifier.fillMaxSize()
                     .graphicsLayer { if (isTop) closing(local) else behind(local) }
-                    .background(background),
+                    .background(background)
+                    .then(if (isTop) Modifier else Modifier.clearAndSetSemantics { }),
             ) { content(page) }
             // The scrim lies between the two pages, as the system's does.
             if (!isTop) Box(Modifier.fillMaxSize().drawBehind {

@@ -14,7 +14,10 @@ The Bluetooth stream test sends an oversized frame followed by a fragmented 4096
 The standalone JVM run passed 42 tests across protocol, stream transport, scheduling and battery
 history and health. The Android build runs the full suite, including the mode-controller tests.
 
-The launcher icon, widget layouts, navigation code and the committed screenshot goldens match the baseline at source level. Home and Battery still use the approved composition. Runtime rendering and accessibility are measured by the screenshot and instrumentation jobs.
+The launcher icon, widget layouts and committed screenshot goldens match the baseline at source
+level. The page behind the current one stays drawn for predictive back with its controls excluded
+from the accessibility tree. The instrumentation suite exercises that behavior, both swipe edges,
+and settings scroll position after resume and recreation.
 
 ### Pixel 10 Pro XL acceptance
 
@@ -30,7 +33,9 @@ Record the candidate commit, Android build, WF-1000XM5 firmware and app settings
 
 Compare switching to another app and returning from Recents on Home, Battery, EQ and both settings pages. Capture the first visible frame and the settled frame with the same scroll position. Test predictive-back commit and cancellation from both edges, followed by the same actions with system animations disabled.
 
-For performance, run the same Macrobenchmark journeys on each build with the release baseline profile and without it. Save startup timing, frame-overrun percentiles, refresh rate and Perfetto traces. Record process memory after cold launch and repeated navigation. Use matched 24-hour sessions for phone and WF-1000XM5 battery measurements. The emulator results do not fill these entries.
+For performance, run `coldLaunch` and `settingsTransitions` with the required release baseline
+profile. Run the matching `WithoutBaselineProfile` methods for a no-precompilation comparison on
+the same build. Save startup timing, frame-overrun percentiles, refresh rate and Perfetto traces. Record process memory after cold launch and repeated navigation. Use matched 24-hour sessions for phone and WF-1000XM5 battery measurements. The emulator results do not fill these entries.
 
 For ecosystem acceptance, pair or reconnect real WF-1000XM5, exercise Quick Settings and Gemini, verify companion presence with the app closed, and export/restore the settings across installs. Record which actions the earbuds confirmed and which surfaces stayed in sync. The device pass, side-by-side media and owner approval are pending.
 
