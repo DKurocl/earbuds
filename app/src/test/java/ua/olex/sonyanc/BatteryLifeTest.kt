@@ -35,6 +35,19 @@ class BatteryLifeTest {
         assertEquals(280, BatteryLife.budsMinutes(SonyProtocol.Battery(70, 75, null), Mode.ANC, rate))
     }
 
+    @Test fun fasterDrainingEarbudCanLimitPlaybackEvenWithMoreCharge() {
+        val log = listOf(
+            sample(0, 100).copy(left = 100, right = 100),
+            sample(60, 85).copy(left = 85, right = 93),
+            sample(120, 70).copy(left = 70, right = 86),
+        )
+        val drain = BatteryLog.perEarbudDrain(log, Mode.ANC)!!
+        assertEquals(0.25, drain.left.rate, 1e-9)
+        assertEquals(14.0 / 120, drain.right.rate, 1e-9)
+        assertEquals(320, drain.minutesLeft(SonyProtocol.Battery(80, 60, null), Mode.ANC))
+        assertNull(BatteryLog.perEarbudDrain(log.map { it.copy(right = null) }, Mode.ANC))
+    }
+
     @Test fun ignoresCaseTimeChargingAndOtherSessions() {
         val log = listOf(
             sample(0, 90), sample(30, 88),                  // too little

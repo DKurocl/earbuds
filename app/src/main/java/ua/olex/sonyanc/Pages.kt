@@ -137,13 +137,13 @@ fun AppSettingsContent(
             // Android's companion link; absent where presence events are not available.
             if (liveLink != null) item {
                 SwitchRow(it, Glyph.LINK, "Stay in sync",
-                    "Stays connected while the earbuds are out, so changes made on the earbuds show at once and taps are instant",
+                    "Keeps controls in sync while the earbuds are out",
                     liveLink, onChange = onLiveLink)
             }
             // The sheet can only come up over other apps for a companion app.
             if (liveLink == true) item {
                 SwitchRow(it, Glyph.EARBUDS, "Show when connected",
-                    "A sheet with the earbuds and their battery comes up when you take them out", connectSheet, onChange = onConnectSheet)
+                    "Show battery levels when you take the earbuds out", connectSheet, onChange = onConnectSheet)
             }
             item {
                 ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
@@ -167,11 +167,11 @@ fun AppSettingsContent(
             }
             item {
                 SwitchRow(it, Glyph.BATTERY, "Case battery reminder",
-                    "When the case is at ${CaseReminder.THRESHOLD} % or less as you take the earbuds out or put them away", caseReminder, onChange = onCaseReminder)
+                    "At ${CaseReminder.THRESHOLD}% or less when you open or put away the earbuds", caseReminder, onChange = onCaseReminder)
             }
             item {
                 SwitchRow(it, Glyph.EARBUDS, "Low earbud battery",
-                    "A heads-up at ${LowBattery.THRESHOLD} % while you listen, with the time left", budsReminder, onChange = onBudsReminder)
+                    "At ${LowBattery.THRESHOLD}% while listening, with time left", budsReminder, onChange = onBudsReminder)
             }
             item {
                 SwitchRow(it, Glyph.UPCOMING, "Charge before you go",
@@ -186,8 +186,8 @@ fun AppSettingsContent(
             }
             item {
                 SwitchRow(it, Glyph.WALK, "Ambient while walking",
-                    if (liveLink == false) "Needs Stay in sync on: the app listens for steps only while the earbuds are connected"
-                    else "Ambient when you start walking, noise cancelling when you stop", activityMode, onChange = onActivityMode)
+                    if (liveLink == false) "Requires Stay in sync. Uses steps only while connected."
+                    else "Ambient when walking, noise cancelling when stopped", activityMode, onChange = onActivityMode)
             }
             item {
                 ChoiceRow(it, Glyph.BEDTIME, "When Music's sleep timer ends", AfterSleep.entries.map { a -> a.ordinal to a.label }, afterSleep.ordinal) { i ->
@@ -197,8 +197,8 @@ fun AppSettingsContent(
         }
         ListGroup("Appearance") {
             item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Use your wallpaper palette in the app", dynamicColor, onChange = onDynamicColor) }
-            item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "A tap when you choose, a pulse when the earbuds confirm", haptics, onChange = onHaptics) }
-            if (haptics) item { NavRow(it, Glyph.TUNE, "Vibrations", "How each answer feels: try and choose", onClick = onVibrations) }
+            item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "Feedback on tap and confirmation", haptics, onChange = onHaptics) }
+            if (haptics) item { NavRow(it, Glyph.TUNE, "Vibrations", "Preview confirmation patterns", onClick = onVibrations) }
         }
         if (canAddTile || canPinWidget) ListGroup("System shortcuts") {
             if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Cycle noise control from the notification shade", onClick = onAddTile) }
@@ -207,7 +207,7 @@ fun AppSettingsContent(
                     if (tileTwoWay) 1 else 0) { i -> onTileTwoWay(i == 1) }
             }
             if (canPinWidget) item { NavRow(it, Glyph.WIDGET, "Add noise control widget", "ANC, Ambient and Off on your home screen", onClick = onPinWidget) }
-            if (canPinWidget) item { NavRow(it, Glyph.BATTERY, "Add battery widget", "Left, case and right at a glance", onClick = onPinBatteryWidget) }
+            if (canPinWidget) item { NavRow(it, Glyph.BATTERY, "Add battery widget", "Left, right and case charge", onClick = onPinBatteryWidget) }
         }
         if (onProfiles != null || onBackup != null) ListGroup("Personal settings") {
             if (onProfiles != null) item { NavRow(it, Glyph.TUNE, "Personal profiles", "Save and recall noise control and EQ", onClick = onProfiles) }

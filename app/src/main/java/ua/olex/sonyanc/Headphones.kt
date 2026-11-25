@@ -65,7 +65,12 @@ object Headphones {
     ): ByteArray? = commands.run(priority) {
         if (!readyToRead()) return@run null
         val ready = if (connect) ensureConnectedLocked() else conn.connected
-        if (ready && prepare()) commands.readLocked(timeoutMs, accepts, send) else null
+        if (!ready) return@run null
+        val generation = conn.generation
+        if (!prepare() || conn.generation != generation) return@run null
+        commands.readLocked(timeoutMs, { type, payload ->
+            conn.generation == generation && accepts(type, payload)
+        }) { conn.generation == generation && send() }
     }
 
     internal val usage = ConnectionUse()

@@ -71,7 +71,15 @@ object SonyProtocol {
     private const val MAX_PAYLOAD_BYTES = 4096
     internal const val MAX_ENCODED_BODY_BYTES = 2 * (MAX_PAYLOAD_BYTES + 7)
 
-    fun hex(b: ByteArray) = b.joinToString(" ") { "%02X".format(it) }
+    private const val HEX = "0123456789ABCDEF"
+    fun hex(b: ByteArray): String = buildString((b.size * 3 - 1).coerceAtLeast(0)) {
+        b.forEachIndexed { index, byte ->
+            if (index > 0) append(' ')
+            val value = byte.toInt() and 0xFF
+            append(HEX[value ushr 4])
+            append(HEX[value and 0xF])
+        }
+    }
 
     fun parseHex(s: String): ByteArray =
         s.replace(Regex("[^0-9A-Fa-f]"), "").chunked(2).filter { it.length == 2 }

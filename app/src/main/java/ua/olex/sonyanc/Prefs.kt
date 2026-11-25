@@ -82,7 +82,7 @@ object Prefs {
         val editor = p(ctx).edit().putString("device", address).putString("device_name", name)
         listOf(
             "mode", "voice", "level", "codec", "battery_at", "linked", "last_seen",
-            "cache_advanced", "cache_features", "cache_eq", "panel_refused",
+            "cache_advanced", "cache_features", "cache_eq", "last_eq_preset", "panel_refused",
             "battery_log", "battery_health", "buds_reminded_session",
         ).forEach { editor.remove(it) }
         editor.apply()
@@ -189,8 +189,14 @@ object Prefs {
         val bands = parts.getOrNull(1).orEmpty().split(',').filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: return null }
         if (bands.size !in listOf(0, 6) || bands.any { it !in -10..10 }) null else EqualizerProtocol.State(preset, bands)
     }
-    fun cacheEqualizer(ctx: Context, eq: EqualizerProtocol.State) =
-        p(ctx).edit().putString("cache_eq", "${eq.preset}|${eq.bands.joinToString(",")}").apply()
+    fun lastEnabledEqualizerPreset(ctx: Context): Int =
+        p(ctx).getInt("last_eq_preset", 0xA0).takeIf { it != 0 && it in EqualizerProtocol.presets } ?: 0xA0
+
+    fun cacheEqualizer(ctx: Context, eq: EqualizerProtocol.State) {
+        val editor = p(ctx).edit().putString("cache_eq", "${eq.preset}|${eq.bands.joinToString(",")}")
+        if (eq.preset != 0) editor.putInt("last_eq_preset", eq.preset)
+        editor.apply()
+    }
 
     // ---- real battery use (BatteryLog) ----
     fun batteryLog(ctx: Context) = BatteryLog.decode(p(ctx).getString("battery_log", null))

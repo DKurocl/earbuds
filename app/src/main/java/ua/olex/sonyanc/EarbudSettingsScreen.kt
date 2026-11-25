@@ -161,7 +161,7 @@ fun EarbudSettingsContent(
             // Shown only where the earbuds report the panel and have not refused turning it off.
             if (!panelHidden && values[Key.PANEL] != null) item {
                 val panel = values[Key.PANEL]
-                SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Turn off to ignore every tap on the earbuds", panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), writing == null, note = notes[rowId(Key.PANEL, 1)]) { on ->
+                SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Enable taps on the earbuds", panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), writing == null, note = notes[rowId(Key.PANEL, 1)]) { on ->
                     panel?.let { v -> update(Key.PANEL, 1, AdvancedSettings.panelCode(v, on)) }
                 }
             }
@@ -172,10 +172,10 @@ fun EarbudSettingsContent(
             if (has(Key.GESTURES)) item { KeySwitch(it, Key.GESTURES, Glyph.FACE, "Head gestures", "Nod or shake your head to answer calls", code(Key.GESTURES, 0), busy(Key.GESTURES), writing == null, update, notes[rowId(Key.GESTURES, 0)]) }
         }
         if (has(Key.SIDETONE)) ListGroup("Calls") {
-            item { KeySwitch(it, Key.SIDETONE, Glyph.MIC, "Hear my voice", "Your own voice in the earbuds while you talk", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update, notes[rowId(Key.SIDETONE, 0)]) }
+            item { KeySwitch(it, Key.SIDETONE, Glyph.MIC, "Hear my voice", "Hear your voice during calls", code(Key.SIDETONE, 0), busy(Key.SIDETONE), writing == null, update, notes[rowId(Key.SIDETONE, 0)]) }
         }
         if (has(Feature.AUTO_PAUSE) || has(Key.POWER)) ListGroup("Wearing") {
-            if (has(Feature.AUTO_PAUSE)) item { FeatureSwitch(it, Feature.AUTO_PAUSE, Glyph.PAUSE_CIRCLE, "Pauses playback when you take an earbud out", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }
+            if (has(Feature.AUTO_PAUSE)) item { FeatureSwitch(it, Feature.AUTO_PAUSE, Glyph.PAUSE_CIRCLE, "Pause when you remove an earbud", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }
             if (has(Key.POWER)) item { ChoiceRow(it, Glyph.POWER, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), writing == null, note = notes[rowId(Key.POWER, 0)]) { c -> update(Key.POWER, 0, c) } }
         }
         if (has(Key.GUIDANCE)) ListGroup("Spoken prompts") {
