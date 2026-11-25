@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -463,11 +462,12 @@ private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockE
     }
 }
 
-/** The buttons float above the scrollable page, with clear space between their pills. */
+/** One floating surface for the three noise modes, above the scrollable Home content. */
 @Composable
 private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onChoose: (NcState) -> Unit, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
     BoxWithConstraints(
-        modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
+        modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         val density = LocalDensity.current
@@ -479,33 +479,40 @@ private fun ModeDock(state: NcState?, pending: NcState?, enabled: Boolean, onCho
         }
         val contentWidths = labelWidths.map { it + 24.dp + ToggleButtonDefaults.IconSpacing + 24.dp }
         val iconOnly = maxWidth < 320.dp || density.fontScale >= 1.3f || contentWidths.any { it > slotWidth }
-        var iconMotion by remember { mutableStateOf<Pair<Mode, Int>?>(null) }
-        val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
-        ButtonGroup(
-            overflowIndicator = {},
-            expandedRatio = .08f,
-            modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        Surface(
+            shape = CircleShape,
+            color = cs.surfaceContainerHighest,
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Mode.entries.forEachIndexed { index, mode ->
-                val contentWidth = if (iconOnly) 48.dp else contentWidths[index]
-                // Keep room for the whole label, including the case where two neighbors press.
-                val compression = ((slotWidth - contentWidth - 1.dp) / 2).coerceIn(0.dp, 8.dp)
-                customItem(
-                    buttonGroupContent = {
-                        ModeButton(
-                            mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
-                            iconMotion?.takeIf { it.first == mode }?.second, interactions[index],
-                            Modifier.weight(1f).animateWidth(interactions[index], compression),
-                        ) {
-                            if (mode != (pending ?: state)?.mode) {
-                                iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
+            var iconMotion by remember { mutableStateOf<Pair<Mode, Int>?>(null) }
+            val interactions = remember { Mode.entries.map { MutableInteractionSource() } }
+            ButtonGroup(
+                overflowIndicator = {},
+                expandedRatio = .08f,
+                modifier = Modifier.fillMaxWidth().padding(6.dp).selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Mode.entries.forEachIndexed { index, mode ->
+                    val contentWidth = if (iconOnly) 48.dp else contentWidths[index]
+                    // Keep room for the whole label, including the case where two neighbors press.
+                    val compression = ((slotWidth - contentWidth - 1.dp) / 2).coerceIn(0.dp, 8.dp)
+                    customItem(
+                        buttonGroupContent = {
+                            ModeButton(
+                                mode, state?.mode == mode, pending?.mode == mode, enabled, iconOnly,
+                                iconMotion?.takeIf { it.first == mode }?.second, interactions[index],
+                                Modifier.weight(1f).animateWidth(interactions[index], compression),
+                            ) {
+                                if (mode != (pending ?: state)?.mode) {
+                                    iconMotion = mode to ((iconMotion?.second ?: 0) + 1)
+                                }
+                                onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
                             }
-                            onChoose((pending ?: state ?: NcState(mode)).copy(mode = mode))
-                        }
-                    },
-                    menuContent = {},
-                )
+                        },
+                        menuContent = {},
+                    )
+                }
             }
         }
     }
@@ -524,14 +531,14 @@ private fun ModeButton(
         enabled = enabled,
         shapes = ToggleButtonShapes(shape = CircleShape, pressedShape = CircleShape, checkedShape = CircleShape),
         colors = ToggleButtonDefaults.colors(
-            containerColor = cs.surfaceContainerHighest,
+            containerColor = Color.Transparent,
             contentColor = cs.onSurface,
-            disabledContainerColor = cs.surfaceContainerHighest,
+            disabledContainerColor = Color.Transparent,
         ),
         contentPadding = PaddingValues(horizontal = 12.dp),
         interactionSource = interaction,
         // The screen's one hero control, as Pixel Buds' mode button: taller than a normal button.
-        modifier = modifier.heightIn(min = 64.dp).shadow(3.dp, CircleShape, clip = false)
+        modifier = modifier.heightIn(min = 64.dp)
             // One of three, like radio buttons: announced and tested as selected, not as on/off.
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = mode.label; if (applying) stateDescription = "Applying" },
     ) {
