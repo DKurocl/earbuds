@@ -1,10 +1,10 @@
 package ua.olex.sonyanc
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,12 +15,12 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 import ua.olex.sonyanc.SonyProtocol.Mode
@@ -29,7 +29,7 @@ import kotlin.math.sin
 
 /** A one-shot response to a mode request. The glyph and its label retain the same layout bounds. */
 @Composable
-internal fun ModeGlyph(mode: Mode, request: Int?, selected: Boolean, applying: Boolean, color: Color) {
+internal fun ModeGlyph(mode: Mode, request: Int?, selected: Boolean, color: Color) {
     val phase = remember { Animatable(1f) }
     val motionEnabled = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
     LaunchedEffect(request, motionEnabled) {
@@ -42,25 +42,15 @@ internal fun ModeGlyph(mode: Mode, request: Int?, selected: Boolean, applying: B
             }
         }
     }
-    val glyph = remember(mode) { lazy(LazyThreadSafetyMode.NONE) { GlyphContours(mode) } }
-    Box(Modifier.size(24.dp).graphicsLayer { alpha = if (applying && !selected) .75f else 1f }) {
-        HushIcon(
-            mode.glyph, Modifier.matchParentSize().graphicsLayer { alpha = 1f - contourAlpha(phase.value) },
-            color, bold = selected, popOnEmphasis = false,
-        )
-        Canvas(Modifier.matchParentSize()) {
-            val time = phase.value
-            val alpha = contourAlpha(time)
-            if (alpha == 0f) return@Canvas
-            val unit = size.minDimension / 960f
-            withTransform({ translate(0f, size.height); scale(unit, -unit, Offset.Zero) }) {
-                glyph.value.draw(this, time, color.copy(alpha = color.alpha * alpha))
-            }
+    val weight = animateFloatAsState(if (selected) 1f else 0f, tween(140), label = "Mode icon weight")
+    val glyph = remember(mode) { GlyphContours(mode) }
+    Canvas(Modifier.size(24.dp)) {
+        val unit = size.minDimension / 960f
+        withTransform({ translate(0f, size.height); scale(unit, -unit, Offset.Zero) }) {
+            glyph.draw(this, phase.value, weight.value, color)
         }
     }
 }
-
-private fun contourAlpha(time: Float): Float = minOf(time / .11f, (1f - time) / .18f, 1f).coerceAtLeast(0f)
 
 private fun impulse(time: Float, start: Float, finish: Float): Float {
     val position = ((time - start) / (finish - start)).coerceIn(0f, 1f)
@@ -69,19 +59,50 @@ private fun impulse(time: Float, start: Float, finish: Float): Float {
 }
 
 private class GlyphContours(private val mode: Mode) {
-    private val paths = when (mode) {
-        Mode.ANC -> ModeGlyphPaths.anc
-        Mode.AMBIENT -> ModeGlyphPaths.ambient
-        Mode.OFF -> ModeGlyphPaths.off
-    }.map { PathParser().parsePathString(it).toPath() }
-    private val ring = Path().apply {
+    private val regular = parse(when (mode) {
+        Mode.ANC -> ModeGlyphPaths.ancRegular
+        Mode.AMBIENT -> ModeGlyphPaths.ambientRegular
+        Mode.OFF -> ModeGlyphPaths.offRegular
+    })
+    private val bold = parse(when (mode) {
+        Mode.ANC -> ModeGlyphPaths.ancBold
+        Mode.AMBIENT -> ModeGlyphPaths.ambientBold
+        Mode.OFF -> ModeGlyphPaths.offBold
+    })
+    private val interpolated = List(regular.size) { Path() }
+    private val ring = Path()
+    private var previousWeight = -1f
+    private var paths = regular
+
+    private fun parse(contours: List<String>): List<Path> =
+        contours.map { PathParser().parsePathString(it).toPath() }
+
+    private fun updateWeight(weight: Float) {
+        if (weight == previousWeight) return
+        previousWeight = weight
+        paths = when (weight) {
+            0f -> regular
+            1f -> bold
+            else -> interpolated.also { output ->
+                regular.indices.forEach { index ->
+                    val start = regular[index].asAndroidPath()
+                    val end = bold[index].asAndroidPath()
+                    val result = output[index].asAndroidPath()
+                    if (!start.interpolate(end, 1f - weight, result)) {
+                        result.set(if (weight < .5f) start else end)
+                    }
+                }
+            }
+        }
         if (mode == Mode.ANC) {
-            addPath(paths[0])
-            addPath(paths[1])
+            ring.reset()
+            ring.addPath(paths[0])
+            ring.addPath(paths[1])
         }
     }
 
-    fun draw(scope: DrawScope, time: Float, color: Color) = with(scope) {
+    fun draw(scope: DrawScope, time: Float, weight: Float, color: Color) = with(scope) {
+        updateWeight(weight)
         when (mode) {
             Mode.ANC -> {
                 val aperture = 1f - .145f * impulse(time, .08f, .62f) + .024f * impulse(time, .62f, .87f)
