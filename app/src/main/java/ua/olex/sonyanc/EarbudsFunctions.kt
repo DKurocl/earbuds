@@ -18,6 +18,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 @RequiresApi(36) // App Functions arrived in Android 16; only the Pixel's Android 17 binds it.
 @AppFunctionServiceEntryPoint(serviceName = "EarbudsFunctionService", appFunctionXmlFileName = "earbuds_functions")
 abstract class EarbudsFunctions : AppFunctionService() {
+    private val setupRequired = "Open Earbuds once to choose your WF-1000XM5."
 
     /**
      * Changes the noise control of the user's Sony WF-1000XM5 earbuds.
@@ -38,7 +39,7 @@ abstract class EarbudsFunctions : AppFunctionService() {
                 Headphones.request(base.copy(mode = wanted)).await() && confirmedMode(wanted)
             } ?: false
             if (ok) "${wanted.label} is on." else notReachable()
-        }
+        } ?: setupRequired
     }
 
     /**
@@ -54,11 +55,10 @@ abstract class EarbudsFunctions : AppFunctionService() {
         if (minutes !in 1..30) throw AppFunctionInvalidArgumentException("minutes must be between 1 and 30")
         return withLink {
             val from = Headphones.state.value.shownNc ?: SonyProtocol.NcState(SonyProtocol.Mode.ANC)
-            AmbientTimer.start(this, minutes, from)
-            val ok = withTimeoutOrNull(8500) { confirmedMode(SonyProtocol.Mode.AMBIENT) } ?: false
-            if (ok) "Ambient sound for $minutes minutes, then back to ${AmbientTimer.returnMode(this).label.lowercase()}."
-            else { AmbientTimer.cancel(this); notReachable() }
-        }
+            val back = AmbientTimer.start(this, minutes, from)
+            if (back != null) "Ambient sound for $minutes minutes, then back to ${back.label.lowercase()}."
+            else notReachable()
+        } ?: setupRequired
     }
 
     /**
@@ -70,20 +70,13 @@ abstract class EarbudsFunctions : AppFunctionService() {
     @AppFunctionDeclaration(isDescribedByKDoc = true)
     suspend fun getEarbudsBattery(): EarbudsBattery {
         Headphones.init(this)
-        if (Prefs.linked(this) != false) withLink {
+        val snapshot = if (Prefs.linked(this) == false) null else withLink {
             withTimeoutOrNull(5000) { if (Headphones.connectAndSync()) Headphones.queryBattery() }
-            ""
+            // Capture the live parts while this action still owns the control link.
+            Headphones.state.value
         }
-        val state = Headphones.state.value
-        val b = state.battery ?: SonyProtocol.Battery()
-        val mode = state.nc?.mode
-        val left = BatteryLife.budsMinutes(b, mode, Prefs.drainRate(this, mode))
-        return EarbudsBattery(
-            leftPercent = b.left ?: -1, rightPercent = b.right ?: -1, casePercent = b.case ?: -1,
-            charging = b.leftCharging || b.rightCharging,
-            listeningMinutesLeft = left ?: -1,
-            summary = BatteryWords.sentence(b, left?.let(BatteryLife::format), Prefs.linked(this) == true),
-        )
+        val state = snapshot ?: Headphones.state.value.copy(liveBatteryParts = emptySet())
+        return BatteryWords.forAssistant(state, Prefs.drainRate(this, state.nc?.mode))
     }
 
     private suspend fun confirmedMode(mode: SonyProtocol.Mode): Boolean {
@@ -103,34 +96,60 @@ abstract class EarbudsFunctions : AppFunctionService() {
         else "The earbuds didn't answer. Make sure they're connected to this phone."
 
     /** A background lease, as the widget takes for a tap. */
-    private suspend fun withLink(block: suspend () -> String): String {
+    private suspend fun <T : Any> withLink(block: suspend () -> T): T? {
         Headphones.init(this)
         if (!Headphones.hasPermission(this) || Prefs.deviceAddress(this) == null)
-            return "Open Earbuds once to choose your WF-1000XM5."
+            return null
         Headphones.hold(foreground = false)
         try { return block() } finally { Headphones.release(foreground = false) }
     }
 }
 
-/** The earbuds' battery for an assistant. -1 means not known. */
+/** Current earbud and case battery for an assistant. A cached level may appear in the summary. */
 @AppFunctionSerializable(isDescribedByKDoc = true)
 class EarbudsBattery(
-    /** Left earbud, percent, or -1 when unknown. */
+    /** Current left earbud level, percent, or -1 when unavailable. */
     val leftPercent: Int,
-    /** Right earbud, percent, or -1 when unknown. */
+    /** Current right earbud level, percent, or -1 when unavailable. */
     val rightPercent: Int,
-    /** Charging case, percent, or -1 when unknown. */
+    /** Current charging case level, percent, or -1 when unavailable. */
     val casePercent: Int,
     /** True while the earbuds are charging in the case. */
     val charging: Boolean,
     /** Minutes of listening left on the emptier earbud, or -1 when unknown. */
     val listeningMinutesLeft: Int,
-    /** The same as one sentence for the user. */
+    /** Current readings, with any cached levels explicitly identified as last known. */
     val summary: String,
 )
 
 /** Plain-language battery for voice answers. Pure, unit-tested. */
 object BatteryWords {
+    internal fun forAssistant(state: DeviceState, rate: Double?): EarbudsBattery {
+        val known = state.battery ?: SonyProtocol.Battery()
+        val fresh = state.liveBatteryParts
+        val live = SonyProtocol.Battery(
+            left = known.left.takeIf { 0 in fresh },
+            right = known.right.takeIf { 1 in fresh },
+            case = known.case.takeIf { 2 in fresh },
+            leftCharging = known.leftCharging && 0 in fresh,
+            rightCharging = known.rightCharging && 1 in fresh,
+        )
+        val charging = live.leftCharging || live.rightCharging
+        val minutes = BatteryLife.budsMinutes(live, state.nc?.mode, rate).takeUnless { charging }
+        val current = when {
+            live.left != null || live.right != null -> sentence(live, minutes?.let(BatteryLife::short), linked = true)
+            live.case != null -> "Case battery ${live.case}%."
+            else -> null
+        }
+        val history = listOfNotNull(
+            known.left?.takeUnless { 0 in fresh }?.let { "left earbud $it%" },
+            known.right?.takeUnless { 1 in fresh }?.let { "right earbud $it%" },
+            known.case?.takeUnless { 2 in fresh }?.let { "case $it%" },
+        ).takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "Last known readings: ", postfix = ".")
+        val summary = listOfNotNull(current, history).joinToString(" ").ifEmpty { sentence(known, null, linked = false) }
+        return EarbudsBattery(live.left ?: -1, live.right ?: -1, live.case ?: -1, charging, minutes ?: -1, summary)
+    }
+
     fun sentence(b: SonyProtocol.Battery, timeLeft: String?, linked: Boolean): String {
         val buds = when {
             b.left != null && b.right != null && b.left == b.right -> "Both earbuds are at ${b.left}%"

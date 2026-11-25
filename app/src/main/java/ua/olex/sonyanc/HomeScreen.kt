@@ -31,6 +31,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -74,7 +75,7 @@ fun HushScreen(
     batterySeenAt: Long? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null, onBatteryDetails: () -> Unit = {},
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
-    ambientMinutes: Int = 5, ambientUntil: Long? = null, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
+    ambientMinutes: Int = 5, ambientUntil: Long? = null, ambientReturn: Mode = Mode.ANC, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
     linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true, codecLive: Boolean = true,
     onProfiles: (() -> Unit)? = null,
 ) {
@@ -154,7 +155,7 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery, nc?.mode, live = batteryParts.isNotEmpty(),
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, live = 0 in batteryParts || 1 in batteryParts,
                                 seenAt = batterySeenAt.takeUnless { linked == true }, onClick = onBatteryDetails,
                             )
                         }
@@ -173,7 +174,7 @@ fun HushScreen(
                     // What the chosen mode offers, in the page as a card (as Pixel Buds settings do),
                     // never floating: Ambient's level and voice focus, or Speak-to-Chat and
                     // "Ambient for a moment" with noise cancelling.
-                    if (canControl && (ready || nc != null)) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, onAmbientFor, onStayInAmbient))
+                    if (canControl && (ready || nc != null)) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient))
 
                     Box(Modifier.introFade()) { ListGroup("More controls") {
                         // Battery opens from the listening-time tiles above; no second entry here.
@@ -225,11 +226,20 @@ internal fun Batteries(
     // When the earbuds confirm a new mode, a small swell runs through the rings, left to right:
     // the answer comes from the earbuds, not from the button that was tapped.
     val swell = remember { List(3) { Animatable(1f) } }
+    var lastConfirmed by remember { mutableStateOf(confirmed) }
+    SideEffect { if (confirmed != null) lastConfirmed = confirmed }
     val seen = remember { arrayOfNulls<Mode>(1) }
+    val motionEnabled = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
     val grow = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
-    LaunchedEffect(confirmed) {
-        val was = seen[0]; seen[0] = confirmed ?: was
-        if (confirmed == null || was == null || was == confirmed) return@LaunchedEffect
+    LaunchedEffect(lastConfirmed, motionEnabled) {
+        val mode = lastConfirmed
+        val was = seen[0]
+        seen[0] = mode
+        if (!motionEnabled) {
+            swell.forEach { it.snapTo(1f) }
+            return@LaunchedEffect
+        }
+        if (mode == null || was == null || was == mode) return@LaunchedEffect
         listOf(0, 2, 1).forEachIndexed { order, ring ->
             launch {
                 delay(order * 70L)
@@ -244,13 +254,13 @@ internal fun Batteries(
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, dimCached, { swell[0].value }) { BudArt(budL) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, dimCached, motionEnabled, { swell[0].value }) { BudArt(budL) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-            BatteryRing("Case", b.case, b.caseCharging, 2 in live, dimCached, { swell[2].value }) {
+            BatteryRing("Case", b.case, b.caseCharging, 2 in live, dimCached, motionEnabled, { swell[2].value }) {
                 Image(painterResource(R.drawable.device_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, dimCached, { swell[1].value }) { BudArt(budR) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, dimCached, motionEnabled, { swell[1].value }) { BudArt(budR) } }
     }
 }
 
@@ -261,7 +271,7 @@ internal fun Batteries(
  */
 @Composable
 private fun BatteryRing(
-    label: String, value: Int?, charging: Boolean, live: Boolean, dimCached: Boolean,
+    label: String, value: Int?, charging: Boolean, live: Boolean, dimCached: Boolean, motionEnabled: Boolean,
     swell: () -> Float = { 1f }, art: @Composable () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -283,10 +293,9 @@ private fun BatteryRing(
     val landed = Intro.isLanded(label)
     val shown by animateFloatAsState(if (landed) 1f else 0f, MaterialTheme.motionScheme.fastEffectsSpec(), label = "shown $label")
     LaunchedEffect(value, landed) { if (landed) fill.animateTo((value ?: 0) / 100f, fillSpec) }
-    val progress = fill.value.coerceIn(0f, 1f)
     // Runs only while this ring is charging; otherwise no animation frame is ever requested.
     // Read only while drawing: a charging frame redraws the ring and recomposes nothing.
-    val phaseState = if (charging && value != null) {
+    val phaseState = if (motionEnabled && charging && value != null) {
         val waves = rememberInfiniteTransition(label = "charging $label")
         waves.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "phase")
     } else null
@@ -302,6 +311,7 @@ private fun BatteryRing(
             // While the intro plays, the ring waits dimmed, its chip hidden, until its piece lands.
             // A slow charging wave: 30 frames a second look the same and let the panel leave 120 Hz.
             Canvas(Modifier.fillMaxSize().then(if (phaseState != null) Modifier.preferredFrameRate(30f) else Modifier).graphicsLayer { alpha = 0.35f + 0.65f * shown }) {
+                val progress = fill.value.coerceIn(0f, 1f)
                 val phase = phaseState?.value ?: 0f
                 val stroke = RING_STROKE.toPx()
                 val radius = RING_RADIUS.toPx()
@@ -403,7 +413,7 @@ private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onCl
 /** What the dock offers besides the modes: Speak-to-Chat and "Ambient for a moment". */
 class DockExtras(
     val speakToChat: Boolean?, val onSpeakToChat: (Boolean) -> Unit,
-    val minutes: Int, val until: Long?, val onAmbientFor: () -> Unit, val onStay: () -> Unit,
+    val minutes: Int, val until: Long?, val returnMode: Mode, val onAmbientFor: () -> Unit, val onStay: () -> Unit,
 )
 
 /** The chosen mode's options as a card in the page; it grows in and out with the mode. */
@@ -525,16 +535,16 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
     Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // A running "Ambient for a moment": the way back, and one tap to stay.
         extras.until?.let { until ->
-            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            var now by remember(until) { mutableLongStateOf(System.currentTimeMillis()) }
             LaunchedEffect(until) { while (now < until) { kotlinx.coroutines.delay(1000); now = System.currentTimeMillis() } }
             Surface(
                 onClick = extras.onStay, shape = CircleShape, color = cs.tertiaryContainer, contentColor = cs.onTertiaryContainer,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).semantics { contentDescription = "Back to noise cancelling soon. Tap to stay in Ambient" },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).semantics { contentDescription = "Back to ${extras.returnMode.label.lowercase()} soon. Tap to stay in Ambient" },
             ) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     HushIcon(Glyph.TIMER, Modifier.size(18.dp), cs.onTertiaryContainer)
                     Spacer(Modifier.width(8.dp))
-                    Text("Back to ANC in " + AmbientTimer.countdown(until - now), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    Text("Back to ${extras.returnMode.short} in " + AmbientTimer.countdown(until - now), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     Text("Stay", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 }
             }

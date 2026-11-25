@@ -72,16 +72,21 @@ object ActivityMode {
                 delay(5_000)
                 val now = SystemClock.elapsedRealtime()
                 // A change nobody here asked for was made by hand: hold off for a while.
-                val mode = Headphones.state.value.nc?.mode
+                val revision = ModeControl.revision
+                val snapshot = Headphones.state.value
+                val mode = snapshot.nc?.mode
                 if (mode != seen && mode != lastAuto) heldUntil = now + HOLD_MS
                 seen = mode
                 if (walking && now - lastStep > STILL_MS) walking = false
-                if (now < heldUntil || Headphones.state.value.pending != null) continue
+                if (now < heldUntil || !snapshot.ncConfirmed || snapshot.pending != null) continue
+                val base = snapshot.nc ?: continue
                 val target = decide(mode, walking) ?: continue
+                val receipt = ModeControl.requestIfUnchanged(base.copy(mode = target), revision) {
+                    Headphones.staying && Headphones.state.value.nc == base && Prefs.timerUntil(ctx) <= System.currentTimeMillis()
+                } ?: continue
                 Headphones.addLog("· Ambient while walking: ${if (walking) "walking" else "still"}, ${target.short}")
                 lastAuto = target
-                val base = Headphones.state.value.nc ?: SonyProtocol.NcState(target)
-                ModeControl.request(base.copy(mode = target))
+                if (!receipt.await()) lastAuto = null
             }
         }
         Headphones.addLog("· Ambient while walking: listening for steps")

@@ -1,5 +1,82 @@
 # Verification
 
+## 3.0.2 candidate compared with 3.0.1
+
+The baseline is [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.
+
+| Input | 3.0.1 | 3.0.2 candidate |
+|---|---|---|
+| Legacy case-only report with a cached earbud minimum of 20% | A 20% earbud observation entered the history | Case level is preserved with no earbud observation |
+| Legacy right-only report at 85% with a cached left level of 20% | Minimum recorded as 20% | Right-earbud observation recorded at 85% |
+| Left unavailable with a charging flag and right at 72% | Cached left level was reported as charging | Left keeps its cached level and loses charging and live status |
+
+The Bluetooth stream test sends an oversized frame followed by a fragmented 4096-byte escaped payload. The automation tests cover an intervening manual choice and an invalidated timer or connection, plus a widget request superseded by a later choice in the app.
+The standalone JVM run passed 42 tests across protocol, stream transport, scheduling and battery
+history and health. The Android Gradle JVM run passed all 112 tests, including the mode-controller
+tests. [The first candidate run](https://github.com/DKurocl/xm5/actions/runs/45596239368) also passed
+the build, lint, goldens and 20 Android emulator tests.
+
+The launcher icon and widget layouts match the baseline at source level. The page behind the
+current one stays drawn for predictive back with its controls excluded from the accessibility
+tree. The instrumentation suite exercises both swipe edges and settings scroll position after
+resume and recreation.
+
+Row icon backgrounds use the same 40 dp circle for all categories, with the existing wallpaper
+colors and error tone. All 32 screenshot test cases rendered locally. Fifteen reference images
+changed, with visible pixel differences confined to the row-icon area. Compare the
+[3.0.1 settings render](https://github.com/DKurocl/xm5/blob/f9af749/app/src/screenshotTest/goldens/page-settings.png)
+with the [candidate settings render](https://github.com/DKurocl/xm5/blob/codex/earbuds-3.0.2-correctness/app/src/screenshotTest/goldens/page-settings.png).
+
+### Pixel 10 Pro XL acceptance
+
+Record the candidate commit, Android build, WF-1000XM5 firmware and app settings for both passes. Keep system font size, display size, theme, wallpaper and brightness constant for the visual comparison.
+
+| Reference | Earbuds comparison | Evidence still required on the Pixel |
+|---|---|---|
+| Pixel Buds and Pixel Settings | Home and Connected sheet show L/R/Case, current mode and what's available. Earbud settings, App settings, Diagnostics, Profiles, Vibrations and Backup use consistent row, label and back-button alignment. | Light and dark captures, maximum font scale, TalkBack order, and a recording of one bud being put away while the other stays connected. |
+| Google Clock | Ambient timer gives a dependable countdown and a predictable return action. | Start, cancel, replace and expire a timer, including the system chip and lock-screen actions. Compare interaction timing and record the device's confirmed mode. |
+| Calculator | EQ controls are legible and respond immediately while dragging. | Recording at 120 Hz of slider and graph drags, including finger release, interruption and reduced motion. |
+| Wallet | State hierarchy makes available, pending, confirmed and unavailable controls distinguishable. | Light/dark contrast checks, TalkBack and a recording of a failed command, with the corresponding haptic outcome. |
+| Pixel Launcher | All three widgets, the lock-screen dashboard and the adaptive/themed icon fit the existing workspace. | Resize and re-add each widget. Capture the player-slot widget next to the player, test each segment and both side edges, and compare icon weight in the launcher grid. |
+
+Compare switching to another app and returning from Recents on Home, Battery, EQ and both settings pages. Capture the first visible frame and the settled frame with the same scroll position. Test predictive-back commit and cancellation from both edges, followed by the same actions with system animations disabled.
+
+For performance, run `coldLaunch` and `settingsTransitions` with the required release baseline
+profile. Run the matching `WithoutBaselineProfile` methods to compare the same build without
+precompilation. Run `hotResume` for an existing activity returning from Home. Startup reports
+initial display and, when the launch intro completes, full display. Record frame-overrun
+percentiles, observed refresh rate, final memory samples and Perfetto traces. Use matched
+24-hour sessions for phone and WF-1000XM5 battery measurements on the physical Pixel.
+
+For ecosystem acceptance, pair or reconnect real WF-1000XM5, exercise Quick Settings and Gemini, verify companion presence with the app closed, and export/restore the settings across installs. Record which actions the earbuds confirmed and which surfaces stayed in sync. The device pass, side-by-side media and owner approval are pending.
+
+### Follow-up regressions
+
+The [first emulator run of the recreation test](https://github.com/DKurocl/xm5/actions/runs/45598925960/job/139154612599) preserved the row position after backgrounding and found a 48.76 dp difference after Activity recreation. A follow-up recorded the same scroll position and range before and after recreation (1059 px of 3224 px). The test checks absolute row position on normal resume, and the scroll offset plus the row position inside the viewport on recreation. A second test disables Android animator duration scale while exercising predictive back, then restores its previous value.
+
+An isolated 96 ms battery-fill regression probe recorded six composition changes before moving the reading into the draw phase and zero afterward. It uses the same manual Compose clock and battery values for both runs. The light and dark palette checks cover text and selected controls with the app palette and the emulator wallpaper palette, plus battery widget text.
+
+The Ambient countdown waits for the headphones to confirm Ambient, and a replaced timer keeps its original return mode. Existing alarm and notification actions carry the expiry they belong to. The App Functions battery response captures the snapshot while its connection lease is active, exposes current readings as numbers, and identifies cached levels in the spoken summary.
+
+### Final test session
+
+`bash docs/review/capture-pixel-evidence.sh baseline home` and the matching `candidate`
+command save the visible screen, Android and app versions, display state, frame data, memory,
+and phone battery for the connected Pixel. Set `ANDROID_SERIAL` if multiple devices are
+attached. A snapshot is complete when its folder contains `status.txt`. The script preserves
+the current screen and performance counters. Capture each matched scenario with the same
+wallpaper, scale, app state and listening setup.
+
+The automated integration suite opens Android Settings over Earbuds and returns to the
+existing page and scroll position. It exercises both player-slot widget edges, the mode
+segment's setup intent, both battery widget entry points and the Quick Settings cycle.
+Use the Pixel Launcher and actual Bluetooth headset for the final trigger and delivery checks.
+
+In the Battery page the weekly figure is an estimate of connected time between readings.
+A case-only report keeps the playback estimate labeled as the last reading. If a bud has
+reported, the estimate uses the reported buds. The cached level of an unavailable bud remains
+visible as its last known value.
+
 ## 2.1 on the Pixel 10 Pro XL
 
 Use a physical Pixel 10 Pro XL with Smooth Display enabled and its WF-1000XM5 paired. Record the

@@ -46,21 +46,24 @@ class ConnectionReceiver : BroadcastReceiver() {
         if (!Headphones.hasPermission(ctx)) return
         Headphones.init(ctx)
         // "When earbuds connect", or the home mode when the phone is at home (Places).
+        val modeRevision = ModeControl.revision
+        val session = Prefs.session(ctx)
         val apply = Places.modeOnConnect(ctx)
+        fun sameSession() = Prefs.deviceAddress(ctx) == saved && Prefs.linked(ctx) == true && Prefs.session(ctx) == session
         val pending = goAsync()
         scope.launch {
             try {
                 // The sheet comes from Stay in sync's presence event, the moment Android lets a
                 // companion open a screen; this broadcast only backs it up if that has not come.
                 delay(SHEET_BACKUP_MS)
-                if (Prefs.deviceAddress(ctx) != saved || Prefs.linked(ctx) != true) return@launch
+                if (!sameSession()) return@launch
                 ConnectedSheet.show(ctx, "Bluetooth")
                 // Let Android finish A2DP/HFP setup before opening the control channel.
                 delay(SETTLE_MS - SHEET_BACKUP_MS)
-                if (Prefs.deviceAddress(ctx) != saved || Prefs.linked(ctx) != true) return@launch
-                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(apply) }
+                if (!sameSession()) return@launch
+                withTimeoutOrNull(SYNC_BUDGET_MS) { Headphones.syncOnConnect(apply, modeRevision, ::sameSession) }
                 // Normally LinkService's presence event does this; the broadcast backs it up.
-                if (Prefs.deviceAddress(ctx) == saved && Prefs.linked(ctx) == true) {
+                if (sameSession()) {
                     if (LiveLink.enabled(ctx)) Headphones.stay(true)
                     CaseReminder.onEarbudsOut(ctx)
                 }

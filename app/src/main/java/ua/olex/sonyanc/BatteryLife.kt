@@ -26,6 +26,15 @@ object BatteryLife {
         return fullChargeMinutes(mode, rate) * level / 100
     }
 
+    /** Estimates use the current buds when at least one has reported, or the last known pair. */
+    internal fun forEstimate(battery: SonyProtocol.Battery, liveParts: Set<Int>): SonyProtocol.Battery {
+        if (0 !in liveParts && 1 !in liveParts) return battery
+        return battery.copy(
+            left = battery.left.takeIf { 0 in liveParts },
+            right = battery.right.takeIf { 1 in liveParts },
+        )
+    }
+
     /** Extra listening the case can add by recharging the earbuds. */
     fun caseMinutes(b: SonyProtocol.Battery, mode: Mode?, rate: Double? = null): Int? =
         b.case?.let { 2 * fullChargeMinutes(mode, rate) * it / 100 }
@@ -58,9 +67,20 @@ object BatteryLife {
  * [session] changes on every connect (out of the case).
  */
 data class BatterySample(
-    val at: Long, val level: Int, val charging: Boolean, val mode: Mode?, val session: Int,
+    val at: Long, val level: Int?, val charging: Boolean, val mode: Mode?, val session: Int,
     val case: Int? = null, val left: Int? = null, val right: Int? = null,
-)
+) {
+    companion object {
+        internal fun fromReading(at: Long, battery: SonyProtocol.Battery, parts: Set<Int>, mode: Mode?, session: Int): BatterySample? {
+            if (parts.isEmpty()) return null
+            val left = battery.left.takeIf { 0 in parts }
+            val right = battery.right.takeIf { 1 in parts }
+            val level = listOfNotNull(left, right).minOrNull()
+            val charging = (left != null && battery.leftCharging) || (right != null && battery.rightCharging)
+            return BatterySample(at, level, charging, mode, session, battery.case.takeIf { 2 in parts }, left, right)
+        }
+    }
+}
 
 /** The owner's measured drain for one mode bucket: percent per minute, from [minutes] of real use. */
 data class Drain(val rate: Double, val minutes: Double)
@@ -80,45 +100,61 @@ object BatteryLog {
     private const val MIN_DROP = 5
 
     fun encode(samples: List<BatterySample>): String = samples.joinToString(";") {
-        "${it.at},${it.level},${if (it.charging) 1 else 0},${it.mode?.name ?: "-"},${it.session},${it.case ?: "-"},${it.left ?: "-"},${it.right ?: "-"}"
+        "${it.at},${it.level ?: "-"},${if (it.charging) 1 else 0},${it.mode?.name ?: "-"},${it.session},${it.case ?: "-"},${it.left ?: "-"},${it.right ?: "-"},2"
     }
 
     fun decode(text: String?): List<BatterySample> = text.orEmpty().split(';').mapNotNull { row ->
         val p = row.split(',')
-        if (p.size !in listOf(5, 6, 8)) return@mapNotNull null
+        if (p.size !in listOf(5, 6, 8, 9) || (p.size == 9 && p[8] != "2")) return@mapNotNull null
         fun marker(index: Int) = p.getOrNull(index)?.toIntOrNull()?.takeIf { it in 1..100 }
         val at = p[0].toLongOrNull() ?: return@mapNotNull null
-        val level = p[1].toIntOrNull()?.takeIf { it in 1..100 } ?: return@mapNotNull null
         val session = p[4].toIntOrNull() ?: return@mapNotNull null
-        BatterySample(at, level, p[2] == "1", Mode.entries.firstOrNull { it.name == p[3] }, session,
-            marker(5), marker(6), marker(7))
+        val left = marker(6)
+        val right = marker(7)
+        val case = marker(5).takeUnless { p.size == 8 && (left != null || right != null) }
+        // Earlier eight-field records repeated the cached earbud minimum on case-only packets.
+        val level = if (p.size == 8) listOfNotNull(left, right).minOrNull() else marker(1)
+        if (level == null && case == null) return@mapNotNull null
+        BatterySample(at, level, p[2] == "1", Mode.entries.firstOrNull { it.name == p[3] }, session, case, left, right)
     }
 
     /** Appends a reading; repeats of the same level within ten minutes add nothing. */
     fun add(samples: List<BatterySample>, s: BatterySample): List<BatterySample> {
         val last = samples.lastOrNull()
         if (last != null && last.session == s.session && last.level == s.level && last.case == s.case &&
-            last.left == s.left && last.right == s.right && last.charging == s.charging && s.at - last.at < 10 * 60_000L) return samples
+            last.left == s.left && last.right == s.right && last.charging == s.charging && last.mode == s.mode &&
+            s.at - last.at in 0 until 10 * 60_000L) return samples
         return (samples.filter { s.at - it.at <= KEEP_MS } + s).takeLast(MAX)
     }
 
-    private fun bucket(mode: Mode?) = if (mode == Mode.OFF) 1 else 0
+    private fun bucket(mode: Mode?) = when (mode) {
+        null -> null
+        Mode.OFF -> 1
+        else -> 0
+    }
 
-    /** Minutes in the ears over the week before [now], and how many of them with noise cancelling. */
+    private fun intervals(samples: List<BatterySample>) = samples.asSequence()
+        .filter { it.level != null }
+        .zipWithNext()
+        .filter { (a, b) ->
+            a.session == b.session && !a.charging && !b.charging && b.at - a.at in 1..MAX_GAP &&
+                (a.left != null) == (b.left != null) && (a.right != null) == (b.right != null)
+        }
+
+    /** Estimated connected minutes for the last week and the portion attributed to noise cancelling. */
     data class Week(val minutes: Int, val anc: Int)
 
     /**
-     * The week's listening from the readings already kept: the time between two readings of the
-     * same out-of-case session (not charging, at most [MAX_GAP] apart) counts, in the mode of the
-     * first. Readings are sparse, so this is a floor, never an overstatement.
+     * Estimate the observed connection time from consecutive readings in the same non-charging
+     * session at most [MAX_GAP] apart. The first reading supplies the interval's mode.
      */
     fun week(samples: List<BatterySample>, now: Long): Week {
         var all = 0L; var anc = 0L
-        for ((a, b) in samples.zipWithNext()) {
-            if (now - a.at !in 0..7 * 24 * 60 * 60_000L) continue
-            val dt = b.at - a.at
-            if (a.session != b.session || a.charging || dt <= 0 || dt > MAX_GAP) continue
-            all += dt; if (a.mode == Mode.ANC) anc += dt
+        val start = now - 7 * 24 * 60 * 60_000L
+        for ((a, b) in intervals(samples)) {
+            val dt = (minOf(now, b.at) - maxOf(start, a.at)).coerceAtLeast(0)
+            all += dt
+            if (a.mode == Mode.ANC) anc += dt
         }
         return Week((all / 60_000L).toInt(), (anc / 60_000L).toInt())
     }
@@ -130,12 +166,13 @@ object BatteryLog {
     fun drain(samples: List<BatterySample>, mode: Mode?): Drain? {
         var minutes = 0.0
         var drop = 0
-        for ((a, b) in samples.zipWithNext()) {
-            val dt = b.at - a.at
-            if (a.session != b.session || a.charging || b.charging || dt <= 0 || dt > MAX_GAP) continue
-            if (b.level > a.level || bucket(a.mode) != bucket(mode) || bucket(b.mode) != bucket(mode)) continue
-            minutes += dt / 60_000.0
-            drop += a.level - b.level
+        val modeBucket = bucket(mode) ?: return null
+        for ((a, b) in intervals(samples)) {
+            val start = a.level ?: continue
+            val end = b.level ?: continue
+            if (end > start || bucket(a.mode) != modeBucket || bucket(b.mode) != modeBucket) continue
+            minutes += (b.at - a.at) / 60_000.0
+            drop += start - end
         }
         return if (minutes >= MIN_MINUTES && drop >= MIN_DROP) Drain(drop / minutes, minutes) else null
     }

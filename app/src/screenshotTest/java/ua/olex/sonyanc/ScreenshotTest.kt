@@ -1,6 +1,8 @@
 package ua.olex.sonyanc
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.runtime.mutableStateOf
@@ -13,8 +15,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Recomposer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import android.graphics.Canvas
 import android.view.View
 import androidx.activity.ComponentActivity
@@ -65,6 +70,61 @@ class ScreenshotTest {
         compose.setContent { AppTheme(dynamic = false) { content() } }
         compose.waitForIdle()
         save(name)
+    }
+
+    @Test fun darkPaletteContrast() = checkPaletteContrast()
+
+    @Test
+    @Config(qualifiers = "+notnight")
+    fun lightPaletteContrast() = checkPaletteContrast()
+
+    private fun checkPaletteContrast() {
+        val dynamic = mutableStateOf(false)
+        var checkAppColors = {}
+        compose.setContent {
+            AppTheme(dynamic = dynamic.value) {
+                val colors = MaterialTheme.colorScheme
+                val battery = batteryIndicator
+                SideEffect {
+                    checkAppColors = {
+                        assertContrast("Page text", colors.onSurface, colors.surface, 4.5f)
+                        assertContrast("Setting summary", colors.onSurfaceVariant, colors.surfaceContainerHigh, 4.5f)
+                        assertContrast("Section label", colors.primary, colors.surface, 4.5f)
+                        assertContrast("Selected control", colors.onPrimary, colors.primary, 4.5f)
+                        assertContrast("Timer label", colors.onTertiaryContainer, colors.tertiaryContainer, 4.5f)
+                        assertContrast("Battery symbol", battery.second, battery.first, 3f)
+                    }
+                }
+            }
+        }
+        compose.runOnIdle { checkAppColors(); dynamic.value = true }
+        compose.runOnIdle { checkAppColors() }
+
+        val ctx = compose.activity
+        assertContrast("Selected widget segment", Color(ctx.getColor(R.color.w_bar_on_text)), Color(ctx.getColor(R.color.w_bar_on)), 4.5f)
+        assertContrast("Battery widget value", Color(ctx.getColor(R.color.w_off_text)), Color(ctx.getColor(R.color.w_bg)), 4.5f)
+        assertContrast("Battery widget low value", Color(ctx.getColor(R.color.w_low)), Color(ctx.getColor(R.color.w_bg)), 4.5f)
+    }
+
+    private fun assertContrast(label: String, foreground: Color, background: Color, minimum: Float) {
+        val fg = foreground.luminance()
+        val bg = background.luminance()
+        val ratio = (maxOf(fg, bg) + 0.05f) / (minOf(fg, bg) + 0.05f)
+        assertTrue("$label contrast: $ratio, expected at least $minimum", ratio >= minimum)
+    }
+
+    @Test fun batteryFillUpdatesDrawingWithoutRecomposing() {
+        fun commits() = Recomposer.runningRecomposers.value.sumOf { it.changeCount }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                Batteries(SonyProtocol.Battery(100, 80, 90), setOf(0, 1, 2), true, {})
+            }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val before = compose.runOnIdle { commits() }
+        compose.mainClock.advanceTimeBy(96)
+        assertEquals("Composition changes during fill", before, compose.runOnIdle { commits() })
     }
 
     @Test fun home() = shoot("home") {
@@ -206,6 +266,15 @@ class ScreenshotTest {
 
     @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
     @Test fun batteryPageLight() = shoot("page-battery-light") { BatteryContent(weekOfUse(), NOW) }
+
+    @Test fun cachedBatteryPageIdentifiesTheLastReading() {
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                BatteryContent(emptyList(), NOW, device = DeviceState(battery = SonyProtocol.Battery(20, 85, 40)))
+            }
+        }
+        compose.onNodeWithText("Last reading").assertIsDisplayed()
+    }
 
     @Test fun batteryPageEmpty() = shoot("page-battery-empty") { BatteryContent(emptyList(), NOW) }
 

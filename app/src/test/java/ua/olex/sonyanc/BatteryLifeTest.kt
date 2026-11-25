@@ -100,4 +100,48 @@ class BatteryLifeTest {
         assertNull(BatteryLog.rate(log, Mode.ANC))
         assertNull(BatteryLog.rate(log, Mode.OFF))
     }
+
+    @Test fun recordsOnlyPartsReportedInThisFrame() {
+        val cached = SonyProtocol.Battery(20, 85, 40, leftCharging = true)
+        val case = BatterySample.fromReading(30 * min, cached, setOf(2), Mode.ANC, 1)!!
+        val right = BatterySample.fromReading(60 * min, cached, setOf(1), Mode.ANC, 1)!!
+        assertNull(case.level)
+        assertEquals(40, case.case)
+        assertEquals(85, right.level)
+        assertNull(right.left)
+        assertNull(right.case)
+        assertFalse(right.charging)
+        assertEquals(listOf(case, right), BatteryLog.decode(BatteryLog.encode(listOf(case, right))))
+    }
+
+    @Test fun caseOnlyPacketsAndChangingCoverageCannotInventDrain() {
+        val first = sample(0, 85).copy(left = 90, right = 85)
+        val caseOnly = sample(30, 70).copy(level = null, case = 40)
+        val both = sample(60, 70).copy(left = 80, right = 70)
+        val one = sample(60, 70).copy(right = 70)
+        assertEquals(0.25, BatteryLog.rate(listOf(first, caseOnly, both), Mode.ANC)!!, 1e-9)
+        assertNull(BatteryLog.rate(listOf(first, caseOnly, one), Mode.ANC))
+        assertNull(BatteryLog.rate(listOf(first, caseOnly), Mode.ANC))
+        assertEquals(BatteryLog.Week(0, 0), BatteryLog.week(listOf(first, caseOnly), 60 * min))
+    }
+
+    @Test fun legacyEightFieldCaseAndPartialPacketsDiscardTheCachedMinimum() {
+        val log = BatteryLog.decode("60000,20,0,ANC,1,40,-,-;120000,20,0,ANC,1,40,-,85")
+        assertNull(log[0].level)
+        assertEquals(40, log[0].case)
+        assertEquals(85, log[1].level)
+    }
+
+    @Test fun unknownModeAndChargingEndpointsDoNotTrainTheEstimate() {
+        assertNull(BatteryLog.rate(listOf(sample(0, 90, mode = null), sample(60, 70)), Mode.ANC))
+        assertEquals(BatteryLog.Week(0, 0), BatteryLog.week(listOf(sample(0, 90), sample(60, 70, charging = true)), 60 * min))
+        assertEquals(2, BatteryLog.add(listOf(sample(0, 90)), sample(1, 90, mode = Mode.OFF)).size)
+    }
+
+    @Test fun listeningEstimatesUseFreshBudsAndFallBackToTheLastReading() {
+        val cached = SonyProtocol.Battery(20, 85, 40)
+        assertEquals(408, BatteryLife.budsMinutes(BatteryLife.forEstimate(cached, setOf(1)), Mode.ANC))
+        assertEquals(96, BatteryLife.budsMinutes(BatteryLife.forEstimate(cached, setOf(2)), Mode.ANC))
+        assertEquals(cached, BatteryLife.forEstimate(cached, setOf(0, 1, 2)))
+    }
 }

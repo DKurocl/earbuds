@@ -22,8 +22,12 @@ internal object ModeControl {
     // ---- mode requests ----------------------------------------------------------------
     private data class ModeRequest(val id: Long, val state: SonyProtocol.NcState, val confirmed: CompletableDeferred<Boolean>)
     private val modeVersion = AtomicLong()
+    internal val revision get() = modeVersion.get()
     private val requests = Channel<ModeRequest>(Channel.CONFLATED, onUndeliveredElement = { it.confirmed.complete(false) })
     private var activeRequest: ModeRequest? = null
+    @Volatile private var latestReceipt: Deferred<Boolean>? = null
+
+    internal fun isCurrent(receipt: Deferred<Boolean>) = latestReceipt === receipt
 
     init {
         scope.launch {
@@ -36,7 +40,9 @@ internal object ModeControl {
                     throw e
                 } catch (e: Exception) {
                     addLog("✗ mode: ${e.message}")
-                    _state.update { it.copy(error = "Could not change mode. Try again.") }
+                    if (modeVersion.get() == requested.id) {
+                        _state.update { it.copy(error = "Could not change mode. Try again.") }
+                    }
                 } finally {
                     synchronized(this@ModeControl) {
                         val latest = modeVersion.get() == requested.id
@@ -53,6 +59,7 @@ internal object ModeControl {
 
     @Synchronized internal fun cancelModes() {
         modeVersion.incrementAndGet()
+        latestReceipt = null
         activeRequest?.confirmed?.complete(false)
         activeRequest = null
         _state.update { it.copy(pending = null) }
@@ -66,11 +73,24 @@ internal object ModeControl {
     @Synchronized fun request(state: SonyProtocol.NcState): Deferred<Boolean> {
         val current = _state.value
         activeRequest?.takeIf { current.pending == state && it.state == state }?.let { return it.confirmed }
+        val previous = activeRequest
         val request = ModeRequest(modeVersion.incrementAndGet(), state, CompletableDeferred())
+        latestReceipt = request.confirmed
         _state.update { it.copy(pending = state, error = null) }
         activeRequest = request
+        previous?.confirmed?.complete(false)
         requests.trySend(request)
         return request.confirmed
+    }
+
+    /** Gate a deferred automation against both intervening choices and a command still in flight. */
+    @Synchronized internal fun requestIfUnchanged(
+        state: SonyProtocol.NcState,
+        revision: Long,
+        eligible: () -> Boolean = { true },
+    ): Deferred<Boolean>? {
+        if (modeVersion.get() != revision || activeRequest != null || !eligible()) return null
+        return request(state)
     }
 
     private fun SonyProtocol.NcState.matches(target: SonyProtocol.NcState): Boolean =
@@ -117,9 +137,9 @@ internal object ModeControl {
         }) { conn.send(SonyProtocol.NC_GET) }?.let(SonyProtocol::parseNc)
 
     internal fun setNc(state: SonyProtocol.NcState) {
-        _state.update { it.copy(nc = state, ncConfirmed = true) }
-        Prefs.saveNc(app, state)
-        ModeWidget.refreshAll(app)
+        val previous = _state.getAndUpdate { it.copy(nc = state, ncConfirmed = true) }
+        if (previous.nc != state) Prefs.saveNc(app, state)
+        if (previous.nc?.mode != state.mode) Widgets.refreshModes(app)
     }
 
     internal suspend fun awaitModeIdle(timeoutMs: Long = 2200) =

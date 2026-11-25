@@ -122,9 +122,29 @@ internal object WidgetLayout {
 
 /** Android side shared by [ModeWidget] and [BatteryWidget]. */
 object Widgets {
-    fun refreshAll(ctx: Context) {
-        ModeWidget.refreshAll(ctx)
-        BatteryWidget.refreshAll(ctx)
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pending = false
+    private var batteryRequested = false
+
+    fun refreshAll(ctx: Context) = scheduleRefresh(ctx, battery = true)
+    fun refreshModes(ctx: Context) = scheduleRefresh(ctx, battery = false)
+
+    @Synchronized private fun scheduleRefresh(ctx: Context, battery: Boolean) {
+        batteryRequested = batteryRequested || battery
+        if (pending) return
+        pending = true
+        val app = ctx.applicationContext
+        main.post {
+            val refreshBattery = synchronized(this) {
+                val requested = batteryRequested
+                pending = false
+                batteryRequested = false
+                requested
+            }
+            ModeWidget.refreshAll(app)
+            if (refreshBattery) BatteryWidget.refreshAll(app)
+            StatusWidget.refreshAll(app)
+        }
     }
 
     /** Widget text uses Pixel's system Google Sans when present, like the app. */

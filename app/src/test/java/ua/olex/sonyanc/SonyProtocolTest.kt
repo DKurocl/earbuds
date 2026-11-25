@@ -89,4 +89,13 @@ class SonyProtocolTest {
             assertNull(it,DeviceSettingsProtocol.parse(SonyProtocol.parseHex(it)))
         }
     }
+
+    @Test fun unavailableBatteryPartKeepsItsCachedLevelWithoutClaimingCharging() {
+        val cached = SonyProtocol.Battery(20, 80, 50, true, true, true)
+        val reply = SonyProtocol.parseHex("25 09 FF 01 48 00")
+        val parsed = SonyProtocol.parseBattery(reply, cached)!!
+        assertEquals(setOf(0, 1), SonyProtocol.reportedBatteryParts(reply))
+        assertEquals(setOf(1), SonyProtocol.liveBatteryParts(reply))
+        assertEquals(SonyProtocol.Battery(20, 72, 50, false, false, true), parsed)
+    }
 }

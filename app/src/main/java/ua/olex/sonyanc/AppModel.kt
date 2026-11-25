@@ -118,13 +118,14 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun requestMode(state: NcState) {
         // Choosing a mode yourself always wins over a running timer.
-        if (ambientUntil != null) { AmbientTimer.cancel(ctx); ambientUntil = null }
+        AmbientTimer.cancel(ctx)
+        ambientUntil = null
         val before = Headphones.state.value.shownNc?.mode
         val receipt = Headphones.request(state)
         val mine = ++tapGeneration
         viewModelScope.launch {
             val ok = receipt.await()
-            if (!haptics || mine != tapGeneration) return@launch
+            if (!haptics || mine != tapGeneration || !ModeControl.isCurrent(receipt)) return@launch
             if (ok) Haptics.confirm(ctx, if (state.mode != before) state.mode else null) else Haptics.reject(ctx)
         }
     }
@@ -140,8 +141,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     /** Starts the timer. Returns true when the countdown could also show in the status bar. */
     fun ambientForAMoment(): Boolean {
         val from = Headphones.state.value.shownNc ?: NcState(Mode.ANC)
-        AmbientTimer.start(ctx, ambientMinutes, from)
-        ambientUntil = AmbientTimer.until(ctx)
+        viewModelScope.launch {
+            AmbientTimer.start(ctx, ambientMinutes, from)
+        }
         return notificationsAllowed()
     }
 

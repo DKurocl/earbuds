@@ -1,6 +1,8 @@
 package ua.olex.sonyanc
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BatteryWordsTest {
@@ -21,4 +23,24 @@ class BatteryWordsTest {
 
     @Test fun unknownSaysWhatToDo() =
         assertEquals("The earbuds' battery isn't known yet. Take them out of the case.", BatteryWords.sentence(b(null, null), null, linked = false))
+
+    @Test fun assistantDistinguishesFreshRightBudFromCachedLeftAndCase() {
+        val state = DeviceState(battery = b(20, 85, 40, charging = true).copy(rightCharging = false), liveBatteryParts = setOf(1))
+        val answer = BatteryWords.forAssistant(state, null)
+        assertEquals(-1, answer.leftPercent)
+        assertEquals(85, answer.rightPercent)
+        assertEquals(-1, answer.casePercent)
+        assertFalse(answer.charging)
+        assertEquals(408, answer.listeningMinutesLeft)
+        assertTrue(answer.summary.endsWith("Last known readings: left earbud 20%, case 40%."))
+    }
+
+    @Test fun assistantCaseOnlyReportDoesNotClaimThatCachedBudsAreCharging() {
+        val state = DeviceState(battery = b(20, 85, 40, charging = true), liveBatteryParts = setOf(2))
+        val answer = BatteryWords.forAssistant(state, null)
+        assertEquals(40, answer.casePercent)
+        assertEquals(-1, answer.listeningMinutesLeft)
+        assertFalse(answer.charging)
+        assertEquals("Case battery 40%. Last known readings: left earbud 20%, right earbud 85%.", answer.summary)
+    }
 }

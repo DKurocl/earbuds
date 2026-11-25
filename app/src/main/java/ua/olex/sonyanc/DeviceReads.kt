@@ -28,8 +28,8 @@ internal object DeviceReads {
     private val allParts = setOf(0, 1, 2)
     private var qualityCheckedFor: Long? = null
 
-    internal fun batteryNotification(parts: Set<Int>) {
-        pushedBatteryParts = pushedBatteryParts + parts
+    internal fun batteryNotification(reported: Set<Int>, live: Set<Int>) {
+        pushedBatteryParts = (pushedBatteryParts - reported) + live
     }
 
     @Synchronized internal fun stopInfoLoop() {
