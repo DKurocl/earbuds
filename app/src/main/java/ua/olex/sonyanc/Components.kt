@@ -46,7 +46,6 @@ fun PageScaffold(
     title: String,
     onBack: () -> Unit,
     actions: @Composable RowScope.() -> Unit = {},
-    compact: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // A page that fits the screen doesn't scroll at all: the title collapses only when there is
@@ -59,7 +58,7 @@ fun PageScaffold(
     )
     val page = Surfaces.page
     Scaffold(
-        modifier = if (compact) Modifier else Modifier.nestedScroll(scroll.nestedScrollConnection),
+        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         containerColor = page,
         topBar = {
             val navigation: @Composable () -> Unit = {
@@ -69,20 +68,16 @@ fun PageScaffold(
             }
             val label: @Composable () -> Unit = { Text(title, maxLines = 1) }
             val colors = TopAppBarDefaults.topAppBarColors(containerColor = page, scrolledContainerColor = page)
-            if (compact) {
-                TopAppBar(title = label, navigationIcon = navigation, actions = actions, colors = colors)
-            } else {
-                LargeFlexibleTopAppBar(
-                    title = label, navigationIcon = navigation, actions = actions, colors = colors, scrollBehavior = scroll,
-                )
-            }
+            LargeFlexibleTopAppBar(
+                title = label, navigationIcon = navigation, actions = actions, colors = colors, scrollBehavior = scroll,
+            )
         },
     ) { insets ->
         Column(
             Modifier.padding(insets).consumeWindowInsets(insets).fillMaxSize().verticalScroll(column)
                 .padding(horizontal = UiTokens.pageInset),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else UiTokens.pageSectionGap),
-            content = { content(); Spacer(Modifier.height(if (compact) 4.dp else 12.dp)) },
+            verticalArrangement = Arrangement.spacedBy(UiTokens.pageSectionGap),
+            content = { content(); Spacer(Modifier.height(12.dp)) },
         )
     }
 }
@@ -165,9 +160,9 @@ private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> 
     val cs = MaterialTheme.colorScheme
     val (container, glyphColor) = when {
         danger -> cs.errorContainer to cs.onErrorContainer
-        g in linkGlyphs -> cs.secondaryFixed to cs.onSecondaryFixed
-        g in routineGlyphs -> cs.tertiaryFixedDim to cs.onTertiaryFixed
-        else -> cs.primaryFixedDim to cs.onPrimaryFixed
+        g in linkGlyphs -> cs.secondaryContainer to cs.onSecondaryContainer
+        g in routineGlyphs -> cs.tertiaryContainer to cs.onTertiaryContainer
+        else -> cs.primaryContainer to cs.onPrimaryContainer
     }
 
     Surface(shape = CircleShape, color = container, contentColor = glyphColor, modifier = Modifier.size(40.dp)) {

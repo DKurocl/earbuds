@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -19,14 +20,10 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-/**
- * Google Sans Flex, bundled (SIL Open Font License, assets/licenses), so the app reads the same
- * on any Pixel firmware and in the screenshot renders. One variable font, subset to Latin: weight
- * and optical size follow each Material style; display and headline text get the rounded cut
- * (ROND 100) that Material 3 Expressive uses for large type, smaller text stays crisp (ROND 0).
- */
-private fun Density.flex(style: TextStyle, round: Boolean): TextStyle {
+/** Google Sans Flex at its standard roundedness, with optical sizing for system text scale. */
+private fun Density.flex(style: TextStyle): TextStyle {
     val weight = style.fontWeight ?: FontWeight.Normal
     val size = if (style.fontSize.isSp) style.fontSize.toDp().value else 14f
     val family = FontFamily(
@@ -35,7 +32,6 @@ private fun Density.flex(style: TextStyle, round: Boolean): TextStyle {
             variationSettings = FontVariation.Settings(
                 FontVariation.weight(weight.weight),
                 FontVariation.Setting("opsz", size.coerceIn(6f, 144f)),
-                FontVariation.Setting("ROND", if (round) 100f else 0f),
             ),
         ),
     )
@@ -49,19 +45,19 @@ private fun appTypography(): Typography {
         with(density) {
             val t = Typography()
             Typography(
-                displayLarge = flex(t.displayLarge, true), displayMedium = flex(t.displayMedium, true), displaySmall = flex(t.displaySmall, true),
-                headlineLarge = flex(t.headlineLarge, true), headlineMedium = flex(t.headlineMedium, true), headlineSmall = flex(t.headlineSmall, true),
-                titleLarge = flex(t.titleLarge, true), titleMedium = flex(t.titleMedium, false), titleSmall = flex(t.titleSmall, false),
-                bodyLarge = flex(t.bodyLarge, false), bodyMedium = flex(t.bodyMedium, false), bodySmall = flex(t.bodySmall, false),
-                labelLarge = flex(t.labelLarge, false), labelMedium = flex(t.labelMedium, false), labelSmall = flex(t.labelSmall, false),
-                displayLargeEmphasized = flex(t.displayLargeEmphasized, true), displayMediumEmphasized = flex(t.displayMediumEmphasized, true),
-                displaySmallEmphasized = flex(t.displaySmallEmphasized, true), headlineLargeEmphasized = flex(t.headlineLargeEmphasized, true),
-                headlineMediumEmphasized = flex(t.headlineMediumEmphasized, true), headlineSmallEmphasized = flex(t.headlineSmallEmphasized, true),
-                titleLargeEmphasized = flex(t.titleLargeEmphasized, true), titleMediumEmphasized = flex(t.titleMediumEmphasized, false),
-                titleSmallEmphasized = flex(t.titleSmallEmphasized, false), bodyLargeEmphasized = flex(t.bodyLargeEmphasized, false),
-                bodyMediumEmphasized = flex(t.bodyMediumEmphasized, false), bodySmallEmphasized = flex(t.bodySmallEmphasized, false),
-                labelLargeEmphasized = flex(t.labelLargeEmphasized, false), labelMediumEmphasized = flex(t.labelMediumEmphasized, false),
-                labelSmallEmphasized = flex(t.labelSmallEmphasized, false),
+                displayLarge = flex(t.displayLarge), displayMedium = flex(t.displayMedium), displaySmall = flex(t.displaySmall),
+                headlineLarge = flex(t.headlineLarge), headlineMedium = flex(t.headlineMedium), headlineSmall = flex(t.headlineSmall),
+                titleLarge = flex(t.titleLarge), titleMedium = flex(t.titleMedium), titleSmall = flex(t.titleSmall),
+                bodyLarge = flex(t.bodyLarge), bodyMedium = flex(t.bodyMedium), bodySmall = flex(t.bodySmall),
+                labelLarge = flex(t.labelLarge), labelMedium = flex(t.labelMedium), labelSmall = flex(t.labelSmall),
+                displayLargeEmphasized = flex(t.displayLargeEmphasized), displayMediumEmphasized = flex(t.displayMediumEmphasized),
+                displaySmallEmphasized = flex(t.displaySmallEmphasized), headlineLargeEmphasized = flex(t.headlineLargeEmphasized),
+                headlineMediumEmphasized = flex(t.headlineMediumEmphasized), headlineSmallEmphasized = flex(t.headlineSmallEmphasized),
+                titleLargeEmphasized = flex(t.titleLargeEmphasized), titleMediumEmphasized = flex(t.titleMediumEmphasized),
+                titleSmallEmphasized = flex(t.titleSmallEmphasized), bodyLargeEmphasized = flex(t.bodyLargeEmphasized),
+                bodyMediumEmphasized = flex(t.bodyMediumEmphasized), bodySmallEmphasized = flex(t.bodySmallEmphasized),
+                labelLargeEmphasized = flex(t.labelLargeEmphasized), labelMediumEmphasized = flex(t.labelMediumEmphasized),
+                labelSmallEmphasized = flex(t.labelSmallEmphasized),
             )
         }
     }
@@ -155,16 +151,20 @@ internal val batteryIndicator: Pair<Color, Color>
     get() = if (isSystemInDarkTheme()) Color(0xFF6DD58C) to Color(0xFF0A3818)
         else Color(0xFF1E8E3E) to Color.White
 
-internal fun TextStyle.withTabularFigures() = copy(fontFeatureSettings = "tnum")
+internal fun TextStyle.withTabularFigures() = copy(fontFeatureSettings = "tnum", letterSpacing = 0.sp)
 
-/** Page and card surfaces, as in Android settings: cards sit one step above the page. */
+/** Shared surface levels, with a quiet tint for the main battery estimate. */
 object Surfaces {
-    // As Music: the page is the plain surface and rows sit on it in the tinted container, in both
-    // themes, so the two apps read as one family.
     val page: Color
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.colorScheme.surface
     val card: Color
         @Composable @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.surfaceContainer
+    val control: Color
+        @Composable @ReadOnlyComposable
         get() = MaterialTheme.colorScheme.surfaceContainerHigh
+    val estimate: Color
+        @Composable @ReadOnlyComposable
+        get() = with(MaterialTheme.colorScheme) { lerp(surfaceContainerHigh, primaryContainer, .26f) }
 }

@@ -16,13 +16,15 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 - **Icon**: Google's product-icon style (Calendar, Tasks, Meet): the case as one bold coral shape on white, lid slit and
   light cut out in white, a peach copy peeking below, one pink glow (`docs/icon/brand_icon.py`).
 - **Color**: wallpaper palettes are the default. The coral palette provides matching surface,
-  outline and inverse roles in both themes. Pages use `surface`, cards use `surfaceContainerHigh`,
-  and battery rings use a semantic green, with `error` for low charge.
+  outline and inverse roles in both themes. Pages use `surface`, groups use `surfaceContainer` and
+  raised controls use `surfaceContainerHigh`. Soft primary tint highlights listening time. Settings
+  icons use paired sound, connection and power container roles. Battery rings use semantic green
+  with `error` for low charge.
 - **Dimensions**: `UiTokens` defines page insets, section spacing, card shapes and shared control
   sizes. Connected rows and control groups use Material's own spacing and shapes.
 - **Type**: Google Sans Flex is bundled (`res/font/google_sans_flex.ttf`, OFL, Latin subset) and
-  used through its axes: `opsz` follows each style's size, display and headline styles are
-  rounded (`ROND` 100), body and labels stay plain. Rolling readings use tabular figures.
+  set to its default roundedness at every size. Optical sizing follows system text scaling.
+  Readings use tabular figures with zero additional tracking.
 - **Motion**: `MotionScheme.expressive()`. Pages move exactly like Android's own screens
   (`Navigation.kt`, values from AOSP's CrossActivityBackAnimation): under a back swipe the page
   shrinks to 0.9 toward the far edge (8 dp margin), following the finger up and down, through
@@ -50,7 +52,7 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 | Page | Content |
 |---|---|
 | Home (`HomeScreen.kt`) | Settings button only (gear → App settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → the Battery page grows out of the tile; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
-| Equalizer | Presets as Material toggle buttons (round; the chosen one squares off), Off and Custom first; Saved 1/2 are the earbuds' slots. Custom: five `VerticalSlider`s with the centered track (fill from 0 dB), whole-dB steps, a haptic tick per dB and a firmer one at 0; Clear Bass is a centered `Slider`; Reset. Fixed presets offer "Use Custom". |
+| Equalizer | Connected graph and Clear Bass sections. Five draggable bands share a neutral plot and gain labels, with primary reserved for the curve and active preset. Presets use connected Material buttons, including Custom, Flat and both saved slots. |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |
 | App settings | Device picker only when needed, display name, Stay in sync, When earbuds connect, At home (+ Home), Ambient for a moment length, case battery reminder, low earbud battery, wallpaper colors, haptics, Quick Settings tile and its cycle, both widgets, diagnostics, version. |

@@ -213,8 +213,7 @@ fun HushScreen(
 private fun Header(name: String, status: String, busy: Boolean) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        // The device name is the page title: large, rounded and heavy, as Pixel Buds shows it.
-        Text(name, style = MaterialTheme.typography.headlineLargeEmphasized, textAlign = TextAlign.Center,
+        Text(name.ifBlank { "WF-1000XM5" }, style = MaterialTheme.typography.headlineLargeEmphasized, textAlign = TextAlign.Center,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(status, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
@@ -702,10 +701,16 @@ private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, codec: In
 @Composable
 private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, innerStart: Boolean = false, innerEnd: Boolean = false, onClick: () -> Unit = {}, icon: @Composable (Color) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    // Calm tiles: a neutral icon disc, so the mode toolbar stays the screen's one accent; only a
-    // low battery takes color.
-    val accent = if (low) cs.errorContainer else cs.surfaceContainerHighest
-    val onAccent = if (low) cs.onErrorContainer else cs.onSurfaceVariant
+    val accent = when {
+        low -> cs.errorContainer
+        innerStart -> cs.secondaryContainer
+        else -> cs.primaryContainer
+    }
+    val onAccent = when {
+        low -> cs.onErrorContainer
+        innerStart -> cs.onSecondaryContainer
+        else -> cs.onPrimaryContainer
+    }
     // Tapping either tile opens the Battery page (history and measured battery life) as a
     // normal page, the same way every other page opens.
     // Pressed, the tile settles in a little and its corners tighten, with Material's springs.
@@ -715,7 +720,7 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
     val squeeze by animateFloatAsState(if (pressed) 0.96f else 1f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "squeeze")
     val start = if (innerStart) 10.dp else corner
     val end = if (innerEnd) 10.dp else corner
-    Surface(onClick = onClick, shape = RoundedCornerShape(start, end, end, start), color = Surfaces.card, interactionSource = press,
+    Surface(onClick = onClick, shape = RoundedCornerShape(start, end, end, start), color = if (innerStart) Surfaces.card else Surfaces.estimate, interactionSource = press,
         modifier = modifier
             .graphicsLayer { scaleX = squeeze; scaleY = squeeze }
             .semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {

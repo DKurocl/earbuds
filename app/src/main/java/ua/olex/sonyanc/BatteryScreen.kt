@@ -114,12 +114,12 @@ private fun ListeningEstimate(log: List<BatterySample>, device: DeviceState) {
         codec == CodecProtocol.LDAC -> "Sony rating · LDAC"
         else -> "Sony rating"
     }
-    Surface(shape = UiTokens.cardShape, color = cs.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = UiTokens.cardShape, color = Surfaces.estimate, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (minutes != null) {
                 Text(if (budsLive) "Estimated listening left" else "Last reading", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    BatteryLife.short(minutes), style = MaterialTheme.typography.displayLargeEmphasized.withTabularFigures(),
+                    BatteryLife.short(minutes), style = MaterialTheme.typography.displayMediumEmphasized.withTabularFigures(),
                     color = cs.primary,
                 )
                 Text(if (budsLive) source else "Listening estimate · $source", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -131,9 +131,9 @@ private fun ListeningEstimate(log: List<BatterySample>, device: DeviceState) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(painterResource(R.drawable.ic_case_mark), null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                    Icon(painterResource(R.drawable.ic_case_mark), null, Modifier.size(18.dp), tint = cs.secondary)
                     Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                    Text("+${BatteryLife.short(reserve)}", style = MaterialTheme.typography.labelLarge.withTabularFigures())
+                    Text("+${BatteryLife.short(reserve)}", color = cs.secondary, style = MaterialTheme.typography.labelLarge.withTabularFigures())
                 }
             }
         }

@@ -34,6 +34,15 @@ class PortableSettingsTest {
         assertEquals(0xA0, Prefs.lastEnabledEqualizerPreset(ctx))
     }
 
+    @Test fun blankNamesDoNotReplaceTheDeviceLabel() {
+        Prefs.setDisplayName(ctx, "  ")
+        assertNull(Prefs.displayName(ctx))
+        Prefs.saveDevice(ctx, "00:11:22:33:44:55", "")
+        assertNull(Prefs.deviceName(ctx))
+        Prefs.setDisplayName(ctx, "My earbuds")
+        assertEquals("My earbuds", Prefs.displayName(ctx))
+    }
+
     @Test fun oldBatteryHistoryExpiresEvenWithoutANewReading() {
         val now = System.currentTimeMillis()
         val mode = SonyProtocol.Mode.ANC

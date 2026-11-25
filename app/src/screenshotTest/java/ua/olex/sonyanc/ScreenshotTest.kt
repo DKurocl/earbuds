@@ -102,7 +102,10 @@ class ScreenshotTest {
                 SideEffect {
                     checkAppColors = {
                         assertContrast("Page text", colors.onSurface, colors.surface, 4.5f)
-                        assertContrast("Setting summary", colors.onSurfaceVariant, colors.surfaceContainerHigh, 4.5f)
+                        assertContrast("Setting summary", colors.onSurfaceVariant, colors.surfaceContainer, 4.5f)
+                        assertContrast("Estimate", colors.primary, androidx.compose.ui.graphics.lerp(colors.surfaceContainerHigh, colors.primaryContainer, .26f), 4.5f)
+                        assertContrast("Sound icon", colors.onPrimaryContainer, colors.primaryContainer, 4.5f)
+                        assertContrast("Connection icon", colors.onSecondaryContainer, colors.secondaryContainer, 4.5f)
                         assertContrast("Section label", colors.primary, colors.surface, 4.5f)
                         assertContrast("Selected control", colors.onPrimary, colors.primary, 4.5f)
                         assertContrast("Timer label", colors.onTertiaryContainer, colors.tertiaryContainer, 4.5f)

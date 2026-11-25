@@ -31,9 +31,9 @@ object Prefs {
     fun setHaptics(ctx: Context, value: Boolean) = p(ctx).edit().putBoolean("haptics", value).apply()
 
     fun deviceAddress(ctx: Context): String? = p(ctx).getString("device", null)
-    fun displayName(ctx: Context): String? = p(ctx).getString("display_name", null)
+    fun displayName(ctx: Context): String? = p(ctx).getString("display_name", null)?.takeUnless { it.isBlank() }
     fun setDisplayName(ctx: Context, value: String) = p(ctx).edit().putString("display_name", value).apply()
-    fun deviceName(ctx: Context): String? = p(ctx).getString("device_name", null)
+    fun deviceName(ctx: Context): String? = p(ctx).getString("device_name", null)?.takeUnless { it.isBlank() }
     fun saveDevice(ctx: Context, address: String, name: String?) =
         p(ctx).edit().putString("device", address).putString("device_name", name).apply()
 

@@ -166,7 +166,7 @@ fun EqualizerContent(
     onToggle: (Boolean) -> Unit = { onPreset(if (it) CUSTOM else OFF) },
 ) {
     val cs = MaterialTheme.colorScheme
-    PageScaffold("Equalizer", onBack, compact = true, actions = {
+    PageScaffold("Equalizer", onBack, actions = {
         if (busy) LoadingIndicator(Modifier.padding(end = 4.dp).size(32.dp))
         var menu by remember { mutableStateOf(false) }
         Box {
@@ -218,16 +218,15 @@ fun EqualizerContent(
                     else -> EqualizerProtocol.presets[state.preset] ?: "Custom"
                 }
 
-                Surface(
-                    shape = UiTokens.cardShape,
-                    color = cs.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column {
-                        Surface(color = cs.primaryContainer, contentColor = cs.onPrimaryContainer) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(topStart = UiTokens.cardRadius, topEnd = UiTokens.cardRadius, bottomStart = 8.dp, bottomEnd = 8.dp),
+                        color = Surfaces.card,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                             Row(
-                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .heightIn(min = UiTokens.minTouchTarget),
+                                Modifier.fillMaxWidth().padding(start = 2.dp).heightIn(min = UiTokens.minTouchTarget),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
@@ -236,8 +235,7 @@ fun EqualizerContent(
                                     thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
                                     modifier = Modifier.semantics { contentDescription = "Equalizer" })
                             }
-                        }
-                        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
+                            Spacer(Modifier.height(8.dp))
                             Box(contentAlignment = Alignment.Center) {
                                 EqCurve(
                                     gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
@@ -253,18 +251,17 @@ fun EqualizerContent(
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(8.dp))
                             BandReadouts(displayed, activeBand, controlsReady && edit == null) { index, gain -> commit(index + 1, gain) }
                         }
                     }
+                    ClearBass(
+                        gain = displayed?.first(),
+                        enabled = controlsReady && (edit == null || edit?.index == 0),
+                        editing = edit?.index == 0, haptics = haptics,
+                        onGain = { edit = EqEdit(0, it) },
+                        onFinish = { commit(0, it) },
+                    )
                 }
-                ClearBass(
-                    gain = displayed?.first(),
-                    enabled = controlsReady && (edit == null || edit?.index == 0),
-                    editing = edit?.index == 0, haptics = haptics,
-                    onGain = { edit = EqEdit(0, it) },
-                    onFinish = { commit(0, it) },
-                )
                 PresetGroups(
                     active = state.preset, flat = flat,
                     enabled = !busy && edit == null,
@@ -285,12 +282,9 @@ private fun BandReadouts(gains: List<Int>?, active: Int?, editable: Boolean, onG
             val gain = gains?.get(index + 1)
             val chosen = active == index
             Surface(
-                color = if (chosen) cs.primaryContainer else cs.surfaceContainerHighest,
+                color = if (chosen) cs.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
                 contentColor = if (chosen) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                shape = RoundedCornerShape(
-                    topStart = if (index == 0) 14.dp else 4.dp, bottomStart = if (index == 0) 14.dp else 4.dp,
-                    topEnd = if (index == BAND_HZ.lastIndex) 14.dp else 4.dp, bottomEnd = if (index == BAND_HZ.lastIndex) 14.dp else 4.dp,
-                ),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.weight(1f).clearAndSetSemantics {
                     contentDescription = "$label, ${gain?.let { "${signed(it)} dB" } ?: "unavailable"}"
                     if (editable && gain != null) {
@@ -323,53 +317,35 @@ private fun ClearBass(gain: Int?, enabled: Boolean, editing: Boolean, haptics: B
         if (!editing) slider.value = gain?.toFloat() ?: 0f
     }
     val feedback = LocalHapticFeedback.current
-    val colors = SliderDefaults.colors(
-        thumbColor = cs.onTertiaryContainer, activeTrackColor = cs.onTertiaryContainer,
-        inactiveTrackColor = cs.onTertiaryContainer.copy(alpha = .26f),
-    )
-    val control: @Composable (Modifier) -> Unit = { modifier ->
-        Slider(
-            state = slider, enabled = enabled,
-            onValueChange = {
-                val old = slider.value.roundToInt()
-                slider.value = it
-                val step = slider.value.roundToInt()
-                if (step != old) {
-                    if (haptics) feedback.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
-                    onGain(step)
-                }
-            },
-            onValueChangeFinished = { onFinish(slider.value.roundToInt()) },
-            colors = colors,
-            track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = enabled, drawTick = { _, _ -> }, colors = colors) },
-            modifier = modifier.semantics { contentDescription = "Clear Bass" },
-        )
-    }
-    val largeText = LocalDensity.current.fontScale >= 1.3f
     Surface(
-        shape = UiTokens.compactCardShape, color = cs.tertiaryContainer, contentColor = cs.onTertiaryContainer,
+        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = UiTokens.cardRadius, bottomEnd = UiTokens.cardRadius),
+        color = Surfaces.control,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        val label: @Composable (Modifier) -> Unit = { modifier ->
-            Text("Clear Bass", modifier, style = MaterialTheme.typography.titleSmallEmphasized)
-        }
-        val value: @Composable () -> Unit = {
-            Text(gain?.let(::signed) ?: "–", style = MaterialTheme.typography.titleSmall.withTabularFigures())
-        }
-        if (largeText) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { label(Modifier.weight(1f)); value() }
-                control(Modifier.fillMaxWidth())
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Clear Bass", Modifier.weight(1f), style = MaterialTheme.typography.titleSmallEmphasized)
+                Text(
+                    gain?.let(::signed) ?: "–",
+                    style = MaterialTheme.typography.titleSmall.withTabularFigures(),
+                    color = if (gain != null && gain != 0) cs.primary else cs.onSurfaceVariant,
+                )
             }
-        } else {
-            Row(
-                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                label(Modifier)
-                control(Modifier.weight(1f))
-                Box(Modifier.widthIn(min = 22.dp), contentAlignment = Alignment.CenterEnd) { value() }
-            }
+            Slider(
+                state = slider, enabled = enabled,
+                onValueChange = {
+                    val old = slider.value.roundToInt()
+                    slider.value = it
+                    val step = slider.value.roundToInt()
+                    if (step != old) {
+                        if (haptics) feedback.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
+                        onGain(step)
+                    }
+                },
+                onValueChangeFinished = { onFinish(slider.value.roundToInt()) },
+                track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = enabled, drawTick = { _, _ -> }) },
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Clear Bass" },
+            )
         }
     }
 }
@@ -424,8 +400,8 @@ private fun PresetButton(name: String, selected: Boolean, enabled: Boolean, inde
     ToggleButton(
         checked = selected, onCheckedChange = { if (!selected) onClick() }, enabled = enabled, shapes = shapes,
         colors = ToggleButtonDefaults.colors(
-            containerColor = cs.surfaceContainer, contentColor = cs.onSurfaceVariant,
-            checkedContainerColor = cs.secondaryContainer, checkedContentColor = cs.onSecondaryContainer,
+            containerColor = Surfaces.card, contentColor = cs.onSurfaceVariant,
+            checkedContainerColor = cs.primaryContainer, checkedContentColor = cs.onPrimaryContainer,
         ),
         contentPadding = PaddingValues(horizontal = 4.dp),
         modifier = modifier.heightIn(min = UiTokens.minTouchTarget).semantics { role = Role.RadioButton; this.selected = selected },
@@ -463,7 +439,8 @@ private fun EqCurve(
     val radius = animateFloatAsState(if (activeBand != null && activeBand >= 0) 8f else 5f, motion.fastSpatialSpec(), label = "Band handle")
     val range = 10f
     val padding = 20.dp
-    val plotHeight = (LocalConfiguration.current.screenHeightDp - 590).coerceIn(156, 228).dp
+    val plotHeight = (LocalConfiguration.current.screenHeightDp - 670).coerceIn(148, 216).dp
+    val backing = Surfaces.card
     Box(Modifier.fillMaxWidth().height(plotHeight)) {
         Spacer(
             Modifier.matchParentSize().semantics { contentDescription = "Equalizer curve" }
@@ -521,18 +498,16 @@ private fun EqCurve(
                 }
                 .drawWithCache {
                     val width = size.width
-                    val gridValues = listOf(-10, -5, 0, 5, 10)
+                    val gridValues = listOf(-10, 0, 10)
                     val mid = size.height / 2f
                     val perDb = (mid - padding.toPx()) / range
                     val xs = FloatArray(BAND_HZ.size) { bandX(it, width) }
                     val ys = FloatArray(BAND_HZ.size)
                     val line = Path()
-                    val area = Path()
                     val stroke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round)
                     val grid = cs.outlineVariant.copy(alpha = .6f)
                     val tone = cs.primary
                     onDrawBehind {
-                        for (x in xs) drawLine(grid, Offset(x, mid - range * perDb), Offset(x, mid + range * perDb), 1.dp.toPx())
                         for (db in gridValues) {
                             val y = mid - db * perDb
                             drawLine(if (db == 0) cs.outlineVariant else grid, Offset(0f, y), Offset(width, y), 1.dp.toPx())
@@ -551,17 +526,11 @@ private fun EqCurve(
                             line.cubicTo(xs[i] + dx, ys[i], xs[i + 1] - dx, ys[i + 1], xs[i + 1], ys[i + 1])
                         }
                         line.lineTo(width, ys.last())
-                        area.reset()
-                        area.addPath(line)
-                        area.lineTo(width, mid)
-                        area.lineTo(0f, mid)
-                        area.close()
-                        drawPath(area, tone.copy(alpha = .12f))
                         drawPath(line, tone, style = stroke)
                         for (i in xs.indices) {
                             val handle = (if (dragging?.first == i) radius.value else 5f).dp.toPx()
                             val center = Offset(xs[i], ys[i])
-                            drawCircle(cs.surfaceContainerHigh, handle + 2.dp.toPx(), center)
+                            drawCircle(backing, handle + 1.5.dp.toPx(), center)
                             drawCircle(tone, handle, center)
                         }
                     }
