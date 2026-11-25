@@ -1,7 +1,7 @@
 name: Publish verified build 236
 on:
   push:
-    branches: [codex/publish-build-236]
+    branches: [codex/publish-build-236-tag]
 permissions:
   actions: read
   contents: write
@@ -44,10 +44,7 @@ jobs:
               gh api --method POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$COMMIT" --jq .object.sha > tag-sha.txt
             fi
             test "$(cat tag-sha.txt)" = "$COMMIT"
-            for attempt in 1 2 3; do
-              if gh release edit "$TAG" --draft=false --verify-tag; then break; fi
-              sleep "$((attempt * 5))"
-            done
+            gh release edit "$TAG" --draft=false --verify-tag
           fi
           gh release view "$TAG" --json isDraft,assets,url |
             jq -e '.isDraft == false and any(.assets[]; .name == "Earbuds-236.apk" and .size > 0)'
