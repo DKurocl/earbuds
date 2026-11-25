@@ -110,7 +110,7 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
                 item {
                     val source = if (measured == null) "Sony's rating, until it learns your use"
                         else "From your last ${BatteryLife.short(measured.minutes.toInt())} of listening"
-                    val stale = if (device.liveBatteryParts.isEmpty()) " · Last reading" else ""
+                    val stale = if (0 !in device.liveBatteryParts && 1 !in device.liveBatteryParts) " · Last reading" else ""
                     InfoRow(it, Glyph.BATTERY, BatteryLife.short(minutes), source + stale)
                 }
             }
@@ -172,7 +172,7 @@ private fun WeekChart(samples: List<BatterySample>, now: Long, separate: Boolean
         return samples.minByOrNull { abs(it.at - t) }
     }
     fun levels(sample: BatterySample): String {
-        val budsLevel = if (sample.left == null && sample.right == null) listOf("Earbuds ${sample.level} %")
+        val budsLevel = if (sample.left == null && sample.right == null) listOfNotNull(sample.level?.let { "Earbuds $it %" })
             else listOfNotNull(sample.left?.let { "Left $it %" }, sample.right?.let { "Right $it %" })
         return (budsLevel + listOfNotNull(sample.case?.let { "Case $it %" })).joinToString(" · ")
     }
@@ -250,7 +250,7 @@ private fun WeekChart(samples: List<BatterySample>, now: Long, separate: Boolean
                 mark.left?.let { markEarbud(it, buds) }
                 mark.right?.let { markEarbud(it, rightColor) }
             } else {
-                markEarbud(mark.level, buds)
+                mark.level?.let { markEarbud(it, buds) }
             }
         }
     }

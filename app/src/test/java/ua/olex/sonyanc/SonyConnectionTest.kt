@@ -122,4 +122,22 @@ class SonyConnectionTest {
             assertEquals(listOf(0x0E to "47 01 00 01",0x0C to "3C 3D 3E"),seen.toList())
         } finally {c.close();scope.cancel()}
     }
+
+    @Test fun maximumEscapedPayloadSurvivesFragmentationAfterAnOversizedFrame() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val received = CompletableDeferred<ByteArray>()
+        val connection = session(scope) { _, payload -> received.complete(payload) }
+        try {
+            val stream = Stream()
+            connection.attach(stream)
+            stream.feed(byteArrayOf(SonyProtocol.START) +
+                ByteArray(SonyProtocol.MAX_ENCODED_BODY_BYTES + 1) + SonyProtocol.END)
+            val payload = ByteArray(4096) { SonyProtocol.START }
+            stream.feed(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, 0, payload))
+            assertArrayEquals(payload, withTimeout(2_000) { received.await() })
+        } finally {
+            connection.close()
+            scope.cancel()
+        }
+    }
 }

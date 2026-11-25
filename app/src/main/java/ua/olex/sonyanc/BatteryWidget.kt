@@ -33,8 +33,7 @@ class BatteryWidget : AppWidgetProvider() {
         private const val GLYPH_INSET = 0.2f
         private val FALLBACK = listOf(SizeF(110f, 110f), SizeF(250f, 110f), SizeF(250f, 150f), SizeF(340f, 200f))
 
-        fun refreshAll(ctx: Context) {
-            StatusWidget.refreshAll(ctx) // the 2×2 glance shows both mode and battery
+        internal fun refreshAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, BatteryWidget::class.java))
             if (ids.isNotEmpty()) render(ctx, mgr, ids)

@@ -1,5 +1,37 @@
 # Verification
 
+## 3.0.2 candidate compared with 3.0.1
+
+Baseline: [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.
+
+| Input | 3.0.1 | 3.0.2 candidate |
+|---|---|---|
+| Legacy case-only report with a cached earbud minimum of 20% | A 20% earbud observation entered the history | Case level is preserved with no earbud observation |
+| Legacy right-only report at 85% with a cached left level of 20% | Minimum recorded as 20% | Right-earbud observation recorded at 85% |
+| Left unavailable with a charging flag and right at 72% | Cached left level was reported as charging | Left keeps its cached level and loses charging and live status |
+
+The Bluetooth stream test sends an oversized frame followed by a fragmented 4096-byte escaped payload. The automation tests cover an intervening manual choice and an invalidated timer or connection. These are transport and command regressions on the JVM.
+
+The launcher icon, widget layouts, navigation code and the committed screenshot goldens match the baseline at source level. Home and Battery still use the approved composition. Runtime rendering and accessibility are measured by the screenshot and instrumentation jobs.
+
+### Pixel 10 Pro XL acceptance
+
+Record the candidate commit, Android build, WF-1000XM5 firmware and app settings for both passes. Keep system font size, display size, theme, wallpaper and brightness constant for the visual comparison.
+
+| Reference | Earbuds comparison | Evidence still required on the Pixel |
+|---|---|---|
+| Pixel Buds and Pixel Settings | Home and Connected sheet show L/R/Case, current mode and what's available. Earbud settings, App settings, Diagnostics, Profiles, Vibrations and Backup use consistent row, label and back-button alignment. | Light and dark captures, maximum font scale, TalkBack order, and a recording of one bud being put away while the other stays connected. |
+| Google Clock | Ambient timer gives a dependable countdown and a predictable return action. | Start, cancel, replace and expire a timer, including the system chip and lock-screen actions. Compare interaction timing and record the device's confirmed mode. |
+| Calculator | EQ controls are legible and respond immediately while dragging. | Recording at 120 Hz of slider and graph drags, including finger release, interruption and reduced motion. |
+| Wallet | State hierarchy makes available, pending, confirmed and unavailable controls distinguishable. | Light/dark contrast checks, TalkBack and a recording of a failed command, with the corresponding haptic outcome. |
+| Pixel Launcher | All three widgets, the lock-screen dashboard and the adaptive/themed icon fit the existing workspace. | Resize and re-add each widget. Capture the player-slot widget next to the player, test each segment and both side edges, and compare icon weight in the launcher grid. |
+
+Compare switching to another app and returning from Recents on Home, Battery, EQ and both settings pages. Capture the first visible frame and the settled frame with the same scroll position. Test predictive-back commit and cancellation from both edges, followed by the same actions with system animations disabled.
+
+For performance, run the same Macrobenchmark journeys on each build with the release baseline profile and without it. Save startup timing, frame-overrun percentiles, refresh rate and Perfetto traces. Record process memory after cold launch and repeated navigation. Use matched 24-hour sessions for phone and WF-1000XM5 battery measurements. The emulator results do not fill these entries.
+
+For ecosystem acceptance, pair or reconnect real WF-1000XM5, exercise Quick Settings and Gemini, verify companion presence with the app closed, and export/restore the settings across installs. Record which actions the earbuds confirmed and which surfaces stayed in sync. The device pass, side-by-side media and owner approval are pending.
+
 ## 2.1 on the Pixel 10 Pro XL
 
 Use a physical Pixel 10 Pro XL with Smooth Display enabled and its WF-1000XM5 paired. Record the

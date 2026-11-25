@@ -22,6 +22,7 @@ internal object ModeControl {
     // ---- mode requests ----------------------------------------------------------------
     private data class ModeRequest(val id: Long, val state: SonyProtocol.NcState, val confirmed: CompletableDeferred<Boolean>)
     private val modeVersion = AtomicLong()
+    internal val revision get() = modeVersion.get()
     private val requests = Channel<ModeRequest>(Channel.CONFLATED, onUndeliveredElement = { it.confirmed.complete(false) })
     private var activeRequest: ModeRequest? = null
 
@@ -73,6 +74,16 @@ internal object ModeControl {
         return request.confirmed
     }
 
+    /** Gate a deferred automation against both intervening choices and a command still in flight. */
+    @Synchronized internal fun requestIfUnchanged(
+        state: SonyProtocol.NcState,
+        revision: Long,
+        eligible: () -> Boolean = { true },
+    ): Deferred<Boolean>? {
+        if (modeVersion.get() != revision || activeRequest != null || !eligible()) return null
+        return request(state)
+    }
+
     private fun SonyProtocol.NcState.matches(target: SonyProtocol.NcState): Boolean =
         mode == target.mode && (mode != SonyProtocol.Mode.AMBIENT ||
             voice == target.voice && level == target.level.coerceIn(0, 20))
@@ -117,9 +128,9 @@ internal object ModeControl {
         }) { conn.send(SonyProtocol.NC_GET) }?.let(SonyProtocol::parseNc)
 
     internal fun setNc(state: SonyProtocol.NcState) {
-        _state.update { it.copy(nc = state, ncConfirmed = true) }
-        Prefs.saveNc(app, state)
-        ModeWidget.refreshAll(app)
+        val previous = _state.getAndUpdate { it.copy(nc = state, ncConfirmed = true) }
+        if (previous.nc != state) Prefs.saveNc(app, state)
+        if (previous.nc?.mode != state.mode) Widgets.refreshModes(app)
     }
 
     internal suspend fun awaitModeIdle(timeoutMs: Long = 2200) =

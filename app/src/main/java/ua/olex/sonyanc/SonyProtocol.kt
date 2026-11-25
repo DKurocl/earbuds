@@ -41,27 +41,35 @@ object SonyProtocol {
     data class Frame(val type: Int, val seq: Int, val payload: ByteArray, val checksumOk: Boolean)
 
     /** Unescape and parse the bytes between START and END (markers excluded). */
-    fun parse(raw: ByteArray): Frame? {
-        val un = ArrayList<Byte>(raw.size)
-        var i = 0
-        while (i < raw.size) {
-            if (raw[i] == ESC) {
-                if (i + 1 >= raw.size || raw[i + 1].toInt() !in listOf(0x2C, 0x2D, 0x2E)) return null
-                un += (raw[i + 1].toInt() or 0x10).toByte(); i += 2
-            } else { un += raw[i]; i++ }
+    fun parse(raw: ByteArray): Frame? = parseInPlace(raw.copyOf(), raw.size)
+
+    /** The reader owns its reusable buffer. Only the payload escapes to the caller. */
+    internal fun parseInPlace(buffer: ByteArray, size: Int): Frame? {
+        var read = 0
+        var decoded = 0
+        var sum = 0
+        while (read < size) {
+            var value = u(buffer[read++])
+            if (value == ESC.toInt()) {
+                if (read == size) return null
+                val escaped = u(buffer[read++])
+                if (escaped !in 0x2C..0x2E) return null
+                value = escaped or 0x10
+            }
+            buffer[decoded++] = value.toByte()
+            sum += value
         }
-        if (un.size < 7) return null
-        val len = ((un[2].toInt() and 0xFF) shl 24) or ((un[3].toInt() and 0xFF) shl 16) or
-                ((un[4].toInt() and 0xFF) shl 8) or (un[5].toInt() and 0xFF)
-        if (len < 0 || len > 4096 || len != un.size - 7) return null
-        val sum = un.subList(0, 6 + len).sumOf { it.toInt() and 0xFF } and 0xFF
-        return Frame(
-            type = un[0].toInt() and 0xFF,
-            seq = un[1].toInt() and 0xFF,
-            payload = un.subList(6, 6 + len).toByteArray(),
-            checksumOk = sum == (un[6 + len].toInt() and 0xFF)
-        )
+        if (decoded < 7) return null
+        val len = (u(buffer[2]) shl 24) or (u(buffer[3]) shl 16) or
+            (u(buffer[4]) shl 8) or u(buffer[5])
+        if (len !in 0..MAX_PAYLOAD_BYTES || len != decoded - 7) return null
+        val checksum = u(buffer[decoded - 1])
+        val checksumOk = ((sum - checksum) and 0xFF) == checksum
+        return Frame(u(buffer[0]), u(buffer[1]), buffer.copyOfRange(6, decoded - 1), checksumOk)
     }
+
+    private const val MAX_PAYLOAD_BYTES = 4096
+    internal const val MAX_ENCODED_BODY_BYTES = 2 * (MAX_PAYLOAD_BYTES + 7)
 
     fun hex(b: ByteArray) = b.joinToString(" ") { "%02X".format(it) }
 
@@ -118,12 +126,19 @@ object SonyProtocol {
         if (p.size < 4 || u(p[0]) !in listOf(0x23, 0x25)) return null
         return when (u(p[1])) {
             0x01, 0x09 -> if (p.size >= 6 && u(p[3]) in listOf(0,1,2,3,255) && u(p[5]) in listOf(0,1,2,3,255))
-                old.copy(left = pct(p[2]) ?: old.left, leftCharging = p[3].toInt() == 1,
-                    right = pct(p[4]) ?: old.right, rightCharging = p[5].toInt() == 1) else null
+                old.copy(left = pct(p[2]) ?: old.left, leftCharging = pct(p[2]) != null && p[3].toInt() == 1,
+                    right = pct(p[4]) ?: old.right, rightCharging = pct(p[4]) != null && p[5].toInt() == 1) else null
             0x0A -> if (p.size >= 4 && u(p[3]) in listOf(0,1,2,3,255))
-                old.copy(case = pct(p[2]) ?: old.case, caseCharging = p[3].toInt() == 1) else null
+                old.copy(case = pct(p[2]) ?: old.case, caseCharging = pct(p[2]) != null && p[3].toInt() == 1) else null
             else -> null
         }
+    }
+
+    /** A report can invalidate a previously live part without touching the other family. */
+    internal fun reportedBatteryParts(p: ByteArray): Set<Int> = when (p.getOrNull(1)?.toInt()) {
+        0x01, 0x09 -> setOf(0, 1)
+        0x0A -> setOf(2)
+        else -> emptySet()
     }
 
     /** Freshness belongs to each physical battery, not the whole merged snapshot. */

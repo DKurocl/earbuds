@@ -44,7 +44,7 @@ class ModeWidget : AppWidgetProvider() {
         val generation=latestTap.incrementAndGet()
         // The highlight moves (animated) on the tap itself; only the command waits for a burst to settle.
         busyMode=mode
-        refreshAll(ctx)
+        Widgets.refreshModes(ctx)
         CoroutineScope(Dispatchers.IO).launch {
             Headphones.hold(foreground=false)
             try {
@@ -64,7 +64,7 @@ class ModeWidget : AppWidgetProvider() {
             } catch(e:Exception) {
                 if(latestTap.get()==generation) showFailure(ctx)
             } finally {
-                if(latestTap.get()==generation) {busyMode=null;refreshAll(ctx)}
+                if(latestTap.get()==generation) {busyMode=null;Widgets.refreshModes(ctx)}
                 Headphones.release(foreground=false)
                 pending.finish()
             }
@@ -94,8 +94,7 @@ class ModeWidget : AppWidgetProvider() {
             Handler(Looper.getMainLooper()).post {Toast.makeText(ctx,text,Toast.LENGTH_SHORT).show()}
         }
 
-        fun refreshAll(ctx:Context) {
-            StatusWidget.refreshAll(ctx) // the 2×2 glance shows both mode and battery
+        internal fun refreshAll(ctx: Context) {
             val mgr=AppWidgetManager.getInstance(ctx)
             val ids=mgr.getAppWidgetIds(ComponentName(ctx,ModeWidget::class.java))
             if(ids.isNotEmpty()) render(ctx,mgr,ids)
@@ -105,8 +104,9 @@ class ModeWidget : AppWidgetProvider() {
             val current=Prefs.lastNc(ctx)?.mode
             val linked=Prefs.linked(ctx)
             for(id in ids) {
-                val sizes=Widgets.sizes(mgr.getAppWidgetOptions(id),FALLBACK)
-                val category = mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_HOST_CATEGORY)
+                val options = mgr.getAppWidgetOptions(id)
+                val sizes = Widgets.sizes(options, FALLBACK)
+                val category = options.getInt(AppWidgetManager.OPTION_APPWIDGET_HOST_CATEGORY)
                 val showDashboard = category == android.appwidget.AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD
                 mgr.updateAppWidget(id,Widgets.forSizes(sizes){
                     viewsFor(ctx,it.width,it.height,current,busyMode,linked=linked,showDashboard=showDashboard)

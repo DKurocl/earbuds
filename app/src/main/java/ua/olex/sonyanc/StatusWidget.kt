@@ -26,7 +26,7 @@ class StatusWidget : AppWidgetProvider() {
 
         private fun render(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
             val views = viewsFor(ctx, Prefs.lastNc(ctx)?.mode, Prefs.lastBattery(ctx), Prefs.linked(ctx))
-            for (id in ids) mgr.updateAppWidget(id, views)
+            if (ids.isNotEmpty()) mgr.updateAppWidget(ids, views)
         }
 
         internal fun viewsFor(ctx: Context, mode: SonyProtocol.Mode?, last: Pair<SonyProtocol.Battery, Long>?, linked: Boolean?,

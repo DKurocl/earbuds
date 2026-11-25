@@ -289,13 +289,16 @@ object Headphones {
      * no polling starts, and the control socket closes on return unless a screen is open.
      * Applies [apply] if given, then reads the battery so widgets and the cache are current.
      */
-    suspend fun syncOnConnect(apply: SonyProtocol.Mode?): Boolean {
+    internal suspend fun syncOnConnect(
+        apply: SonyProtocol.Mode?, modeRevision: Long, sameSession: () -> Boolean,
+    ): Boolean {
         hold(foreground = false)
         try {
             var ok = false
             for (attempt in 0..1) {
                 // The earbuds can refuse RFCOMM while A2DP/HFP are still being set up.
                 if (attempt > 0) delay(1500)
+                if (!sameSession()) return false
                 ok = connectAndSync(CommandScheduler.Priority.BACKGROUND)
                 if (ok || usage.foreground) break
             }
@@ -308,8 +311,11 @@ object Headphones {
             }
             if (apply != null) {
                 val base = _state.value.shownNc ?: SonyProtocol.NcState(apply)
-                withTimeoutOrNull(4000) { ModeControl.request(base.copy(mode = apply)).await() }
+                withTimeoutOrNull(4000) {
+                    ModeControl.requestIfUnchanged(base.copy(mode = apply), modeRevision, sameSession)?.await()
+                }
             }
+            if (!sameSession()) return false
             withTimeoutOrNull(3000) { DeviceReads.queryBattery(priority = CommandScheduler.Priority.BACKGROUND) }
             return true
         } finally {
@@ -382,28 +388,28 @@ object Headphones {
         }
         EqualizerProtocol.parse(p)?.let { EarbudSettingsLink._equalizer.value = it; Prefs.cacheEqualizer(app, it); return }
         SonyProtocol.parseNc(p)?.let { ModeControl.setNc(it); return }
+        val previous = _state.value
+        val b = SonyProtocol.parseBattery(p, previous.battery ?: SonyProtocol.Battery()) ?: return
+        val reported = SonyProtocol.reportedBatteryParts(p)
         val live = SonyProtocol.liveBatteryParts(p)
-        if (DeviceReads.batteryFamily(p) != null) {
-            if (op == 0x25) DeviceReads.batteryNotification(live)
-            if (live.isNotEmpty()) {
-                val now = System.currentTimeMillis()
-                val updated = _state.updateAndGet {
-                    val merged = SonyProtocol.parseBattery(p, it.battery ?: SonyProtocol.Battery()) ?: it.battery
-                    it.copy(battery = merged, batterySeenAt = now, liveBatteryParts = it.liveBatteryParts + live)
-                }
-                updated.battery?.let { b ->
-                    Prefs.saveBattery(app, b, now)
-                    // Feed the owner's real drain model with the emptier earbud.
-                    listOfNotNull(b.left, b.right).minOrNull()?.let { level ->
-                        Prefs.addBatterySample(app, BatterySample(
-                            now, level, b.leftCharging || b.rightCharging, updated.nc?.mode, Prefs.session(app), b.case,
-                            b.left.takeIf { 0 in live }, b.right.takeIf { 1 in live },
-                        ))
-                    }
-                    Widgets.refreshAll(app)
-                    LowBattery.onReading(app, b, updated.nc?.mode)
-                }
-            }
+        if (op == 0x25) DeviceReads.batteryNotification(reported, live)
+        val now = System.currentTimeMillis()
+        val at = if (live.isEmpty()) previous.batterySeenAt else now
+        val sample = BatterySample.fromReading(
+            now, b, live, previous.nc?.mode?.takeIf { previous.ncConfirmed && previous.pending == null }, Prefs.session(app),
+        )
+        if (sample != null) Prefs.addBatterySample(app, sample)
+        if (at != null) Prefs.saveBattery(app, b, at)
+        _state.update {
+            it.copy(
+                battery = b.takeIf { at != null },
+                batterySeenAt = at,
+                liveBatteryParts = (it.liveBatteryParts - reported) + live,
+            )
+        }
+        if (sample != null || b != previous.battery) Widgets.refreshAll(app)
+        if (0 in reported || 1 in reported) {
+            LowBattery.onReading(app, b.copy(left = sample?.left, right = sample?.right), previous.nc?.mode)
         }
     }
 }

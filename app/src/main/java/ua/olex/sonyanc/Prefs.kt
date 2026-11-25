@@ -196,7 +196,9 @@ object Prefs {
         val next = BatteryLog.add(log, s)
         if (next === log) return
         // This week's measured full charge, for the months-long health view.
-        val health = BatteryHealth.record(batteryHealth(ctx), BatteryHealth.weekOf(s.at), BatteryLog.drain(next, SonyProtocol.Mode.ANC))
+        val week = BatteryHealth.weekOf(s.at)
+        val thisWeek = next.filter { BatteryHealth.weekOf(it.at) == week }
+        val health = BatteryHealth.record(batteryHealth(ctx), week, BatteryLog.drain(thisWeek, SonyProtocol.Mode.ANC))
         p(ctx).edit().putString("battery_log", BatteryLog.encode(next)).putString("battery_health", BatteryHealth.encode(health)).apply()
     }
     fun batteryHealth(ctx: Context) = BatteryHealth.decode(p(ctx).getString("battery_health", null))

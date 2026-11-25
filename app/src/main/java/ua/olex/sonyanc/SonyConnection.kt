@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import kotlinx.coroutines.*
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import kotlinx.coroutines.sync.Mutex
@@ -159,23 +158,25 @@ class SonyConnection(
 
     private fun startReader(s: MdrStream) {
         reader = scope.launch(Dispatchers.IO) {
-            val buf = ByteArrayOutputStream()
+            val frame = ByteArray(SonyProtocol.MAX_ENCODED_BODY_BYTES)
+            var size = 0
             var inFrame = false
             val chunk = ByteArray(512)
             try {
+                val input = s.input
                 while (isActive && socket === s) {
-                    val n = s.input.read(chunk)
+                    val n = input.read(chunk)
                     if (n < 0) break
                     for (i in 0 until n) {
                         when (val b = chunk[i]) {
-                            SonyProtocol.START -> { buf.reset(); inFrame = true }
+                            SonyProtocol.START -> { size = 0; inFrame = true }
                             SonyProtocol.END -> if (inFrame) {
                                 inFrame = false
-                                handle(s, SonyProtocol.parse(buf.toByteArray()))
+                                handle(s, SonyProtocol.parseInPlace(frame, size))
                             }
                             else -> if (inFrame) {
-                                if (buf.size() >= 8192) { inFrame = false; buf.reset() }
-                                else buf.write(b.toInt())
+                                if (size == frame.size) inFrame = false
+                                else frame[size++] = b
                             }
                         }
                     }
@@ -199,7 +200,7 @@ class SonyConnection(
             }
             return
         }
-        if (f.type !in listOf(SonyProtocol.TYPE_COMMAND.toInt(), SonyProtocol.TYPE_COMMAND_2.toInt())) return
+        if (f.type != SonyProtocol.TYPE_COMMAND.toInt() && f.type != SonyProtocol.TYPE_COMMAND_2.toInt()) return
         synchronized(outputLock) {
             s.output.write(SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - f.seq, byteArrayOf()))
             s.output.flush()
