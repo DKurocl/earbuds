@@ -2,12 +2,13 @@
 
 ## Pixel feedback after build 223
 
-The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/earbuds/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget. The follow-up recording shows the pull-to-refresh indicator passing over the case badge about 1.8–2.0 seconds into the clip, after the app switch.
+The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/earbuds/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget. The follow-up recording shows the pull-to-refresh indicator passing over the case badge about 1.8–2.0 seconds into the clip, after the app switch. The Equalizer and Device info summaries also change as hardware reads complete.
 
 | Observation | Candidate verification |
 |---|---|
 | The EQ point appeared to jump on release | The touch regression moves the 16 kHz band with the gesture still down, checks that no write occurred, then checks for one write on release. The curve draws the held point from the current pointer delta. |
 | The top refresh indicator flickered after resume | The regression compares the top-center pixels through two background read cycles and checks that a manual read draws the indicator and clears it on completion. |
+| Home descriptions changed after resume | The home rows use short fixed descriptions. Equalizer and Device info retain their actual values on their own screens. |
 | EQ and Battery had repetitive copy | The page goldens show the shorter text and preserve the gain values, battery estimate source and last-reading status. |
 | The lock screen dashboard had oversized mode controls relative to battery readings | In the 416 × 275 dp reference, the battery rings grow from about 58 to 68 dp and the mode row changes from 64 to 54 dp. The 340 × 208 dp preview covers the compact layout. |
 | The compact home widget had too much space around its modes | At 240 × 105 dp the segment height grows from about 44 to 63 dp. The RemoteViews interaction test covers both player-slot side edges and the center mode controls. |
@@ -39,7 +40,7 @@ Row icon backgrounds use the same 40 dp circle for all categories, with the exis
 colors and error tone. All 32 screenshot test cases rendered locally. Fifteen reference images
 changed, with visible pixel differences confined to the row-icon area. Compare the
 [3.0.1 settings render](https://github.com/DKurocl/earbuds/blob/f9af749/app/src/screenshotTest/goldens/page-settings.png)
-with the [candidate settings render](https://github.com/DKurocl/earbuds/blob/codex/earbuds-3.0.2-correctness/app/src/screenshotTest/goldens/page-settings.png).
+with the [candidate settings render](https://github.com/DKurocl/earbuds/blob/8c51abdf/app/src/screenshotTest/goldens/page-settings.png).
 
 ### Pixel 10 Pro XL acceptance
 
@@ -53,7 +54,7 @@ Record the candidate commit, Android build, WF-1000XM5 firmware and app settings
 | Wallet | State hierarchy makes available, pending, confirmed and unavailable controls distinguishable. | Light/dark contrast checks, TalkBack and a recording of a failed command, with the corresponding haptic outcome. |
 | Pixel Launcher | All three widgets, the lock-screen dashboard and the adaptive/themed icon fit the existing workspace. | Resize and re-add each widget. Capture the player-slot widget next to the player, test each segment and both side edges, and compare icon weight in the launcher grid. |
 
-Compare switching to another app and returning from Recents on Home, Battery, EQ and both settings pages. Capture the first visible frame and the settled frame with the same scroll position. Test predictive-back commit and cancellation from both edges, followed by the same actions with system animations disabled.
+Compare switching to another app and returning from Recents on Home, Battery, EQ and both settings pages. Capture the first visible frame and the settled frame with the same scroll position. On Home, record the case badge and the Equalizer and Device info rows during the first three seconds, then pull to refresh once. Test predictive-back commit and cancellation from both edges, followed by the same actions with system animations disabled.
 
 For performance, run `coldLaunch` and `settingsTransitions` with the required release baseline
 profile. Run the matching `WithoutBaselineProfile` methods to compare the same build without

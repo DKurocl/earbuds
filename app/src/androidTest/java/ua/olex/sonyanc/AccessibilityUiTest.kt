@@ -28,7 +28,7 @@ class AccessibilityUiTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = battery, granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             speakToChat = true,
         )
     }

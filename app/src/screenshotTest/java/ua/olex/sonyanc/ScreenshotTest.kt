@@ -195,6 +195,8 @@ class ScreenshotTest {
             assertTrue("Completing a background read changed the top-center pixels", idle.contentEquals(topCenterPixels()))
         }
         indicator.assertDoesNotExist()
+        compose.onNodeWithText("Presets and Clear Bass").assertExists()
+        compose.onNodeWithText("Codec and firmware").assertExists()
 
         compose.runOnIdle { manual.value = true }
         indicator.assertIsDisplayed()
@@ -209,7 +211,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = false), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {}, onProfiles = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {}, onProfiles = {},
             speakToChat = true,
         )
     }
@@ -249,7 +251,7 @@ class ScreenshotTest {
             if (page == "HOME") HushScreen(
                 status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
                 fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78), granted = true, hasDevice = true,
-                codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             ) else BatteryContent(weekOfUse(), NOW)
         }
     }
@@ -275,7 +277,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             speakToChat = true,
         )
     }
@@ -294,7 +296,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             ambientUntil = System.currentTimeMillis() + 252_000L,
         )
     }
@@ -425,7 +427,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 18, caseCharging = false), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
         )
     }
 
