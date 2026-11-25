@@ -2,12 +2,12 @@
 
 ## Pixel feedback after build 223
 
-The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/xm5/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget.
+The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/earbuds/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget. The follow-up recording shows the pull-to-refresh indicator passing over the case badge about 1.8–2.0 seconds into the clip, after the app switch.
 
 | Observation | Candidate verification |
 |---|---|
 | The EQ point appeared to jump on release | The touch regression moves the 16 kHz band with the gesture still down, checks that no write occurred, then checks for one write on release. The curve draws the held point from the current pointer delta. |
-| The top refresh indicator flickered after resume | The Compose regression checks that a background battery read leaves the indicator hidden and a manual read shows it. |
+| The top refresh indicator flickered after resume | The regression compares the top-center pixels through two background read cycles and checks that a manual read draws the indicator and clears it on completion. |
 | EQ and Battery had repetitive copy | The page goldens show the shorter text and preserve the gain values, battery estimate source and last-reading status. |
 | The lock screen dashboard had oversized mode controls relative to battery readings | In the 416 × 275 dp reference, the battery rings grow from about 58 to 68 dp and the mode row changes from 64 to 54 dp. The 340 × 208 dp preview covers the compact layout. |
 | The compact home widget had too much space around its modes | At 240 × 105 dp the segment height grows from about 44 to 63 dp. The RemoteViews interaction test covers both player-slot side edges and the center mode controls. |
@@ -16,7 +16,7 @@ The PNG comparisons under `app/src/screenshotTest/goldens` use the same Robolect
 
 ## 3.0.2 candidate compared with 3.0.1
 
-The baseline is [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.
+The baseline is [`f9af749`](https://github.com/DKurocl/earbuds/commit/f9af749313655f1e80fed2f8d043b954d4e681ed). The same JVM probe ran against both versions with identical inputs.
 
 | Input | 3.0.1 | 3.0.2 candidate |
 |---|---|---|
@@ -27,7 +27,7 @@ The baseline is [`f9af749`](https://github.com/DKurocl/xm5/commit/f9af749313655f
 The Bluetooth stream test sends an oversized frame followed by a fragmented 4096-byte escaped payload. The automation tests cover an intervening manual choice and an invalidated timer or connection, plus a widget request superseded by a later choice in the app.
 The standalone JVM run passed 42 tests across protocol, stream transport, scheduling and battery
 history and health. The Android Gradle JVM run passed all 112 tests, including the mode-controller
-tests. [The first candidate run](https://github.com/DKurocl/xm5/actions/runs/45596239368) also passed
+tests. [The first candidate run](https://github.com/DKurocl/earbuds/actions/runs/45596239368) also passed
 the build, lint, goldens and 20 Android emulator tests.
 
 The launcher icon and widget layouts match the baseline at source level. The page behind the
@@ -38,8 +38,8 @@ resume and recreation.
 Row icon backgrounds use the same 40 dp circle for all categories, with the existing wallpaper
 colors and error tone. All 32 screenshot test cases rendered locally. Fifteen reference images
 changed, with visible pixel differences confined to the row-icon area. Compare the
-[3.0.1 settings render](https://github.com/DKurocl/xm5/blob/f9af749/app/src/screenshotTest/goldens/page-settings.png)
-with the [candidate settings render](https://github.com/DKurocl/xm5/blob/codex/earbuds-3.0.2-correctness/app/src/screenshotTest/goldens/page-settings.png).
+[3.0.1 settings render](https://github.com/DKurocl/earbuds/blob/f9af749/app/src/screenshotTest/goldens/page-settings.png)
+with the [candidate settings render](https://github.com/DKurocl/earbuds/blob/codex/earbuds-3.0.2-correctness/app/src/screenshotTest/goldens/page-settings.png).
 
 ### Pixel 10 Pro XL acceptance
 
@@ -66,7 +66,7 @@ For ecosystem acceptance, pair or reconnect real WF-1000XM5, exercise Quick Sett
 
 ### Follow-up regressions
 
-The [first emulator run of the recreation test](https://github.com/DKurocl/xm5/actions/runs/45598925960/job/139154612599) preserved the row position after backgrounding and found a 48.76 dp difference after Activity recreation. A follow-up recorded the same scroll position and range before and after recreation (1059 px of 3224 px). The test checks absolute row position on normal resume, and the scroll offset plus the row position inside the viewport on recreation. A second test disables Android animator duration scale while exercising predictive back, then restores its previous value.
+The [first emulator run of the recreation test](https://github.com/DKurocl/earbuds/actions/runs/45598925960/job/139154612599) preserved the row position after backgrounding and found a 48.76 dp difference after Activity recreation. A follow-up recorded the same scroll position and range before and after recreation (1059 px of 3224 px). The test checks absolute row position on normal resume, and the scroll offset plus the row position inside the viewport on recreation. A second test disables Android animator duration scale while exercising predictive back, then restores its previous value.
 
 An isolated 96 ms battery-fill regression probe recorded six composition changes before moving the reading into the draw phase and zero afterward. It uses the same manual Compose clock and battery values for both runs. The light and dark palette checks cover text and selected controls with the app palette and the emulator wallpaper palette, plus battery widget text.
 
@@ -138,7 +138,7 @@ Date: 2026-10-22
 
 Tested source: `7d2465c1a3c8dd8aafdf48fd02da3af7bfc18573`.
 
-[Full CI run](https://github.com/DKurocl/xm5/actions/runs/39755448269): build and emulator jobs passed.
+[Full CI run](https://github.com/DKurocl/earbuds/actions/runs/39755448269): build and emulator jobs passed.
 
 ## Results
 

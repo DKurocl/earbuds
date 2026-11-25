@@ -162,7 +162,7 @@ class ScreenshotTest {
     }
 
     @Test fun backgroundReadsDoNotShowTheManualRefreshIndicator() {
-        val background = mutableStateOf(true)
+        val background = mutableStateOf(false)
         val manual = mutableStateOf(false)
         compose.setContent {
             AppTheme(dynamic = false) {
@@ -174,12 +174,35 @@ class ScreenshotTest {
                 )
             }
         }
+        fun topCenterPixels(): IntArray = compose.runOnIdle {
+            val root = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            val width = root.width / 4
+            val height = root.height / 4
+            IntArray(width * height).also {
+                bitmap.getPixels(it, 0, width, (root.width - width) / 2, 0, width, height)
+                bitmap.recycle()
+            }
+        }
+
         val indicator = compose.onNodeWithContentDescription("Refreshing earbuds")
+        val idle = topCenterPixels()
+        repeat(2) {
+            compose.runOnIdle { background.value = true }
+            assertTrue("A background read changed the top-center pixels", idle.contentEquals(topCenterPixels()))
+            compose.runOnIdle { background.value = false }
+            assertTrue("Completing a background read changed the top-center pixels", idle.contentEquals(topCenterPixels()))
+        }
         indicator.assertDoesNotExist()
+
         compose.runOnIdle { manual.value = true }
         indicator.assertIsDisplayed()
-        compose.runOnIdle { manual.value = false; background.value = true }
+        assertTrue("Manual refresh did not draw in the top center", !idle.contentEquals(topCenterPixels()))
+
+        compose.runOnIdle { manual.value = false }
         indicator.assertDoesNotExist()
+        assertTrue("The refresh indicator remained after completion", idle.contentEquals(topCenterPixels()))
     }
 
     @Test fun home() = shoot("home") {
