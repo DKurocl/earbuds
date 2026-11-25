@@ -7,6 +7,9 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -335,6 +338,30 @@ class ScreenshotTest {
         assertTrue("The mode card lost a full section gap in a single frame: $frameSteps",
             frameSteps.all { it < UiTokens.homeSectionGap.value })
         assertTrue("The collapse should have visible intermediate positions", positions.distinct().size > 5)
+    }
+
+    @Test fun floatingModesLeaveSpaceToOpenTheLastRow() {
+        var opened = false
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                HushScreen(
+                    status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT),
+                    pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
+                    granted = true, hasDevice = true, onConnection = { opened = true },
+                    onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                )
+            }
+        }
+        val viewport = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+        val ambient = compose.onNodeWithContentDescription(SonyProtocol.Mode.AMBIENT.label)
+        val button = ambient.getBoundsInRoot()
+        assertTrue("The scroll viewport should continue behind the mode buttons", viewport.getBoundsInRoot().bottom > button.bottom)
+        viewport.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
+        val deviceInfo = compose.onNodeWithContentDescription("Device info").assertIsDisplayed()
+        assertTrue("The last row should clear the mode buttons", deviceInfo.getBoundsInRoot().bottom < button.top)
+        assertEquals(button, ambient.getBoundsInRoot())
+        deviceInfo.performTouchInput { click(center) }
+        compose.runOnIdle { assertTrue(opened) }
     }
 
     @Test fun home() = shoot("home") {

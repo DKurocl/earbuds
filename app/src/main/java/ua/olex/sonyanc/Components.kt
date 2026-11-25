@@ -146,7 +146,8 @@ private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> 
 @Composable
 fun NavRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, summary: String? = null,
-    enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, danger: Boolean = false, note: RowNote? = null, onClick: () -> Unit,
+    enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, danger: Boolean = false, note: RowNote? = null,
+    modifier: Modifier = Modifier, onClick: () -> Unit,
 ) {
     val error = MaterialTheme.colorScheme.error
     SegmentedListItem(
@@ -154,7 +155,7 @@ fun NavRow(
         colors = if (danger) ListItemDefaults.segmentedColors(containerColor = Surfaces.card, contentColor = error, leadingContentColor = error) else rowColors(),
         leadingContent = leading(glyph, danger), trailingContent = trailing,
         supportingContent = supporting(summary, note),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) { Text(title) }
 }
 
