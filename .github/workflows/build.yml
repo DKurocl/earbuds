@@ -1,270 +1,46 @@
-name: Build APK
+name: Publish verified build 236
 on:
   push:
-  workflow_dispatch:
+    branches: [codex/publish-build-236]
 permissions:
-  contents: read
-concurrency:
-  group: earbuds-${{ github.ref }}
-  cancel-in-progress: ${{ !contains(github.event.head_commit.message, '[review-evidence]') }}
+  actions: read
+  contents: write
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-24.04
-    outputs:
-      owner_key: ${{ steps.key.outputs.owner }}
     env:
-      HUSH_KEYSTORE_PASSWORD: ${{ secrets.HUSH_KEYSTORE_PASSWORD }}
-      HUSH_KEY_ALIAS: ${{ secrets.HUSH_KEY_ALIAS }}
-      HUSH_KEY_PASSWORD: ${{ secrets.HUSH_KEY_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_RUN: '45650420770'
+      COMMIT: '5e751db38dad0292ce8f5dc4deb8217e5158b85b'
+      TAG: build-236
     steps:
-      - uses: actions/checkout@v5
-      - name: Guard against an emptied source tree
+      - name: Check the signed build and verification jobs
         run: |
-          for f in app/build.gradle.kts app/src/main/AndroidManifest.xml app/src/main/java/ua/olex/sonyanc/MainActivity.kt; do
-            [ -f "$f" ] || { echo "::error::$f is missing; the commit replaced the source tree"; exit 1; }
-          done
-      - name: Owner signing key
-        id: key
-        env:
-          KEYSTORE_B64: ${{ secrets.HUSH_KEYSTORE_B64 }}
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN" | jq -e --arg sha "$COMMIT" '.head_sha == $sha and .head_branch == "main"'
+          gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN/jobs" |
+            jq -e '[.jobs[] | select((.name == "build" or .name == "screenshots" or .name == "visual-check") and .conclusion == "success")] | length == 3'
+      - uses: actions/download-artifact@v4
+        with:
+          name: Earbuds-install
+          path: apk
+          github-token: ${{ github.token }}
+          run-id: 45650420770
+      - name: Publish the verified APK
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hush.jks"
-            echo "HUSH_KEYSTORE=$RUNNER_TEMP/hush.jks" >> "$GITHUB_ENV"
-            echo "owner=true" >> "$GITHUB_OUTPUT"
-            echo "Release is signed with the owner key."
-          else
-            echo "::notice::No HUSH_KEYSTORE_B64 secret; release uses the CI debug key and may need a reinstall."
+          set -euo pipefail
+          mv apk/*.apk "apk/Earbuds-236.apk"
+          printf 'Restored the elastic mode-button press and refined each mode icon animation.\n\n[Build and verification](https://github.com/%s/actions/runs/%s).\n' "$GH_REPO" "$SOURCE_RUN" > notes.md
+          if ! gh release view "$TAG" --json isDraft,assets > release.json; then
+            gh release create "$TAG" --draft --target "$COMMIT" --title "Earbuds build 236" --notes-file notes.md
+            gh release view "$TAG" --json isDraft,assets > release.json
           fi
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-      - name: Use preinstalled Android SDK
-        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
-      - uses: gradle/actions/setup-gradle@v5
-        with:
-          gradle-version: 9.9.1
-      - name: Design guards
-        run: |
-          ! grep -rn 'material-icons-extended' app/build.gradle.kts gradle/ || { echo '::error::use Material Symbols (HushIcon)'; exit 1; }
-          ! grep -rnE 'Icons\.(Rounded|Filled|Outlined|Default|AutoMirrored)' app/src/main || { echo '::error::use HushIcon'; exit 1; }
-      - name: Quick APK
-        if: contains(github.event.head_commit.message, '[quick-apk]') && !contains(github.event.head_commit.message, '[quick-release]')
-        run: gradle :app:testDebugUnitTest :app:assembleRelease -PquickApk=true --no-daemon
-      - name: Test, lint and build
-        if: "!contains(github.event.head_commit.message, '[quick-apk]') || contains(github.event.head_commit.message, '[quick-release]')"
-        run: |
-          set -o pipefail
-          gradle :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :benchmark:assembleBenchmark --no-daemon 2>&1 | tee build.log || {
-            grep -E '^e: |error:|ERROR:|What went wrong' -A2 build.log | head -60 | while IFS= read -r l; do
-              [ -n "$l" ] && echo "::error::$l"
-            done
-            exit 1
-          }
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Earbuds-checks
-          path: |
-            app/build/reports/
-            app/build/test-results/
-            build.log
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Earbuds-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Earbuds-install
-          path: app/build/outputs/apk/release/*.apk
-      - uses: actions/upload-artifact@v4
-        if: "!contains(github.event.head_commit.message, '[quick-apk]') || contains(github.event.head_commit.message, '[quick-release]')"
-        with:
-          name: Earbuds-ui-tests
-          path: app/build/outputs/apk/androidTest/debug/*.apk
-  release:
-    # Stable releases need a signed build, screenshot verification, and device tests.
-    if: github.ref == 'refs/heads/main' && needs.build.outputs.owner_key == 'true'
-    needs: [build, screenshots, visual-check]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Earbuds-install
-          path: apk
-      - name: Name the APK
-        run: mv apk/*.apk "apk/Earbuds-${{ github.run_number }}.apk"
-      - name: Prepare release notes
-        run: |
-          {
-            printf 'Commit `%s`. [Build and verification](%s).\n\n' "$COMMIT" "$RUN_URL"
-            if [[ "$COMMIT_MESSAGE" == "Release Earbuds 2.0.0"* ]]; then
-              printf '[Review guide](https://github.com/%s/blob/%s/docs/review/README.md) · [Release notes](https://github.com/%s/blob/%s/docs/review/RELEASE_NOTES.md)\n\n' "$GITHUB_REPOSITORY" "$COMMIT" "$GITHUB_REPOSITORY" "$COMMIT"
-            fi
-            printf '%s\n' 'Obtainium can install the signed APK over the previous release.'
-          } > release-notes.md
-        env:
-          COMMIT: ${{ github.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: Earbuds build ${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
-          files: apk/*.apk
-          make_latest: true
-          body_path: release-notes.md
-  screenshots:
-    # Every page, pose and widget rendered on the JVM (Robolectric) and compared with its golden
-    # in app/src/screenshotTest/goldens, so a layout or color change never slips in unseen.
-    if: "!contains(github.event.head_commit.message, '[quick-apk]') || contains(github.event.head_commit.message, '[quick-release]')"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-      - name: Use preinstalled Android SDK
-        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
-      # Robolectric's Android runtime (~160 MB) comes from Maven Central; keep it between runs.
-      - uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository/org/robolectric
-          key: robolectric-4.14.1-sdk35
-      - uses: gradle/actions/setup-gradle@v5
-        with:
-          gradle-version: 9.9.1
-      - name: Render and compare with goldens
-        run: gradle :app:testDebugUnitTest --tests '*ScreenshotTest*' --tests '*WidgetAnimationTest*' --tests '*PortableSettingsTest*' -Pscreenshots=true --no-daemon
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Earbuds-screenshots
-          path: |
-            app/build/screenshots/
-            app/build/test-results/
-  visual-check:
-    if: "!contains(github.event.head_commit.message, '[quick-apk]') || contains(github.event.head_commit.message, '[quick-release]')"
-    needs: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: actions/download-artifact@v4
-        with:
-          name: Earbuds-debug
-          path: apk
-      - uses: actions/download-artifact@v4
-        with:
-          name: Earbuds-install
-          path: release
-      - uses: actions/download-artifact@v4
-        with:
-          name: Earbuds-ui-tests
-          path: uitests
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: false
-          script: |
-            mkdir -p screens
-            adb shell am force-stop com.android.launcher3
-            adb shell pm disable-user --user 0 com.android.launcher3
-            adb shell wm dismiss-keyguard
-            adb shell cmd uimode night no
-            adb install apk/app-debug.apk
-            adb install uitests/app-debug-androidTest.apk
-            adb shell am instrument -w ua.olex.sonyanc.test/androidx.test.runner.AndroidJUnitRunner | tee screens/instrumentation.txt
-            grep -Eq 'OK \([0-9]+ tests?\)' screens/instrumentation.txt
-            ! grep -Eq 'FAILURES|INSTRUMENTATION_FAILED|shortMsg=' screens/instrumentation.txt
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene anc
-            sleep 5
-            adb shell uiautomator dump /sdcard/hush.xml
-            adb pull /sdcard/hush.xml screens/anc.xml
-            grep -q 'text="WF-1000XM5"' screens/anc.xml
-            ! grep -q 'responding' screens/anc.xml
-            adb exec-out screencap -p > screens/anc-light.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell cmd uimode night yes
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene ambient
-            sleep 5
-            adb exec-out screencap -p > screens/ambient-dark.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell settings put system font_scale 1.3
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene error
-            sleep 5
-            adb exec-out screencap -p > screens/error-large-text.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell settings put system font_scale 1.0
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene settings
-            sleep 3
-            adb exec-out screencap -p > screens/settings-dark.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell settings put system font_scale 1.5
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene settings
-            sleep 3
-            adb exec-out screencap -p > screens/settings-large-text.png
-            adb shell input swipe 540 1800 540 500 350
-            sleep 2
-            adb exec-out screencap -p > screens/settings-scrolled.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell settings put system font_scale 1.0
-            # android-emulator-runner runs each line on its own, so the loop must stay on one line.
-            for scene in equalizer info app profiles backup diagnostics widgets-battery; do adb shell am force-stop ua.olex.sonyanc; adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene $scene; sleep 3; adb exec-out screencap -p > screens/$scene-dark.png; done
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene widgets
-            sleep 3
-            adb exec-out screencap -p > screens/widgets-dark.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell settings put system font_scale 1.3
-            adb shell am start -W -n ua.olex.sonyanc/.DesignPreviewActivity --es scene widgets
-            sleep 3
-            adb exec-out screencap -p > screens/widgets-large-text.png
-            adb shell am force-stop ua.olex.sonyanc
-            adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER ua.olex.sonyanc > screens/launcher-activity.txt
-            grep -q 'MainActivity' screens/launcher-activity.txt
-            adb uninstall ua.olex.sonyanc >/dev/null
-            adb install release/app-release.apk
-            adb shell am start -W -n ua.olex.sonyanc/.MainActivity > screens/release-startup.txt
-            sleep 5
-            # Cold start of the release build, three times, in the run summary (emulator, so relative).
-            for i in 1 2 3; do adb shell am force-stop ua.olex.sonyanc; sleep 1; adb shell am start -W -n ua.olex.sonyanc/.MainActivity | grep -E 'TotalTime' | sed "s/^/run $i: /"; done | tee screens/cold-start.txt
-            { echo "### Cold start (release, emulator)"; echo '```'; cat screens/cold-start.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-            sleep 3
-            adb exec-out screencap -p > screens/release-first-launch.png
-            adb shell pidof ua.olex.sonyanc
-            adb logcat -d -s AndroidRuntime:E > screens/crash.log
-            ! grep -q "FATAL EXCEPTION" screens/crash.log
-            adb shell pm enable com.android.launcher3
-            adb shell input keyevent KEYCODE_HOME
-            sleep 2
-            adb shell dumpsys activity services ua.olex.sonyanc > screens/background-services.txt
-            ! grep -q 'ServiceRecord' screens/background-services.txt
-            adb shell dumpsys jobscheduler > screens/background-jobs.txt
-            ! grep -E 'JOB #.*ua\.olex\.sonyanc' screens/background-jobs.txt
-            adb shell dumpsys alarm > screens/background-alarms.txt
-            ! grep -E '(tag=|package=).*ua\.olex\.sonyanc' screens/background-alarms.txt
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Earbuds-visual-check
-          overwrite: true
-          path: screens/
+          if ! jq -e '.assets[] | select(.name == "Earbuds-236.apk" and .size > 0)' release.json >/dev/null; then
+            gh release upload "$TAG" "apk/Earbuds-236.apk"
+          fi
+          if jq -e .isDraft release.json >/dev/null; then
+            gh release edit "$TAG" --draft=false
+          fi
+          gh release view "$TAG" --json isDraft,assets,url |
+            jq -e '.isDraft == false and any(.assets[]; .name == "Earbuds-236.apk" and .size > 0)'
