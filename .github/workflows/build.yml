@@ -40,7 +40,14 @@ jobs:
             gh release upload "$TAG" "apk/Earbuds-236.apk"
           fi
           if jq -e .isDraft release.json >/dev/null; then
-            gh release edit "$TAG" --draft=false
+            if ! gh api "repos/$GH_REPO/git/ref/tags/$TAG" --jq .object.sha > tag-sha.txt; then
+              gh api --method POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$COMMIT" --jq .object.sha > tag-sha.txt
+            fi
+            test "$(cat tag-sha.txt)" = "$COMMIT"
+            for attempt in 1 2 3; do
+              if gh release edit "$TAG" --draft=false --verify-tag; then break; fi
+              sleep "$((attempt * 5))"
+            done
           fi
           gh release view "$TAG" --json isDraft,assets,url |
             jq -e '.isDraft == false and any(.assets[]; .name == "Earbuds-236.apk" and .size > 0)'
