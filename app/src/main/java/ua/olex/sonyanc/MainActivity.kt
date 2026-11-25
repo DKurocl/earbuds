@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
         }.start()
         enableEdgeToEdge()
         setContent {
+            ReportDrawnWhen { Intro.phase == Intro.Phase.OFF }
             AppTheme(model.dynamicColor) {
                 val systemFeedback = LocalHapticFeedback.current
                 val silentFeedback = remember {

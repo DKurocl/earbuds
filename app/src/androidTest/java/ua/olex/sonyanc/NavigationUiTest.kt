@@ -70,12 +70,14 @@ class NavigationUiTest {
         compose.onNodeWithContentDescription("Settings").performClick()
         val row = compose.onNodeWithText("Wallpaper colors")
         row.performScrollTo().assertIsDisplayed()
-        fun scrollRange() = compose.onAllNodes(
+        val viewport = compose.onNode(
             SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange),
-        ).fetchSemanticsNodes().map {
-            it.config[androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange].run { value() to maxValue() }
-        }
+        )
+        fun scrollRange() = viewport.fetchSemanticsNode().config[
+            androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange
+        ].run { value() to maxValue() }
         val before = row.getBoundsInRoot()
+        val beforeViewport = viewport.getBoundsInRoot()
         val beforeRange = scrollRange()
         scenario.moveToState(Lifecycle.State.CREATED)
         scenario.moveToState(Lifecycle.State.RESUMED)
@@ -84,7 +86,16 @@ class NavigationUiTest {
 
         scenario.recreate()
         row.assertIsDisplayed()
-        assertEquals("Scroll ranges before $beforeRange and after ${scrollRange()}", before.top.value, row.getBoundsInRoot().top.value, 0.5f)
+        assertEquals(beforeRange, scrollRange())
+        // Activity recreation can attach the new scroll viewport at a different root offset.
+        // Compare the row within the viewport while keeping an absolute check for normal resume.
+        val afterViewport = viewport.getBoundsInRoot()
+        assertEquals(
+            "Scroll viewport before $beforeViewport and after $afterViewport",
+            before.top.value - beforeViewport.top.value,
+            row.getBoundsInRoot().top.value - afterViewport.top.value,
+            0.5f,
+        )
     }
 
     @Test fun predictiveBackKeepsThePageStillWhenSystemAnimationsAreDisabled() {
@@ -93,6 +104,7 @@ class NavigationUiTest {
             .bufferedReader().use { it.readText().trim() }
 
         val oldScale = shell("settings get global animator_duration_scale")
+        val animationsWereEnabled = ValueAnimator.areAnimatorsEnabled()
         try {
             shell("settings put global animator_duration_scale 0")
             compose.waitUntil(5_000) { !ValueAnimator.areAnimatorsEnabled() }
@@ -107,6 +119,7 @@ class NavigationUiTest {
         } finally {
             if (oldScale.toFloatOrNull() == null) shell("settings delete global animator_duration_scale")
             else shell("settings put global animator_duration_scale $oldScale")
+            compose.waitUntil(5_000) { ValueAnimator.areAnimatorsEnabled() == animationsWereEnabled }
         }
     }
 }

@@ -42,10 +42,21 @@ Record the candidate commit, Android build, WF-1000XM5 firmware and app settings
 Compare switching to another app and returning from Recents on Home, Battery, EQ and both settings pages. Capture the first visible frame and the settled frame with the same scroll position. Test predictive-back commit and cancellation from both edges, followed by the same actions with system animations disabled.
 
 For performance, run `coldLaunch` and `settingsTransitions` with the required release baseline
-profile. Run the matching `WithoutBaselineProfile` methods for a no-precompilation comparison on
-the same build. Save startup timing, frame-overrun percentiles, refresh rate and Perfetto traces. Record process memory after cold launch and repeated navigation. Use matched 24-hour sessions for phone and WF-1000XM5 battery measurements. Collect these measurements on the physical Pixel.
+profile. Run the matching `WithoutBaselineProfile` methods to compare the same build without
+precompilation. Run `hotResume` for an existing activity returning from Home. Startup reports
+initial display and, when the launch intro completes, full display. Record frame-overrun
+percentiles, observed refresh rate, final memory samples and Perfetto traces. Use matched
+24-hour sessions for phone and WF-1000XM5 battery measurements on the physical Pixel.
 
 For ecosystem acceptance, pair or reconnect real WF-1000XM5, exercise Quick Settings and Gemini, verify companion presence with the app closed, and export/restore the settings across installs. Record which actions the earbuds confirmed and which surfaces stayed in sync. The device pass, side-by-side media and owner approval are pending.
+
+### Follow-up regressions
+
+The [first emulator run of the recreation test](https://github.com/DKurocl/xm5/actions/runs/45598925960/job/139154612599) preserved the row position after backgrounding and found a 48.76 dp difference after Activity recreation. A follow-up recorded the same scroll position and range before and after recreation (1059 px of 3224 px). The test checks absolute row position on normal resume, and the scroll offset plus the row position inside the viewport on recreation. A second test disables Android animator duration scale while exercising predictive back, then restores its previous value.
+
+An isolated 96 ms battery-fill regression probe recorded six composition changes before moving the reading into the draw phase and zero afterward. It uses the same manual Compose clock and battery values for both runs. The light and dark palette checks cover text and selected controls with the app palette and the emulator wallpaper palette, plus battery widget text.
+
+The Ambient countdown waits for the headphones to confirm Ambient, and a replaced timer keeps its original return mode. Existing alarm and notification actions carry the expiry they belong to. The App Functions battery response captures the snapshot while its connection lease is active, exposes current readings as numbers, and identifies cached levels in the spoken summary.
 
 ## 2.1 on the Pixel 10 Pro XL
 
