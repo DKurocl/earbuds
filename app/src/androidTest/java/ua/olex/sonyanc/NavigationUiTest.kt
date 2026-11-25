@@ -104,7 +104,6 @@ class NavigationUiTest {
             .bufferedReader().use { it.readText().trim() }
 
         val oldScale = shell("settings get global animator_duration_scale")
-        val animationsWereEnabled = ValueAnimator.areAnimatorsEnabled()
         try {
             shell("settings put global animator_duration_scale 0")
             compose.waitUntil(5_000) { !ValueAnimator.areAnimatorsEnabled() }
@@ -119,7 +118,7 @@ class NavigationUiTest {
         } finally {
             if (oldScale.toFloatOrNull() == null) shell("settings delete global animator_duration_scale")
             else shell("settings put global animator_duration_scale $oldScale")
-            compose.waitUntil(5_000) { ValueAnimator.areAnimatorsEnabled() == animationsWereEnabled }
+            assertEquals(oldScale, shell("settings get global animator_duration_scale"))
         }
     }
 }
