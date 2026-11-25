@@ -3,6 +3,12 @@ package ua.olex.sonyanc
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.runtime.mutableStateOf
@@ -127,11 +133,85 @@ class ScreenshotTest {
         assertEquals("Composition changes during fill", before, compose.runOnIdle { commits() })
     }
 
+    @Test fun equalizerChangesTheBandBeforeWritingItOnRelease() {
+        val writes = mutableListOf<List<Int>>()
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                EqualizerContent(
+                    state = EqualizerProtocol.State(0xA0, List(6) { 0 }),
+                    busy = false,
+                    unavailable = false,
+                    onBands = { writes.add(it) },
+                )
+            }
+        }
+        val curve = compose.onNodeWithContentDescription("Equalizer curve")
+        curve.performTouchInput {
+            down(Offset(width * .967f, centerY))
+            moveBy(Offset(0f, -height * .28f))
+        }
+        compose.onNode(SemanticsMatcher("positive 16 kHz gain") {
+            it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { value -> value.startsWith("16 kHz, +") }
+        }).assertIsDisplayed()
+        compose.runOnIdle { assertTrue(writes.isEmpty()) }
+        curve.performTouchInput { up() }
+        compose.runOnIdle {
+            assertEquals(1, writes.size)
+            assertTrue(writes.single().last() > 0)
+        }
+    }
+
+    @Test fun backgroundReadsDoNotShowTheManualRefreshIndicator() {
+        val background = mutableStateOf(false)
+        val manual = mutableStateOf(false)
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                HushScreen(
+                    status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC),
+                    pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
+                    granted = true, hasDevice = true, batteryRefreshing = background.value, manualRefreshing = manual.value,
+                    onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                )
+            }
+        }
+        fun topCenterPixels(): IntArray = compose.runOnIdle {
+            val root = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            val width = root.width / 4
+            val height = root.height / 4
+            IntArray(width * height).also {
+                bitmap.getPixels(it, 0, width, (root.width - width) / 2, 0, width, height)
+                bitmap.recycle()
+            }
+        }
+
+        val indicator = compose.onNodeWithContentDescription("Refreshing earbuds")
+        val idle = topCenterPixels()
+        repeat(2) {
+            compose.runOnIdle { background.value = true }
+            assertTrue("A background read changed the top-center pixels", idle.contentEquals(topCenterPixels()))
+            compose.runOnIdle { background.value = false }
+            assertTrue("Completing a background read changed the top-center pixels", idle.contentEquals(topCenterPixels()))
+        }
+        indicator.assertDoesNotExist()
+        compose.onNodeWithText("Presets and Clear Bass").assertExists()
+        compose.onNodeWithText("Codec and firmware").assertExists()
+
+        compose.runOnIdle { manual.value = true }
+        indicator.assertIsDisplayed()
+        assertTrue("Manual refresh did not draw in the top center", !idle.contentEquals(topCenterPixels()))
+
+        compose.runOnIdle { manual.value = false }
+        indicator.assertDoesNotExist()
+        assertTrue("The refresh indicator remained after completion", idle.contentEquals(topCenterPixels()))
+    }
+
     @Test fun home() = shoot("home") {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = false), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {}, onProfiles = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {}, onProfiles = {},
             speakToChat = true,
         )
     }
@@ -171,7 +251,7 @@ class ScreenshotTest {
             if (page == "HOME") HushScreen(
                 status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
                 fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78), granted = true, hasDevice = true,
-                codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+                onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             ) else BatteryContent(weekOfUse(), NOW)
         }
     }
@@ -197,7 +277,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             speakToChat = true,
         )
     }
@@ -216,7 +296,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT, voice = true, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = true), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             ambientUntil = System.currentTimeMillis() + 252_000L,
         )
     }
@@ -347,7 +427,7 @@ class ScreenshotTest {
         HushScreen(
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 18, caseCharging = false), granted = true, hasDevice = true,
-            codec = CodecProtocol.State(0x10), onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
         )
     }
 

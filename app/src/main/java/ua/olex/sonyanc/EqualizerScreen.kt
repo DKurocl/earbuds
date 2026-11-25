@@ -2,8 +2,8 @@
 
 package ua.olex.sonyanc
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -151,7 +151,7 @@ fun EqualizerContent(
         when {
             state == null && unavailable -> SoundCard {
                 Text("Equalizer unavailable", style = MaterialTheme.typography.titleMediumEmphasized)
-                Text("The earbuds didn't answer. Check that they're connected, then try again.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                Text("Check the earbud connection.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 FilledTonalButton(onClick = onRetry, enabled = !busy) { Text("Try again") }
             }
             state == null -> Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
@@ -164,14 +164,14 @@ fun EqualizerContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Equalizer", style = MaterialTheme.typography.titleMediumEmphasized)
-                            Text(if (on) EqualizerProtocol.presets[state.preset] ?: "Custom" else "Off · the earbuds play as tuned",
+                            Text(if (on) EqualizerProtocol.presets[state.preset] ?: "Custom" else "Off",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         }
                         Switch(checked = on, enabled = editable, onCheckedChange = { onPreset(if (it) CUSTOM else OFF) },
                             thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
                             modifier = Modifier.semantics { contentDescription = "Equalizer" })
                     }
-                    if (refused) Text("The earbuds didn't take this change", style = MaterialTheme.typography.bodyMedium, color = cs.error)
+                    if (refused) Text("Change not confirmed", style = MaterialTheme.typography.bodyMedium, color = cs.error)
                     // Two groups, each as rows of connected buttons (M3E button groups): your own
                     // sounds first, then Sony's presets. The chosen one turns into a full pill.
                     val flat = state.preset == CUSTOM && bands.size == 6 && bands.drop(1).all { it == 0 }
@@ -197,7 +197,7 @@ fun EqualizerContent(
                         EqCurve(bands.drop(1), editable, on, held,
                             onHold = { held = it },
                             onGain = { i, v -> bands = bands.toMutableList().also { it[i + 1] = v } },
-                            onDone = { held = null; onBands(bands) })
+                            onDone = { onBands(bands) })
                         // Each band's value, under its place on the curve.
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             BAND_HZ.forEachIndexed { i, hz ->
@@ -210,16 +210,14 @@ fun EqualizerContent(
                                 }
                             }
                         }
-                        Text("Drag a point on the curve to shape the sound.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     } else {
-                        Text("This preset has fixed bands. Choose Custom to shape the sound yourself.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        Text("Choose Custom to adjust the bands.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     }
                 }
                 if (bands.size == 6) SoundCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Clear Bass", style = MaterialTheme.typography.titleMediumEmphasized)
-                            Text("Deeper bass without muddying the rest", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         }
                         Text(signed(bands[0]), style = MaterialTheme.typography.titleMedium, color = if (bands[0] != 0) cs.primary else cs.onSurfaceVariant)
                     }
@@ -287,8 +285,15 @@ private fun EqCurve(values: List<Int>, enabled: Boolean, active: Boolean, held: 
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = cs.onSurfaceVariant)
     val valueStyle = MaterialTheme.typography.labelLarge.copy(color = cs.onPrimary)
-    val shown = values.mapIndexed { i, v -> animateFloatAsState(v.toFloat(), MaterialTheme.motionScheme.fastSpatialSpec(), label = "band $i").value }
+    val shown = values.mapIndexed { i, v ->
+        animateFloatAsState(v.toFloat(), if (held == i) snap() else MaterialTheme.motionScheme.fastSpatialSpec(), label = "band $i")
+    }
     val latest by rememberUpdatedState(values)
+    val updateHold by rememberUpdatedState(onHold)
+    val updateGain by rememberUpdatedState(onGain)
+    val finish by rememberUpdatedState(onDone)
+    val haptics by rememberUpdatedState(feedback)
+    var dragPoint by remember { mutableStateOf<Pair<Int, Float>?>(null) }
     val range = 10f
     fun xOf(hz: Double, w: Float) = (log10(hz / 20.0) / 3.0).toFloat().coerceIn(0f, 1f) * w
     val tone = if (active) cs.primary else cs.outline
@@ -312,22 +317,31 @@ private fun EqCurve(values: List<Int>, enabled: Boolean, active: Boolean, held: 
                     var initial = 0f
                     val start = awaitVerticalTouchSlopOrCancellation(down.id) { change, over -> initial = over; change.consume() } ?: return@awaitEachGesture
                     var raw = latest[index].toFloat()
-                    var last = latest[index]
-                    onHold(index)
-                    feedback.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    val original = latest[index]
+                    var last = original
+                    dragPoint = index to raw
+                    updateHold(index)
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                     fun drag(dy: Float) {
                         raw = (raw - dy / perDb).coerceIn(-range, range)
+                        dragPoint = index to raw
                         val step = raw.roundToInt()
                         if (step != last) {
                             last = step
-                            feedback.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
-                            onGain(index, step)
+                            haptics.performHapticFeedback(if (step == 0) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick)
+                            updateGain(index, step)
                         }
                     }
+                    var completed = false
                     try {
                         drag(initial)
-                        verticalDrag(start.id) { change -> drag(change.position.y - change.previousPosition.y); change.consume() }
-                    } finally { onDone() }
+                        completed = verticalDrag(start.id) { change -> drag(change.position.y - change.previousPosition.y); change.consume() }
+                        if (completed && last != original) finish()
+                    } finally {
+                        if (!completed && last != original) updateGain(index, original)
+                        updateHold(null)
+                        dragPoint = null
+                    }
                 }
             },
     ) {
@@ -343,7 +357,11 @@ private fun EqCurve(values: List<Int>, enabled: Boolean, active: Boolean, held: 
             drawText(measurer, text, Offset(x + 4.dp.toPx(), h - 16.dp.toPx()), labelStyle)
         }
         // A smooth line through the bands, flat beyond the first and last (Catmull-Rom as Béziers).
-        val points = BAND_HZ.mapIndexed { i, hz -> Offset(xOf(hz, w), yOf(shown[i])) }
+        val dragging = dragPoint
+        val points = BAND_HZ.mapIndexed { i, hz ->
+            val gain = if (dragging?.first == i) dragging.second else shown[i].value
+            Offset(xOf(hz, w), yOf(gain))
+        }
         val ends = listOf(Offset(0f, points.first().y)) + points + Offset(w, points.last().y)
         val line = Path().apply {
             moveTo(ends[0].x, ends[0].y)
@@ -358,7 +376,7 @@ private fun EqCurve(values: List<Int>, enabled: Boolean, active: Boolean, held: 
         points.forEachIndexed { i, c ->
             // A held band grows into a cookie (the app's sound shape family, Scallop.kt), so the
             // finger's point reads as picked up; the others stay small round dots.
-            if (held == i) {
+            if (dragging?.first == i) {
                 val r = 13.dp.toPx()
                 drawPath(Scallop.path(c.x, c.y, r + 2.dp.toPx(), 8, 0.08f), dot)
                 drawPath(Scallop.path(c.x, c.y, r, 8, 0.08f), tone)
@@ -367,10 +385,10 @@ private fun EqCurve(values: List<Int>, enabled: Boolean, active: Boolean, held: 
                 drawCircle(dot, r + 2.dp.toPx(), c)
                 drawCircle(tone, r, c)
             }
-            if (held == i) {
-                val layout = measurer.measure("${signed(values[i])} dB · ${bandLabel(BAND_HZ[i])}", valueStyle)
+            if (dragging?.first == i) {
+                val layout = measurer.measure("${signed(dragging.second.roundToInt())} dB · ${bandLabel(BAND_HZ[i])}", valueStyle)
                 val bw = layout.size.width + 20.dp.toPx(); val bh = layout.size.height + 10.dp.toPx()
-                val bx = (c.x - bw / 2f).coerceIn(0f, w - bw)
+                val bx = (c.x - bw / 2f).coerceIn(0f, (w - bw).coerceAtLeast(0f))
                 val by = if (c.y > mid) c.y - bh - 20.dp.toPx() else c.y + 20.dp.toPx()
                 drawRoundRect(cs.primary, Offset(bx, by), Size(bw, bh), CornerRadius(12.dp.toPx()))
                 drawText(layout, topLeft = Offset(bx + 10.dp.toPx(), by + 5.dp.toPx()))

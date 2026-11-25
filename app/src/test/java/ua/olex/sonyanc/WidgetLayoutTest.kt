@@ -115,15 +115,15 @@ class WidgetLayoutTest {
         assertNotNull(s); s!!
         assertTrue(s.estimate); assertTrue(s.labels)
         // The slot is filled: big rings and full-height buttons, and the time keeps a real column.
-        assertTrue(s.ring >= 56f); assertEquals(64f, s.modes); assertTrue(s.heroWidth >= 150f)
+        assertTrue(s.ring >= 64f); assertEquals(54f, s.modes); assertTrue(s.heroWidth >= 150f)
     }
 
     @Test fun dashboardMiddleNeverOverflows() {
         for (w in listOf(300, 340, 416, 480)) for (h in listOf(190, 208, 240, 275, 320)) {
             val s = WidgetLayout.dashboard(w.toFloat(), h.toFloat(), 20f, 18f, 15f, label) ?: continue
-            val middle = h - 32 - 20 - 24 - s.modes
+            val middle = h - 32 - 20 - 2 * WidgetLayout.DASH_GAP - s.modes
             assertTrue("$w×$h ring", s.ring + 6 + 18 <= middle + 0.01f)
-            assertTrue("$w×$h width", 3 * s.ring + 24 + 8 + s.heroWidth <= w - 32 + 0.01f)
+            assertTrue("$w×$h width", 3 * s.ring + 3 * WidgetLayout.DASH_GAP + s.heroWidth <= w - 32 + 0.01f)
         }
     }
 
@@ -136,5 +136,15 @@ class WidgetLayoutTest {
     @Test fun oneRowSlotsNeverBecomeADashboard() {
         for (w in listOf(252, 340, 424)) assertNull(WidgetLayout.dashboard(w.toFloat(), 96f, 20f, 18f, 15f, label))
         assertNull(WidgetLayout.dashboard(164f, 208f, 20f, 18f, 15f, label))
+    }
+
+    @Test fun compactHomeWidgetUsesTheAvailableHeightWithoutCrowdingItsSides() {
+        val width = 240f
+        val height = 105f
+        val bar = WidgetLayout.homeModeHeight(width, height)
+        val segmentWidth = (width - 2 * WidgetLayout.HOME_SIDE_PADDING - 4f) / 3
+        assertTrue(bar > 62f)
+        assertTrue(bar < segmentWidth)
+        assertTrue(height - bar >= 16f)
     }
 }

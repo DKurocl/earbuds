@@ -63,8 +63,8 @@ private fun Scene(scene: String) {
                 nc = state, pending = null, fresh = true,
                 error = if (scene == "error") "Could not connect. Check that your earbuds are connected to this phone." else null,
                 battery = SonyProtocol.Battery(82, 79, 56, rightCharging = true), granted = scene != "permission", hasDevice = true,
-                codec = CodecProtocol.State(0x10), onMode = { state = it }, onSettings = {}, onConnect = {}, onPermission = {},
-                onBluetooth = {}, onPick = {}, equalizerPreset = "Custom",
+                onMode = { state = it }, onSettings = {}, onConnect = {}, onPermission = {},
+                onBluetooth = {}, onPick = {},
             )
         }
     }

@@ -105,8 +105,8 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
         }
         if (heroMinutes != null) ListGroup("Listening time left") {
             item {
-                val source = if (measured == null) "Sony's rating, until it learns your use"
-                    else "From your last ${BatteryLife.short(measured.minutes.toInt())} of listening"
+                val source = if (measured == null) "Sony estimate"
+                    else "Based on ${BatteryLife.short(measured.minutes.toInt())} of readings"
                 val stale = if (freshBuds) "" else " · Last reading"
                 InfoRow(it, Glyph.BATTERY, BatteryLife.short(heroMinutes), source + stale)
             }
@@ -116,11 +116,6 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
             item { DrainRow(it, Glyph.QUIET, "Noise cancelling & ambient", log, Mode.ANC) }
             item { DrainRow(it, Glyph.OFF, "Noise control off", log, Mode.OFF) }
         }
-        Text(
-            "Measured from your own use while the earbuds are out of the case, so LDAC, volume and battery wear count. " +
-                "Until there is enough, Sony's rating is shown.",
-            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp),
-        )
     }
 }
 
@@ -139,10 +134,10 @@ private fun Legend(color: Color, label: String, dashed: Boolean) {
 private fun DrainRow(shape: ListItemShapes, glyph: Glyph, title: String, log: List<BatterySample>, mode: Mode) {
     val drain = remember(log) { BatteryLog.drain(log, mode) }
     val rated = BatteryLife.fullChargeMinutes(mode, null)
-    val value = if (drain == null) "Rated ${BatteryLife.format(rated)} · learning from your use"
+    val value = if (drain == null) "Rated ${BatteryLife.format(rated)}"
     else {
         val measured = BatteryLife.fullChargeMinutes(mode, drain.rate)
-        "About ${BatteryLife.format(measured)} · rated ${BatteryLife.format(rated)} · from ${BatteryLife.format(drain.minutes.toInt())} of use"
+        "About ${BatteryLife.format(measured)} · rated ${BatteryLife.format(rated)}"
     }
     InfoRow(shape, glyph, title, value)
 }

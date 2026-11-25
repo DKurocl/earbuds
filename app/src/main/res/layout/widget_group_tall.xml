@@ -4,7 +4,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="UselessParent" android:id="@android:id/background"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@drawable/w_bar_bg" android:paddingHorizontal="20dp" android:paddingVertical="6dp">
+    android:background="@drawable/w_bar_bg" android:paddingHorizontal="14dp" android:paddingVertical="8dp">
     <LinearLayout android:id="@+id/w_group"
         android:layout_width="match_parent" android:layout_height="48dp" android:layout_gravity="center"
         android:orientation="horizontal" android:baselineAligned="false">

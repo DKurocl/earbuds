@@ -69,14 +69,14 @@ fun HushScreen(
     onPermission: () -> Unit, onBluetooth: () -> Unit, onPick: () -> Unit, onEqualizer: () -> Unit = {}, onEarbuds: () -> Unit = {},
     onConnection: () -> Unit = {}, haptics: Boolean = true,
     batteryRefreshing: Boolean = false, batteryFresh: Boolean = true, onBattery: () -> Unit = {},
-    codec: CodecProtocol.State? = null, codecRefreshing: Boolean = false,
+    manualRefreshing: Boolean = false,
     deviceName: String = "WF-1000XM5",
-    batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(), equalizerPreset: String? = null,
+    batteryParts: Set<Int> = if (batteryFresh) setOf(0, 1, 2) else emptySet(),
     batterySeenAt: Long? = null,
     onFind: () -> Unit = {}, lastSeen: Long? = null, onBatteryDetails: () -> Unit = {},
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, ambientUntil: Long? = null, ambientReturn: Mode = Mode.ANC, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
-    linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true, codecLive: Boolean = true,
+    linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true,
     onProfiles: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -113,12 +113,14 @@ fun HushScreen(
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
-            isRefreshing = batteryRefreshing || codecRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
+            isRefreshing = manualRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
             // The page ends above the floating toolbar: nothing scrolls under it or shows behind it.
             modifier = Modifier.fillMaxSize().padding(bottom = dockHeight),
             indicator = {
-                PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = batteryRefreshing || codecRefreshing,
-                    modifier = Modifier.align(Alignment.TopCenter))
+                PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = manualRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter).then(
+                        if (manualRefreshing) Modifier.semantics { contentDescription = "Refreshing earbuds" } else Modifier,
+                    ))
             },
         ) {
         Column(
@@ -131,7 +133,7 @@ fun HushScreen(
                 !bluetoothOn -> "Bluetooth is off"
                 !hasDevice -> "No earbuds selected"
                 !paired -> "Earbuds are no longer paired"
-                ready || (linked == true && status != Headphones.Status.FAILED) -> "Connected" + (codec?.takeIf { codecLive && it.isKnown }?.let { " · ${it.label}" } ?: "")
+                ready || (linked == true && status != Headphones.Status.FAILED) -> "Connected"
                 linked == false -> lastSeen?.let {
                     "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 } ?: "Earbuds disconnected"
@@ -177,13 +179,9 @@ fun HushScreen(
                     if (canControl && (ready || nc != null)) ModeCard(state, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient))
 
                     Box(Modifier.introFade()) { ListGroup("More controls") {
-                        // Battery opens from the listening-time tiles above; no second entry here.
-                        item { NavRow(it, Glyph.EQ, "Equalizer", equalizerPreset ?: "Presets, custom bands and Clear Bass", onClick = onEqualizer) }
-                        item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls, Speak-to-Chat, voice prompts", onClick = onEarbuds) }
-                        item {
-                            val codecLine = if (ready && codecLive) codec?.label else null
-                            NavRow(it, Glyph.INFO, "Device info", codecLine?.let { c -> "Codec · $c" } ?: "Codec, firmware, power", onClick = onConnection)
-                        }
+                        item { NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass", onClick = onEqualizer) }
+                        item { NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls and voice prompts", onClick = onEarbuds) }
+                        item { NavRow(it, Glyph.INFO, "Device info", "Codec and firmware", onClick = onConnection) }
                     } }
                 }
             }

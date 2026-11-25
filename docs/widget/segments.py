@@ -18,6 +18,7 @@ Icon and label exist twice, in the off and on colors, and cross-fade through sta
 (res/animator/w_while_*.xml) in step with the fill, so they never sit on the wrong background.
 """
 from pathlib import Path
+from connected import segment as connected_segment
 
 RES = Path(__file__).resolve().parents[2] / "app/src/main/res"
 K = 0.44772  # 1 - 0.55228: cubic control offset for a quarter circle
@@ -191,7 +192,7 @@ def main():
     s = dash.read_text()
     start, end = "<!-- modes:start -->\n", "        <!-- modes:end -->"
     a, b = s.index(start) + len(start), s.index(end)
-    dash.write_text(s[:a] + tiles(False, False, "        ") + s[b:])
+    dash.write_text(s[:a] + "".join(connected_segment(i, False) for i in range(3)) + s[b:])
 
 
 if __name__ == "__main__":
