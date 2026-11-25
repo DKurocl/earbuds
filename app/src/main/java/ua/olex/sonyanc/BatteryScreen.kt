@@ -56,16 +56,19 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
     val cs = MaterialTheme.colorScheme
     PageScaffold("Battery", onBack) {
         // One line first, as Pixel's own battery page says it: until when the earbuds last.
-        val heroBattery = device?.battery
+        val liveParts = device?.liveBatteryParts.orEmpty()
+        val freshBuds = 0 in liveParts || 1 in liveParts
+        val heroBattery = device?.battery?.let { BatteryLife.forEstimate(it, liveParts) }
         val heroMode = device?.nc?.mode
-        val heroMinutes = heroBattery?.let { BatteryLife.budsMinutes(it, heroMode, BatteryLog.drain(log, heroMode)?.rate) }
+        val measured = remember(log, heroMode) { BatteryLog.drain(log, heroMode) }
+        val heroMinutes = heroBattery?.let { BatteryLife.budsMinutes(it, heroMode, measured?.rate) }
         if (heroMinutes != null) {
             val ctx = LocalContext.current
             val until = android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(now + heroMinutes * 60_000L))
             Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Until about $until", style = MaterialTheme.typography.headlineMediumEmphasized)
+                Text(if (freshBuds) "Until about $until" else "Last reading", style = MaterialTheme.typography.headlineMediumEmphasized)
                 Text(BatteryLife.short(heroMinutes) + " of listening" +
-                    (BatteryLife.caseMinutes(heroBattery, heroMode, BatteryLog.drain(log, heroMode)?.rate)?.takeIf { it >= 10 }?.let { " · the case adds " + BatteryLife.short(it) } ?: ""),
+                    (BatteryLife.caseMinutes(heroBattery, heroMode, measured?.rate)?.takeIf { it >= 10 }?.let { " · the case adds " + BatteryLife.short(it) } ?: ""),
                     style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
             }
         }
@@ -93,26 +96,19 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
                 } else WeekChart(week, now, separate)
             }
         }
-        // The week in the ears: a quiet summary, no reminder.
-        val listened = remember(log, now) { BatteryLog.week(log, now) }
-        if (listened.minutes >= 30) ListGroup("This week") {
+        val observed = remember(log, now) { BatteryLog.week(log, now) }
+        if (observed.minutes >= 30) ListGroup("This week") {
             item {
-                InfoRow(it, Glyph.INSIGHTS, "${BatteryLife.short(listened.minutes)} in your ears",
-                    if (listened.anc >= 1) "${BatteryLife.short(listened.anc)} of it with noise cancelling" else "None of it with noise cancelling")
+                InfoRow(it, Glyph.INSIGHTS, "About ${BatteryLife.short(observed.minutes)} connected",
+                    if (observed.anc >= 1) "About ${BatteryLife.short(observed.anc)} with noise cancelling" else "No noise cancelling readings")
             }
         }
-        val battery = device?.battery
-        if (device != null && battery != null) {
-            val mode = device.nc?.mode
-            val measured = BatteryLog.drain(log, mode)
-            val minutes = BatteryLife.budsMinutes(battery, mode, measured?.rate)
-            if (minutes != null) ListGroup("Listening time left") {
-                item {
-                    val source = if (measured == null) "Sony's rating, until it learns your use"
-                        else "From your last ${BatteryLife.short(measured.minutes.toInt())} of listening"
-                    val stale = if (0 !in device.liveBatteryParts && 1 !in device.liveBatteryParts) " · Last reading" else ""
-                    InfoRow(it, Glyph.BATTERY, BatteryLife.short(minutes), source + stale)
-                }
+        if (heroMinutes != null) ListGroup("Listening time left") {
+            item {
+                val source = if (measured == null) "Sony's rating, until it learns your use"
+                    else "From your last ${BatteryLife.short(measured.minutes.toInt())} of listening"
+                val stale = if (freshBuds) "" else " · Last reading"
+                InfoRow(it, Glyph.BATTERY, BatteryLife.short(heroMinutes), source + stale)
             }
         }
         HealthCard(BatteryHealth.verdict(health))

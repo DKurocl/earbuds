@@ -26,6 +26,15 @@ object BatteryLife {
         return fullChargeMinutes(mode, rate) * level / 100
     }
 
+    /** Estimates use the current buds when at least one has reported, or the last known pair. */
+    internal fun forEstimate(battery: SonyProtocol.Battery, liveParts: Set<Int>): SonyProtocol.Battery {
+        if (0 !in liveParts && 1 !in liveParts) return battery
+        return battery.copy(
+            left = battery.left.takeIf { 0 in liveParts },
+            right = battery.right.takeIf { 1 in liveParts },
+        )
+    }
+
     /** Extra listening the case can add by recharging the earbuds. */
     fun caseMinutes(b: SonyProtocol.Battery, mode: Mode?, rate: Double? = null): Int? =
         b.case?.let { 2 * fullChargeMinutes(mode, rate) * it / 100 }
@@ -132,13 +141,12 @@ object BatteryLog {
                 (a.left != null) == (b.left != null) && (a.right != null) == (b.right != null)
         }
 
-    /** Minutes in the ears over the week before [now], and how many of them with noise cancelling. */
+    /** Estimated connected minutes for the last week and the portion attributed to noise cancelling. */
     data class Week(val minutes: Int, val anc: Int)
 
     /**
-     * The week's listening from the readings already kept: the time between two readings of the
-     * same out-of-case session (not charging, at most [MAX_GAP] apart) counts, in the mode of the
-     * first. Readings are sparse, so this is a floor, never an overstatement.
+     * Estimate the observed connection time from consecutive readings in the same non-charging
+     * session at most [MAX_GAP] apart. The first reading supplies the interval's mode.
      */
     fun week(samples: List<BatterySample>, now: Long): Week {
         var all = 0L; var anc = 0L

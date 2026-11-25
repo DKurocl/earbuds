@@ -95,7 +95,12 @@ object ChargeReminder {
 
 class ChargeReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) ChargeReminder.reschedule(ctx)
-        else ChargeReminder.fire(ctx)
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                ChargeReminder.reschedule(ctx)
+                LiveLink.ensureObserving(ctx)
+            }
+            else -> ChargeReminder.fire(ctx)
+        }
     }
 }

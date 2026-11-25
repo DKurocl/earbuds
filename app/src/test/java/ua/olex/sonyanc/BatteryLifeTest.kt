@@ -137,4 +137,11 @@ class BatteryLifeTest {
         assertEquals(BatteryLog.Week(0, 0), BatteryLog.week(listOf(sample(0, 90), sample(60, 70, charging = true)), 60 * min))
         assertEquals(2, BatteryLog.add(listOf(sample(0, 90)), sample(1, 90, mode = Mode.OFF)).size)
     }
+
+    @Test fun listeningEstimatesUseFreshBudsAndFallBackToTheLastReading() {
+        val cached = SonyProtocol.Battery(20, 85, 40)
+        assertEquals(408, BatteryLife.budsMinutes(BatteryLife.forEstimate(cached, setOf(1)), Mode.ANC))
+        assertEquals(96, BatteryLife.budsMinutes(BatteryLife.forEstimate(cached, setOf(2)), Mode.ANC))
+        assertEquals(cached, BatteryLife.forEstimate(cached, setOf(0, 1, 2)))
+    }
 }

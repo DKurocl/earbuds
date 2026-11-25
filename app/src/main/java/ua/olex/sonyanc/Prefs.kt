@@ -92,6 +92,9 @@ object Prefs {
     /** True/false once a broadcast or a working control link said so; null while unknown. */
     fun linked(ctx: Context): Boolean? = p(ctx).takeIf { it.contains("linked") }?.getBoolean("linked", false)
     internal fun linkedChanges(ctx: Context) = changes(ctx, setOf("linked")) { linked(ctx) }
+    internal fun tileLinkChanges(ctx: Context) = changes(ctx, setOf("linked", "device")) {
+        linked(ctx) to deviceAddress(ctx)
+    }
     internal fun timerChanges(ctx: Context) = changes(ctx, setOf("timer_until")) { AmbientTimer.until(ctx) }
 
     private fun <T> changes(ctx: Context, keys: Set<String>, value: () -> T) = callbackFlow {

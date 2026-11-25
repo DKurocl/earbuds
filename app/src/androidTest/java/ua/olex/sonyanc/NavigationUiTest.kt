@@ -98,6 +98,27 @@ class NavigationUiTest {
         )
     }
 
+    @Test fun returningFromAndroidSettingsKeepsTheEarbudsPageAndItsScroll() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command))
+            .bufferedReader().use { it.readText() }
+
+        compose.onNodeWithContentDescription("Settings").performClick()
+        val row = compose.onNodeWithText("Wallpaper colors")
+        row.performScrollTo().assertIsDisplayed()
+        val before = row.getBoundsInRoot()
+        val activity = compose.activity
+        try {
+            assertTrue(shell("am start -W -a android.settings.SETTINGS").contains("Status: ok"))
+            compose.waitUntil(10_000) { !activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        } finally {
+            shell("am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n ua.olex.sonyanc/.MainActivity")
+        }
+        compose.waitUntil(10_000) { activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        row.assertIsDisplayed()
+        assertEquals(before.top.value, row.getBoundsInRoot().top.value, 0.5f)
+    }
+
     @Test fun predictiveBackKeepsThePageStillWhenSystemAnimationsAreDisabled() {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command))

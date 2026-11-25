@@ -155,7 +155,7 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery, nc?.mode, live = 0 in batteryParts || 1 in batteryParts,
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, live = 0 in batteryParts || 1 in batteryParts,
                                 seenAt = batterySeenAt.takeUnless { linked == true }, onClick = onBatteryDetails,
                             )
                         }

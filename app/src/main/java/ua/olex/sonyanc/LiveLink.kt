@@ -10,6 +10,7 @@ import android.companion.DevicePresenceEvent
 import android.companion.ObservingDevicePresenceRequest
 import android.content.Context
 import android.content.IntentSender
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.annotation.RequiresApi
@@ -29,11 +30,13 @@ object LiveLink {
     @get:ChecksSdkIntAtLeast(api = 36)
     val supported get() = Build.VERSION.SDK_INT >= 36
 
+    fun available(ctx: Context) = supported && ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)
+
     private fun cdm(ctx: Context) = ctx.getSystemService(CompanionDeviceManager::class.java)
 
     /** The association for the saved earbuds, if the owner allowed one. */
     fun association(ctx: Context): AssociationInfo? {
-        if (!supported) return null
+        if (!available(ctx)) return null
         val address = Prefs.deviceAddress(ctx) ?: return null
         return runCatching { cdm(ctx)?.myAssociations.orEmpty() }.getOrDefault(emptyList())
             .firstOrNull { it.deviceMacAddress?.toString().equals(address, ignoreCase = true) }
@@ -48,7 +51,7 @@ object LiveLink {
     fun enable(ctx: Context, confirm: (IntentSender) -> Unit, done: (Boolean) -> Unit) {
         val address = Prefs.deviceAddress(ctx)
         val manager = cdm(ctx)
-        if (!supported || address == null || manager == null) {
+        if (!available(ctx) || address == null || manager == null) {
             Headphones.addLog("✗ Stay in sync: ${if (!supported) "needs Android 16" else if (address == null) "no earbuds chosen" else "no companion service"}")
             return done(false)
         }
@@ -57,10 +60,11 @@ object LiveLink {
             .addDeviceFilter(BluetoothDeviceFilter.Builder().setAddress(address).build())
             .setSingleDevice(true)
             .build()
-        manager.associate(request, ctx.mainExecutor, object : CompanionDeviceManager.Callback() {
+        val callback = object : CompanionDeviceManager.Callback() {
             override fun onAssociationPending(intentSender: IntentSender) = confirm(intentSender)
             override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                val current = address.equals(Prefs.deviceAddress(ctx), ignoreCase = true)
+                val current = address.equals(Prefs.deviceAddress(ctx), ignoreCase = true) &&
+                    address.equals(associationInfo.deviceMacAddress?.toString(), ignoreCase = true)
                 val observed = current && observe(ctx, associationInfo.id)
                 if (!observed) runCatching { manager.disassociate(associationInfo.id) }
                 done(observed)
@@ -69,7 +73,12 @@ object LiveLink {
                 Headphones.addLog("✗ companion: $error")
                 done(false)
             }
-        })
+        }
+        runCatching { manager.associate(request, ctx.mainExecutor, callback) }
+            .onFailure {
+                Headphones.addLog("✗ companion association: ${it.message}")
+                done(false)
+            }
     }
 
     /** Called after the consent dialog: observing starts in onAssociationCreated; this covers a cancel. */
@@ -77,10 +86,10 @@ object LiveLink {
 
     fun disable(ctx: Context) {
         if (!supported) return
+        Headphones.stay(false)
         val info = association(ctx) ?: return
         runCatching { cdm(ctx)?.stopObservingDevicePresence(ObservingDevicePresenceRequest.Builder().setAssociationId(info.id).build()) }
         runCatching { cdm(ctx)?.disassociate(info.id) }
-        Headphones.stay(false)
     }
 
     /** A new pair of earbuds was chosen: the old association no longer applies. */
@@ -92,7 +101,7 @@ object LiveLink {
 
     @SuppressLint("MissingPermission") // REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE is a normal permission
     private fun observe(ctx: Context, id: Int): Boolean {
-        if (!supported) return false
+        if (!supported || !available(ctx)) return false
         val manager = cdm(ctx) ?: return false
         return runCatching {
             manager.startObservingDevicePresence(ObservingDevicePresenceRequest.Builder().setAssociationId(id).build())

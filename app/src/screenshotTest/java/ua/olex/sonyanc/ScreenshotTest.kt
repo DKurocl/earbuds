@@ -2,6 +2,7 @@ package ua.olex.sonyanc
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.runtime.mutableStateOf
@@ -265,6 +266,15 @@ class ScreenshotTest {
 
     @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
     @Test fun batteryPageLight() = shoot("page-battery-light") { BatteryContent(weekOfUse(), NOW) }
+
+    @Test fun cachedBatteryPageIdentifiesTheLastReading() {
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                BatteryContent(emptyList(), NOW, device = DeviceState(battery = SonyProtocol.Battery(20, 85, 40)))
+            }
+        }
+        compose.onNodeWithText("Last reading").assertIsDisplayed()
+    }
 
     @Test fun batteryPageEmpty() = shoot("page-battery-empty") { BatteryContent(emptyList(), NOW) }
 

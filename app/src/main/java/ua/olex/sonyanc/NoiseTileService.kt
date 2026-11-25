@@ -6,7 +6,7 @@ import android.service.quicksettings.TileService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import ua.olex.sonyanc.SonyProtocol.Mode
 
 /** Uses the widget's bounded reconnect and acknowledgement path, without opening the app. */
 class NoiseTileService : TileService() {
@@ -16,11 +16,10 @@ class NoiseTileService : TileService() {
         Headphones.init(this)
         listening?.cancel()
         listening=CoroutineScope(Dispatchers.Main).launch {
-            Headphones.state.combine(Prefs.linkedChanges(this@NoiseTileService)) { device, linked ->
-                Triple(device.shownNc?.mode, linked, device.pending != null)
-            }.distinctUntilChanged().collect { (mode, linked, applying) ->
-                val needsSetup = !Headphones.hasPermission(this@NoiseTileService) ||
-                    Prefs.deviceAddress(this@NoiseTileService) == null
+            Headphones.state.combine(Prefs.tileLinkChanges(this@NoiseTileService)) { device, (linked, address) ->
+                val needsSetup = !Headphones.hasPermission(this@NoiseTileService) || address == null
+                TileState(device.shownNc?.mode, linked, device.pending != null, needsSetup)
+            }.distinctUntilChanged().collect { (mode, linked, applying, needsSetup) ->
                 qsTile?.apply {
                     label = "Noise control"
                     subtitle = when {
@@ -51,13 +50,18 @@ class NoiseTileService : TileService() {
         }
         if (Prefs.linked(this) == false) return
         val current=(Headphones.state.value.shownNc ?: Prefs.lastNc(this))?.mode
-        val next=when(current) {
-            SonyProtocol.Mode.ANC -> SonyProtocol.Mode.AMBIENT
-            SonyProtocol.Mode.AMBIENT -> if(Prefs.tileTwoWay(this)) SonyProtocol.Mode.ANC else SonyProtocol.Mode.OFF
-            else -> SonyProtocol.Mode.ANC
-        }
-        sendBroadcast(Intent(this,ModeWidget::class.java).setAction("ua.olex.sonyanc.SET_MODE").putExtra("mode",next.name))
+        sendBroadcast(ModeWidget.modeIntent(this, nextMode(current, Prefs.tileTwoWay(this))))
     }
     override fun onStopListening() {listening?.cancel();listening=null;super.onStopListening()}
     override fun onDestroy() {listening?.cancel();super.onDestroy()}
+
+    private data class TileState(val mode: Mode?, val linked: Boolean?, val applying: Boolean, val needsSetup: Boolean)
+
+    companion object {
+        internal fun nextMode(current: Mode?, twoWay: Boolean): Mode = when (current) {
+            Mode.ANC -> Mode.AMBIENT
+            Mode.AMBIENT -> if (twoWay) Mode.ANC else Mode.OFF
+            else -> Mode.ANC
+        }
+    }
 }

@@ -46,7 +46,8 @@ class MainActivity : ComponentActivity() {
     private val shortcutMode = mutableStateOf<Mode?>(null)
 
     private fun consumeIntent(intent: Intent?) {
-        shortcutMode.value = intent?.getStringExtra("hush.mode")?.let { name -> runCatching { Mode.valueOf(name) }.getOrNull() }
+        shortcutMode.value = parseShortcutMode(intent?.getStringExtra(SHORTCUT_MODE))
+        intent?.removeExtra(SHORTCUT_MODE)
     }
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); consumeIntent(intent) }
@@ -57,7 +58,8 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) Intro.prepare()
         SplashHandoff.install(this)
         Headphones.init(this)
-        consumeIntent(intent)
+        if (savedInstanceState == null) consumeIntent(intent)
+        else shortcutMode.value = parseShortcutMode(savedInstanceState.getString(SHORTCUT_MODE))
         // Picker previews are a binder call per widget; keep them off the first frame.
         Thread {
             Widgets.publishPreviews(applicationContext)
@@ -79,6 +81,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(SHORTCUT_MODE, shortcutMode.value?.name)
+    }
+
+    private fun parseShortcutMode(name: String?) = Mode.entries.firstOrNull { it.name == name }
+
+    companion object {
+        private const val SHORTCUT_MODE = "hush.mode"
     }
 
     // A started screen owns the control link; a quick swipe away can reuse an open socket.
@@ -312,7 +325,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         },
                         tileTwoWay = model.tileTwoWay, onTileTwoWay = model::updateTileTwoWay,
                         ambientMinutes = model.ambientMinutes, onAmbientMinutes = model::updateAmbientMinutes,
-                        liveLink = if (LiveLink.supported && model.saved != null) model.liveLink else null, onLiveLink = ::setLiveLink,
+                        liveLink = if (LiveLink.available(ctx) && model.saved != null) model.liveLink else null, onLiveLink = ::setLiveLink,
                         connectSheet = model.connectSheet, onConnectSheet = model::updateConnectSheet,
                         onBluetooth = ::bluetooth, onDiagnostics = { open(Page.DIAGNOSTICS) },
                         onVibrations = { open(Page.VIBRATIONS) },

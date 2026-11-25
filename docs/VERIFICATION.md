@@ -58,6 +58,25 @@ An isolated 96 ms battery-fill regression probe recorded six composition changes
 
 The Ambient countdown waits for the headphones to confirm Ambient, and a replaced timer keeps its original return mode. Existing alarm and notification actions carry the expiry they belong to. The App Functions battery response captures the snapshot while its connection lease is active, exposes current readings as numbers, and identifies cached levels in the spoken summary.
 
+### Final test session
+
+`bash docs/review/capture-pixel-evidence.sh baseline home` and the matching `candidate`
+command save the visible screen, Android and app versions, display state, frame data, memory,
+and phone battery for the connected Pixel. Set `ANDROID_SERIAL` if multiple devices are
+attached. A snapshot is complete when its folder contains `status.txt`. The script preserves
+the current screen and performance counters. Capture each matched scenario with the same
+wallpaper, scale, app state and listening setup.
+
+The automated integration suite opens Android Settings over Earbuds and returns to the
+existing page and scroll position. It exercises both player-slot widget edges, the mode
+segment's setup intent, both battery widget entry points and the Quick Settings cycle.
+Use the Pixel Launcher and actual Bluetooth headset for the final trigger and delivery checks.
+
+In the Battery page the weekly figure is an estimate of connected time between readings.
+A case-only report keeps the playback estimate labeled as the last reading. If a bud has
+reported, the estimate uses the reported buds. The cached level of an unavailable bud remains
+visible as its last known value.
+
 ## 2.1 on the Pixel 10 Pro XL
 
 Use a physical Pixel 10 Pro XL with Smooth Display enabled and its WF-1000XM5 paired. Record the
