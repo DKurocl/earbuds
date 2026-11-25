@@ -24,6 +24,16 @@ class PortableSettingsTest {
         assertTrue(Prefs.cachedFeatures(ctx).isEmpty())
     }
 
+    @Test fun turningEqualizerOffPreservesTheLastConfirmedPresetForThisPair() {
+        assertEquals(0xA0, Prefs.lastEnabledEqualizerPreset(ctx))
+        Prefs.cacheEqualizer(ctx, EqualizerProtocol.State(0xA2, emptyList()))
+        Prefs.cacheEqualizer(ctx, EqualizerProtocol.State(0, emptyList()))
+        assertEquals(0xA2, Prefs.lastEnabledEqualizerPreset(ctx))
+        assertEquals(0, Prefs.cachedEqualizer(ctx)?.preset)
+        Prefs.replaceDevice(ctx, "00:11:22:33:44:77", "New pair")
+        assertEquals(0xA0, Prefs.lastEnabledEqualizerPreset(ctx))
+    }
+
     @Test fun backupRoundTripRestoresPortableSettingsWithoutReplacingThePairedDevice() {
         val profile = PersonalProfile(SonyProtocol.NcState(SonyProtocol.Mode.ANC), null, mapOf(Feature.DSEE to true))
         Prefs.savePersonalProfile(ctx, 1, profile)

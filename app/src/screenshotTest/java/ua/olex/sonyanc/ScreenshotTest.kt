@@ -141,10 +141,11 @@ class ScreenshotTest {
 
     @Test fun equalizerChangesTheBandBeforeWritingItOnRelease() {
         val writes = mutableListOf<List<Int>>()
+        val live = mutableStateOf(EqualizerProtocol.State(0xA0, List(6) { 0 }))
         compose.setContent {
             AppTheme(dynamic = false) {
                 EqualizerContent(
-                    state = EqualizerProtocol.State(0xA0, List(6) { 0 }),
+                    state = live.value,
                     busy = false,
                     unavailable = false,
                     onBands = { writes.add(it) },
@@ -159,11 +160,15 @@ class ScreenshotTest {
         compose.onNode(SemanticsMatcher("positive 16 kHz gain") {
             it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { value -> value.startsWith("16 kHz, +") }
         }).assertIsDisplayed()
-        compose.runOnIdle { assertTrue(writes.isEmpty()) }
+        compose.runOnIdle {
+            assertTrue(writes.isEmpty())
+            live.value = EqualizerProtocol.State(0xA0, listOf(3, 0, 0, 0, 0, 0))
+        }
         curve.performTouchInput { up() }
         compose.runOnIdle {
             assertEquals(1, writes.size)
             assertTrue(writes.single().last() > 0)
+            assertEquals(3, writes.single().first())
         }
     }
 

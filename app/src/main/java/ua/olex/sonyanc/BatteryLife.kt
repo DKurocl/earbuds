@@ -162,14 +162,30 @@ object BatteryLog {
     /** Percent per minute for [mode]'s bucket, or null until there is enough real use. */
     fun rate(samples: List<BatterySample>, mode: Mode?): Double? = drain(samples, mode)?.rate
 
+    internal data class EarbudDrain(val left: Drain, val right: Drain) {
+        fun minutesLeft(battery: SonyProtocol.Battery, mode: Mode?): Int? {
+            val leftMinutes = battery.left?.let { BatteryLife.fullChargeMinutes(mode, left.rate) * it / 100 }
+            val rightMinutes = battery.right?.let { BatteryLife.fullChargeMinutes(mode, right.rate) * it / 100 }
+            return listOfNotNull(leftMinutes, rightMinutes).minOrNull()
+        }
+    }
+
+    internal fun perEarbudDrain(samples: List<BatterySample>, mode: Mode?): EarbudDrain? {
+        val left = measure(samples, mode, BatterySample::left) ?: return null
+        val right = measure(samples, mode, BatterySample::right) ?: return null
+        return EarbudDrain(left, right)
+    }
+
     /** The measured drain and how much use it rests on, or null until there is enough. */
-    fun drain(samples: List<BatterySample>, mode: Mode?): Drain? {
+    fun drain(samples: List<BatterySample>, mode: Mode?): Drain? = measure(samples, mode, BatterySample::level)
+
+    private fun measure(samples: List<BatterySample>, mode: Mode?, level: (BatterySample) -> Int?): Drain? {
         var minutes = 0.0
         var drop = 0
         val modeBucket = bucket(mode) ?: return null
         for ((a, b) in intervals(samples)) {
-            val start = a.level ?: continue
-            val end = b.level ?: continue
+            val start = level(a) ?: continue
+            val end = level(b) ?: continue
             if (end > start || bucket(a.mode) != modeBucket || bucket(b.mode) != modeBucket) continue
             minutes += (b.at - a.at) / 60_000.0
             drop += start - end

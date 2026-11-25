@@ -107,6 +107,23 @@ class SonyConnectionTest {
         }
     }
 
+    @Test fun emptyCommandDoesNotReachPayloadReaders() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val stream = Stream()
+        val delivered = CompletableDeferred<ByteArray>()
+        val connection = session(scope) { _, payload -> delivered.complete(payload) }
+        try {
+            connection.attach(stream)
+            stream.feed(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, 0, byteArrayOf()))
+            val expected = byteArrayOf(0x57, 0, 0, 0)
+            stream.feed(SonyProtocol.frame(SonyProtocol.TYPE_COMMAND, 1, expected))
+            assertArrayEquals(expected, withTimeout(1_000) { delivered.await() })
+        } finally {
+            connection.close()
+            scope.cancel()
+        }
+    }
+
     @Test fun fragmentedCommandTablesAndEscapesReachTheDecoder()= runBlocking {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
         val seen=CopyOnWriteArrayList<Pair<Int,String>>()

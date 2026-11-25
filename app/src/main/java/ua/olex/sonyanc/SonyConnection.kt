@@ -205,6 +205,7 @@ class SonyConnection(
             s.output.write(SonyProtocol.frame(SonyProtocol.TYPE_ACK, 1 - f.seq, byteArrayOf()))
             s.output.flush()
         }
+        if (f.payload.isEmpty()) return
         log("← [%02X] %s".format(f.type, SonyProtocol.hex(f.payload)))
         synchronized(this) {
             if (socket === s) onPayload(f.type, f.payload)

@@ -136,7 +136,7 @@ fun HushScreen(
                 !hasDevice -> "No earbuds selected"
                 !paired -> "Earbuds are no longer paired"
                 ready || (linked == true && status != Headphones.Status.FAILED) -> "Connected"
-                linked == false -> lastSeen?.let {
+                linked == false -> (lastSeen ?: batterySeenAt)?.let {
                     "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
                 } ?: "Earbuds disconnected"
                 connecting -> statusText(status)
@@ -159,8 +159,7 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, live = 0 in batteryParts || 1 in batteryParts,
-                                seenAt = batterySeenAt.takeUnless { linked == true }, onClick = onBatteryDetails,
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, onClick = onBatteryDetails,
                             )
                         }
                     }
@@ -371,12 +370,18 @@ private fun BatteryRing(
                 }, Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp).graphicsLayer { alpha = shown }, chipContent, filled = true,
             )
         }
-        // The number rolls digit by digit when a new reading arrives.
-        RollingText(
-            "$label: " + (value?.let { "$it%" } ?: "\u2014"), MaterialTheme.typography.titleMedium,
+        Row(
             Modifier.padding(horizontal = 4.dp).graphicsLayer { alpha = shown; translationY = (1 - shown) * 6.dp.toPx() },
-            color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+            RollingText(
+                value?.let { "$it%" } ?: "\u2014", MaterialTheme.typography.titleMediumEmphasized,
+                Modifier.weight(1f, fill = false),
+                color = if (value != null && value <= 20 && !charging) cs.error else cs.onSurface,
+            )
+        }
     }
 }
 
@@ -397,7 +402,7 @@ private fun BudArt(image: androidx.compose.ui.graphics.painter.Painter) {
     Image(image, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
 }
 
-/** A home action: Material's medium tonal icon button (wide); it squares off while pressed. */
+/** A home action: A compact tonal action with an expressive press shape. */
 @Composable
 private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val press = remember { MutableInteractionSource() }
@@ -406,7 +411,7 @@ private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onCl
         FilledTonalIconButton(
             onClick = onClick, enabled = enabled,
             shapes = IconButtonDefaults.shapes(), interactionSource = press,
-            modifier = Modifier.size(IconButtonDefaults.mediumContainerSize(IconButtonDefaults.IconButtonWidthOption.Wide))
+            modifier = Modifier.size(width = 56.dp, height = 48.dp)
                 .semantics { contentDescription = label },
         ) {
             // The icon fills in under the finger, as the button squares off.
@@ -672,8 +677,7 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
  * case adds. Big numbers on tonal icons, centered; the age of the reading only when it is old.
  */
 @Composable
-private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boolean, seenAt: Long?, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
+private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, onClick: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // The owner's measured drain once known; Sony's rating until then.
     val rate = remember(battery, mode) { Prefs.drainRate(ctx, mode) }
@@ -683,23 +687,20 @@ private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, live: Boo
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Both tiles have the same parts, so they come out the same height without intrinsics
         // (which the rolling digits, built on AnimatedContent, cannot answer).
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60, onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60, innerEnd = case != null, onClick = onClick) {
                 HushIcon(Glyph.EARBUDS, Modifier.size(22.dp), it, filled = true)
             }
-            if (case != null) StatTile("+" + BatteryLife.short(case), "From the case", Modifier.weight(1f), onClick = onClick) {
+            if (case != null) StatTile("+" + BatteryLife.short(case), "Case reserve", Modifier.weight(1f), innerStart = true, onClick = onClick) {
                 Icon(painterResource(R.drawable.ic_case_mark), null, tint = it, modifier = Modifier.size(22.dp))
             }
         }
-        if (!live && seenAt != null) Text(
-            "Last reading " + DateUtils.getRelativeTimeSpanString(seenAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS),
-            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
-        )
+
     }
 }
 
 @Composable
-private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, onClick: () -> Unit = {}, icon: @Composable (Color) -> Unit) {
+private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, innerStart: Boolean = false, innerEnd: Boolean = false, onClick: () -> Unit = {}, icon: @Composable (Color) -> Unit) {
     val cs = MaterialTheme.colorScheme
     // Calm tiles: a neutral icon disc, so the mode toolbar stays the screen's one accent; only a
     // low battery takes color.
@@ -712,7 +713,9 @@ private fun StatTile(value: String, label: String, modifier: Modifier, low: Bool
     val pressed by press.collectIsPressedAsState()
     val corner by animateDpAsState(if (pressed) 20.dp else PageMotion.CARD_CORNER, MaterialTheme.motionScheme.fastSpatialSpec(), label = "corner")
     val squeeze by animateFloatAsState(if (pressed) 0.96f else 1f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "squeeze")
-    Surface(onClick = onClick, shape = RoundedCornerShape(corner), color = Surfaces.card, interactionSource = press,
+    val start = if (innerStart) 10.dp else corner
+    val end = if (innerEnd) 10.dp else corner
+    Surface(onClick = onClick, shape = RoundedCornerShape(start, end, end, start), color = Surfaces.card, interactionSource = press,
         modifier = modifier
             .graphicsLayer { scaleX = squeeze; scaleY = squeeze }
             .semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {

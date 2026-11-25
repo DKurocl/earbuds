@@ -31,55 +31,83 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 import kotlin.math.log10
 import kotlin.math.roundToInt
+
+private class EqualizerWrite(val shown: EqualizerProtocol.State, val preset: Int?, val bands: List<Int>?)
 
 @Composable
 fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val eq by Headphones.equalizer.collectAsState()
     val scope = rememberCoroutineScope()
-    // Only the read gates the controls; a write keeps everything as it is (no dimming, no
-    // spinner), shows the choice at once and settles when the earbuds answer.
-    var busy by remember { mutableStateOf(true) }
+    // Only the first live read gates editing. Refreshes leave active controls in place.
+    var busy by remember { mutableStateOf(eq == null) }
     var failed by remember { mutableStateOf(false) }
     var refused by remember { mutableStateOf(false) }
-    var pending by remember { mutableStateOf<EqualizerProtocol.State?>(null) }
+    var pending by remember { mutableStateOf<EqualizerWrite?>(null) }
+    val writes = remember { Channel<EqualizerWrite>(Channel.CONFLATED) }
+    LaunchedEffect(writes) {
+        for (request in writes) {
+            val confirmed = Headphones.writeEqualizer(request.preset, request.bands)
+            if (pending === request) {
+                refused = !confirmed
+                pending = null
+            }
+        }
+    }
     suspend fun load() {
-        busy = true
+        busy = eq == null
         try { failed = Headphones.readEqualizer() == null } finally { busy = false }
     }
     LaunchedEffect(resumeTick) { load() }
     fun write(preset: Int? = null, bands: List<Int>? = null) {
         val base = eq ?: return
         val shown = if (bands != null) EqualizerProtocol.State(CUSTOM, bands) else base.copy(preset = preset ?: base.preset)
-        pending = shown
-        scope.launch {
-            refused = false
-            refused = !Headphones.writeEqualizer(preset, bands)
-            if (pending == shown) pending = null
-        }
+        val request = EqualizerWrite(shown, preset, bands)
+        pending = request
+        refused = false
+        writes.trySend(request)
     }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val state = eq ?: return@rememberLauncherForActivityResult
-        uri?.let { runCatching { ctx.contentResolver.openOutputStream(it, "wt")?.use { o -> o.write(EqualizerFile.write(state).toByteArray()) } } }
-            ?.let { toast(ctx, if (it.isSuccess) "Sound exported" else "Couldn't save the file") }
+        if (uri != null) scope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    ctx.contentResolver.openOutputStream(uri, "wt")?.use { output ->
+                        output.write(EqualizerFile.write(state).toByteArray())
+                    } != null
+                }.getOrDefault(false)
+            }
+            toast(ctx, if (saved) "Sound exported" else "Couldn't save the file")
+        }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        val text = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
-        val bands = text?.let(EqualizerFile::read)
-        if (bands == null) toast(ctx, "This file isn't an Earbuds sound") else write(bands = bands)
+        if (uri != null) scope.launch {
+            val bands = withContext(Dispatchers.IO) {
+                val text = runCatching {
+                    ctx.contentResolver.openInputStream(uri)?.use { input ->
+                        input.readNBytes(32_769).takeIf { it.size <= 32_768 }?.decodeToString()
+                    }
+                }.getOrNull()
+                text?.let(EqualizerFile::read)
+            }
+            if (bands == null) toast(ctx, "This file isn't an Earbuds sound") else write(bands = bands)
+        }
     }
     // The last known sound shows at once while the earbuds are asked again; controls stay
     // disabled until the live answer arrives (busy), so nothing is ever written from the cache.
     val cached = remember { Prefs.cachedEqualizer(ctx) }
     EqualizerContent(
-        pending ?: eq ?: cached.takeIf { busy }, busy, failed && eq == null, onBack,
+        pending?.shown ?: eq ?: cached.takeIf { busy }, busy, failed && eq == null, onBack,
         onRetry = { scope.launch { load() } },
         onPreset = { write(preset = it) },
         onBands = { write(bands = it) },
+        onToggle = { write(preset = if (it) Prefs.lastEnabledEqualizerPreset(ctx) else OFF) },
         refused = refused,
         onExport = { exporter.launch("Earbuds sound.json") },
         onImport = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
@@ -128,6 +156,7 @@ fun EqualizerContent(
     state: EqualizerProtocol.State?, busy: Boolean, unavailable: Boolean, onBack: () -> Unit = {},
     onRetry: () -> Unit = {}, onPreset: (Int) -> Unit = {}, onBands: (List<Int>) -> Unit = {}, refused: Boolean = false,
     onExport: () -> Unit = {}, onImport: () -> Unit = {},
+    onToggle: (Boolean) -> Unit = { onPreset(if (it) CUSTOM else OFF) },
 ) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Equalizer", onBack, actions = {
@@ -157,9 +186,13 @@ fun EqualizerContent(
             state == null -> Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
             else -> {
                 val editable = !busy
-                // Local copy while dragging; replaced whenever the earbuds report new values.
-                var bands by remember(state) { mutableStateOf(state.bands) }
                 val on = state.preset != OFF
+                var held by remember { mutableStateOf<Int?>(null) }
+                var adjustingBass by remember { mutableStateOf(false) }
+                var bands by remember { mutableStateOf(state.bands) }
+                LaunchedEffect(state, held, adjustingBass) {
+                    if (held == null && !adjustingBass) bands = state.bands
+                }
                 SoundCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -167,7 +200,7 @@ fun EqualizerContent(
                             Text(if (on) EqualizerProtocol.presets[state.preset] ?: "Custom" else "Off",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         }
-                        Switch(checked = on, enabled = editable, onCheckedChange = { onPreset(if (it) CUSTOM else OFF) },
+                        Switch(checked = on, enabled = editable, onCheckedChange = onToggle,
                             thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
                             modifier = Modifier.semantics { contentDescription = "Equalizer" })
                     }
@@ -193,11 +226,15 @@ fun EqualizerContent(
                     Rows("Your sound", listOf(yours))
                     Rows("Presets", listOf(sony.take(3), sony.subList(3, 6), sony.drop(6)))
                     if (bands.size == 6) {
-                        var held by remember { mutableStateOf<Int?>(null) }
-                        EqCurve(bands.drop(1), editable, on, held,
+                        EqCurve(bands.drop(1), editable && on, on, held,
                             onHold = { held = it },
                             onGain = { i, v -> bands = bands.toMutableList().also { it[i + 1] = v } },
-                            onDone = { onBands(bands) })
+                            onDone = {
+                                val index = held?.plus(1)
+                                if (index != null && state.bands.size == 6) {
+                                    onBands(state.bands.toMutableList().also { it[index] = bands[index] })
+                                }
+                            })
                         // Each band's value, under its place on the curve.
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             BAND_HZ.forEachIndexed { i, hz ->
@@ -222,11 +259,12 @@ fun EqualizerContent(
                         Text(signed(bands[0]), style = MaterialTheme.typography.titleMedium, color = if (bands[0] != 0) cs.primary else cs.onSurfaceVariant)
                     }
                     val clearBass = remember { SliderState(value = bands[0].toFloat(), steps = 19, trackRange = -10f..10f) }
-                    LaunchedEffect(bands[0]) { if (clearBass.value.roundToInt() != bands[0]) clearBass.value = bands[0].toFloat() }
+                    LaunchedEffect(bands[0]) { if (!adjustingBass) clearBass.value = bands[0].toFloat() }
                     val feedback = LocalHapticFeedback.current
                     Slider(
-                        state = clearBass, enabled = editable,
+                        state = clearBass, enabled = editable && on,
                         onValueChange = {
+                            adjustingBass = true
                             clearBass.value = it
                             val step = clearBass.value.roundToInt()
                             if (step != bands[0]) {
@@ -234,8 +272,14 @@ fun EqualizerContent(
                                 bands = bands.toMutableList().also { b -> b[0] = step }
                             }
                         },
-                        onValueChangeFinished = { onBands(bands) },
-                        track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = editable, drawTick = { _, _ -> }) },
+                        onValueChangeFinished = {
+                            adjustingBass = false
+                            val gain = clearBass.value.roundToInt()
+                            if (state.bands.size == 6 && gain != state.bands[0]) {
+                                onBands(state.bands.toMutableList().also { it[0] = gain })
+                            }
+                        },
+                        track = { SliderDefaults.CenteredTrack(sliderState = it, enabled = editable && on, drawTick = { _, _ -> }) },
                         modifier = Modifier.semantics { contentDescription = "Clear Bass" },
                     )
                 }

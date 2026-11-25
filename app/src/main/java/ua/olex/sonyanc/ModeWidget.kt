@@ -27,10 +27,14 @@ import java.util.concurrent.atomic.AtomicLong
  * No persistent service or notification. Large slots get the dashboard.
  */
 class ModeWidget : AppWidgetProvider() {
-    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) = render(ctx,mgr,ids)
+    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) = render(ctx, mgr, ids, force = true)
     override fun onAppWidgetOptionsChanged(ctx:Context,mgr:AppWidgetManager,id:Int,options:Bundle) {
         super.onAppWidgetOptionsChanged(ctx,mgr,id,options)
-        render(ctx,mgr,intArrayOf(id))
+        render(ctx, mgr, intArrayOf(id), force = true)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        appWidgetIds.forEach { renderedControls.remove(it) }
     }
 
     override fun onReceive(ctx: Context, intent: Intent) {
@@ -100,17 +104,31 @@ class ModeWidget : AppWidgetProvider() {
             if(ids.isNotEmpty()) render(ctx,mgr,ids)
         }
 
-        private fun render(ctx:Context,mgr:AppWidgetManager,ids:IntArray) {
-            val current=Prefs.lastNc(ctx)?.mode
-            val linked=Prefs.linked(ctx)
-            for(id in ids) {
+        private data class RenderedControls(
+            val sizes: List<SizeF>, val current: SonyProtocol.Mode?, val pending: SonyProtocol.Mode?,
+            val away: Boolean, val fontScale: Float, val densityDpi: Int, val uiMode: Int,
+        )
+
+        // Provider callbacks and refreshAll both run on the main thread.
+        private val renderedControls = mutableMapOf<Int, RenderedControls>()
+
+        private fun render(ctx: Context, mgr: AppWidgetManager, ids: IntArray, force: Boolean = false) {
+            val current = Prefs.lastNc(ctx)?.mode
+            val linked = Prefs.linked(ctx)
+            val pending = busyMode
+            val configuration = ctx.resources.configuration
+            for (id in ids) {
                 val options = mgr.getAppWidgetOptions(id)
                 val sizes = Widgets.sizes(options, FALLBACK)
                 val category = options.getInt(AppWidgetManager.OPTION_APPWIDGET_HOST_CATEGORY)
                 val showDashboard = category == android.appwidget.AppWidgetProviderInfo.WIDGET_CATEGORY_KEYGUARD
-                mgr.updateAppWidget(id,Widgets.forSizes(sizes){
-                    viewsFor(ctx,it.width,it.height,current,busyMode,linked=linked,showDashboard=showDashboard)
+                val controls = RenderedControls(sizes, current, pending, linked == false,
+                    configuration.fontScale, configuration.densityDpi, configuration.uiMode)
+                if (!force && !showDashboard && renderedControls[id] == controls) continue
+                mgr.updateAppWidget(id, Widgets.forSizes(sizes) {
+                    viewsFor(ctx, it.width, it.height, current, pending, linked = linked, showDashboard = showDashboard)
                 })
+                if (showDashboard) renderedControls.remove(id) else renderedControls[id] = controls
             }
         }
 

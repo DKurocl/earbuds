@@ -61,15 +61,22 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
         val heroBattery = device?.battery?.let { BatteryLife.forEstimate(it, liveParts) }
         val heroMode = device?.nc?.mode
         val measured = remember(log, heroMode) { BatteryLog.drain(log, heroMode) }
-        val heroMinutes = heroBattery?.let { BatteryLife.budsMinutes(it, heroMode, measured?.rate) }
+        val perEar = remember(log, heroMode) { BatteryLog.perEarbudDrain(log, heroMode) }
+        val heroMinutes = heroBattery?.let { perEar?.minutesLeft(it, heroMode) ?: BatteryLife.budsMinutes(it, heroMode, measured?.rate) }
         if (heroMinutes != null) {
             val ctx = LocalContext.current
             val until = android.text.format.DateFormat.getTimeFormat(ctx).format(java.util.Date(now + heroMinutes * 60_000L))
             Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(if (freshBuds) "Until about $until" else "Last reading", style = MaterialTheme.typography.headlineMediumEmphasized)
-                Text(BatteryLife.short(heroMinutes) + " of listening" +
-                    (BatteryLife.caseMinutes(heroBattery, heroMode, measured?.rate)?.takeIf { it >= 10 }?.let { " · the case adds " + BatteryLife.short(it) } ?: ""),
-                    style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+                val source = when {
+                    perEar != null -> "Measured separately for each earbud"
+                    measured != null -> "Based on ${BatteryLife.short(measured.minutes.toInt())} of readings"
+                    else -> "Sony estimate"
+                }
+                val reserve = BatteryLife.caseMinutes(heroBattery, heroMode, measured?.rate)
+                    ?.takeIf { it >= 10 }?.let { " · +${BatteryLife.short(it)} in case" }.orEmpty()
+                Text("${BatteryLife.short(heroMinutes)} of listening$reserve", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+                Text(source, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
         }
         val week = log.filter { now - it.at in 0..7 * 24 * 60 * 60_000L }
@@ -101,14 +108,6 @@ fun BatteryContent(log: List<BatterySample>, now: Long, onBack: () -> Unit = {},
             item {
                 InfoRow(it, Glyph.INSIGHTS, "About ${BatteryLife.short(observed.minutes)} connected",
                     if (observed.anc >= 1) "About ${BatteryLife.short(observed.anc)} with noise cancelling" else "No noise cancelling readings")
-            }
-        }
-        if (heroMinutes != null) ListGroup("Listening time left") {
-            item {
-                val source = if (measured == null) "Sony estimate"
-                    else "Based on ${BatteryLife.short(measured.minutes.toInt())} of readings"
-                val stale = if (freshBuds) "" else " · Last reading"
-                InfoRow(it, Glyph.BATTERY, BatteryLife.short(heroMinutes), source + stale)
             }
         }
         HealthCard(BatteryHealth.verdict(health))
@@ -215,8 +214,11 @@ private fun WeekChart(samples: List<BatterySample>, now: Long, separate: Boolean
                     if (v == null) continue
                     val p = prev
                     val gap = if (perSession) 3 * 60 * 60_000L else 36 * 60 * 60_000L
-                    if (p == null || (perSession && p.session != s.session) || s.at - p.at > gap) path.moveTo(x(s.at), y(v))
-                    else path.lineTo(x(s.at), y(v))
+                    val point = Offset(x(s.at), y(v))
+                    if (p == null || (perSession && p.session != s.session) || s.at - p.at > gap) {
+                        path.moveTo(point.x, point.y)
+                        drawCircle(color, 2.dp.toPx(), point)
+                    } else path.lineTo(point.x, point.y)
                     prev = s
                 }
                 drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
