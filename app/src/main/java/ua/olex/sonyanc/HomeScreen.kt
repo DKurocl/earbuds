@@ -114,16 +114,12 @@ fun HushScreen(
     }) { insets ->
         val density = LocalDensity.current
         var dockHeight by remember { mutableStateOf(0.dp) }
-        var optionsHeight by remember { mutableStateOf(0.dp) }
-        val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        val optionsClearance = if (optionsHeight > 0.dp) dockHeight else 0.dp
-        val dockClearance = if (showModeDock && optionsClearance == 0.dp) (dockHeight - navigationBottom).coerceAtLeast(0.dp) else 0.dp
         Box(Modifier.padding(top = insets.calculateTopPadding()).fillMaxSize()) {
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = manualRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
-            modifier = Modifier.fillMaxSize().padding(bottom = optionsClearance),
+            modifier = Modifier.fillMaxSize(),
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = manualRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter).then(
@@ -133,8 +129,8 @@ fun HushScreen(
         ) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = UiTokens.pageInset)
-                .then(if (optionsClearance == 0.dp) Modifier.navigationBarsPadding() else Modifier)
-                .padding(bottom = dockClearance),
+                .then(if (!showModeDock) Modifier.navigationBarsPadding() else Modifier)
+                .padding(bottom = if (showModeDock) dockHeight else 0.dp),
             verticalArrangement = Arrangement.spacedBy(UiTokens.homeSectionGap),
         ) {
             when {
@@ -189,12 +185,10 @@ fun HushScreen(
             Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
         ) {
             val options = pending?.takeIf { it.mode == nc?.mode } ?: nc
-            Box(Modifier.onSizeChanged { optionsHeight = with(density) { it.height.toDp() } }) {
-                FloatingModeOptions(
-                    options.takeIf { canControl }, ::choose,
-                    DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient),
-                )
-            }
+            FloatingModeOptions(
+                options.takeIf { canControl }, ::choose,
+                DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient),
+            )
             ModeDock(nc, pending, canControl, ::choose)
         }
         }
@@ -208,8 +202,9 @@ private fun ConnectionStatus(status: String, busy: Boolean) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start),
     ) {
         Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        if (busy) LoadingIndicator(Modifier.size(20.dp))
+            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite })
+        if (busy) LoadingIndicator(Modifier.size(16.dp))
     }
 }
 
@@ -432,12 +427,17 @@ private fun FloatingModeOptions(state: NcState?, onChoose: (NcState) -> Unit, ex
         enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Top),
         exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Top),
     ) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            shape = UiTokens.compactCardShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shadowElevation = 6.dp,
+        ) {
             AnimatedContent(
                 lastCard, label = "mode card",
                 transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
             ) { shown ->
-                Box(Modifier.padding(8.dp)) {
+                Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                     when (shown) {
                         Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
                         else -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -554,7 +554,7 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
     var dragging by remember { mutableStateOf(false) }
     LaunchedEffect(state.level, dragging) { if (!dragging) level = state.level.toFloat() }
     val presets = listOf("Low" to 5, "Medium" to 12, "High" to 20)
-    Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // A running "Ambient for a moment": the way back, and one tap to stay.
         extras.until?.let { until ->
             var now by remember(until) { mutableLongStateOf(System.currentTimeMillis()) }
@@ -636,7 +636,7 @@ private fun SoftChip(
         else -> ToggleButton(
             checked = selected, onCheckedChange = { onClick() },
             shapes = shapes ?: ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight),
-            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
+            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHigh, contentColor = cs.onSurface),
             contentPadding = padding, content = content,
             modifier = sized.semantics {
                 contentDescription = description

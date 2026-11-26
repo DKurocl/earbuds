@@ -454,10 +454,10 @@ class ScreenshotTest {
             bitmap.recycle()
         }
         val floatingControls = compose.onNodeWithText("Ambient level").getBoundsInRoot()
-        assertTrue("Page content must stop above the transparent controls", viewport.getBoundsInRoot().bottom <= floatingControls.top)
+        assertTrue("The floating controls must overlay the scrolling viewport", viewport.getBoundsInRoot().bottom > floatingControls.bottom)
         viewport.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         val deviceInfo = compose.onNodeWithContentDescription("Device info").assertIsDisplayed()
-        assertTrue("The last row should clear the mode buttons", deviceInfo.getBoundsInRoot().bottom < button.top)
+        assertTrue("The last row should clear the entire dock", deviceInfo.getBoundsInRoot().bottom < floatingControls.top)
         assertEquals(button, ambient.getBoundsInRoot())
         deviceInfo.performTouchInput { click(center) }
         compose.runOnIdle { assertTrue(opened) }

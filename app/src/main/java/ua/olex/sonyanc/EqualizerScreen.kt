@@ -285,50 +285,41 @@ fun EqualizerContent(
                     else -> EqualizerProtocol.presets[state.preset] ?: "Custom"
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(topStart = UiTokens.cardRadius, topEnd = UiTokens.cardRadius, bottomStart = 8.dp, bottomEnd = 8.dp),
-                        color = Surfaces.card,
-                        modifier = Modifier.fillMaxWidth(),
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 4.dp).heightIn(min = UiTokens.minTouchTarget),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(start = 2.dp).heightIn(min = UiTokens.minTouchTarget),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Text(presetName, Modifier.weight(1f), style = MaterialTheme.typography.titleLargeEmphasized)
-                                Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
-                                    thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                                    modifier = Modifier.semantics { contentDescription = "Equalizer" })
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Box(contentAlignment = Alignment.Center) {
-                                EqCurve(
-                                    gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
-                                    activeBand = activeBand, haptics = haptics,
-                                    onGain = { index, value -> edit = EqEdit(index + 1, value) },
-                                    onFinish = { index, value -> if (value != null) commit(index + 1, value) else edit = null },
-                                )
-                                if (shownBands == null && !applyingPreset) {
-                                    Text(
-                                        if (!on) "Turn on to edit bands" else "Choose Custom to edit bands",
-                                        style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                    )
-                                }
-                            }
-                            BandReadouts(displayed, activeBand, controlsReady && edit == null) { index, gain -> commit(index + 1, gain) }
+                        Text(presetName, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmallEmphasized)
+                        Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
+                            thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
+                            modifier = Modifier.semantics { contentDescription = "Equalizer" })
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        EqCurve(
+                            gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
+                            activeBand = activeBand, haptics = haptics,
+                            onGain = { index, value -> edit = EqEdit(index + 1, value) },
+                            onFinish = { index, value -> if (value != null) commit(index + 1, value) else edit = null },
+                        )
+                        if (shownBands == null && !applyingPreset) {
+                            Text(
+                                if (!on) "Turn on to edit bands" else "Choose Custom to edit bands",
+                                style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
                         }
                     }
-                    ClearBass(
-                        gain = displayed?.first(),
-                        enabled = controlsReady && (edit == null || edit?.index == 0),
-                        editing = edit?.index == 0, haptics = haptics,
-                        onGain = { edit = EqEdit(0, it) },
-                        onFinish = { commit(0, it) },
-                    )
+                    BandReadouts(displayed, activeBand, controlsReady && edit == null) { index, gain -> commit(index + 1, gain) }
                 }
+                ClearBass(
+                    gain = displayed?.first(),
+                    enabled = controlsReady && (edit == null || edit?.index == 0),
+                    editing = edit?.index == 0, haptics = haptics,
+                    onGain = { edit = EqEdit(0, it) },
+                    onFinish = { commit(0, it) },
+                )
                 PresetGroups(
                     active = selectedSlot?.let { 0xA0 + it } ?: state.preset, flat = flat && selectedSlot == null,
                     enabled = editable && !busy && edit == null,
@@ -338,8 +329,8 @@ fun EqualizerContent(
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("Import preset") }
-            FilledTonalButton(onClick = { onSave?.invoke() }, enabled = onSave != null, modifier = Modifier.weight(1f)) {
+            TextButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("Import preset") }
+            TextButton(onClick = { onSave?.invoke() }, enabled = onSave != null, modifier = Modifier.weight(1f)) {
                 Text("Save preset")
             }
         }
@@ -391,7 +382,7 @@ private fun ClearBass(gain: Int?, enabled: Boolean, editing: Boolean, haptics: B
     }
     val feedback = LocalHapticFeedback.current
     Surface(
-        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = UiTokens.cardRadius, bottomEnd = UiTokens.cardRadius),
+        shape = UiTokens.compactCardShape,
         color = Surfaces.control,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -474,7 +465,7 @@ private fun PresetButton(name: String, selected: Boolean, enabled: Boolean, inde
         checked = selected, onCheckedChange = { if (!selected) onClick() }, enabled = enabled, shapes = shapes,
         colors = ToggleButtonDefaults.colors(
             containerColor = Surfaces.card, contentColor = cs.onSurfaceVariant,
-            checkedContainerColor = cs.primaryContainer, checkedContentColor = cs.onPrimaryContainer,
+            checkedContainerColor = cs.primary, checkedContentColor = cs.onPrimary,
         ),
         contentPadding = PaddingValues(horizontal = 4.dp),
         modifier = modifier.heightIn(min = UiTokens.minTouchTarget).semantics { role = Role.RadioButton; this.selected = selected },
@@ -513,7 +504,7 @@ private fun EqCurve(
     val range = 10f
     val padding = 20.dp
     val plotHeight = (LocalConfiguration.current.screenHeightDp - 670).coerceIn(148, 216).dp
-    val backing = Surfaces.card
+    val backing = Surfaces.page
     Box(Modifier.fillMaxWidth().height(plotHeight)) {
         Spacer(
             Modifier.matchParentSize().semantics { contentDescription = "Equalizer curve" }
@@ -577,6 +568,7 @@ private fun EqCurve(
                     val xs = FloatArray(BAND_HZ.size) { bandX(it, width) }
                     val ys = FloatArray(BAND_HZ.size)
                     val line = Path()
+                    val area = Path()
                     val stroke = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round)
                     val grid = cs.outlineVariant.copy(alpha = .6f)
                     val tone = cs.primary
@@ -586,6 +578,9 @@ private fun EqCurve(
                             drawLine(if (db == 0) cs.outlineVariant else grid, Offset(0f, y), Offset(width, y), 1.dp.toPx())
                         }
                         if (!hasGains) return@onDrawBehind
+                        for (x in xs) {
+                            drawLine(grid, Offset(x, mid - range * perDb), Offset(x, mid + range * perDb), 1.dp.toPx())
+                        }
                         val dragging = dragPoint
                         for (i in ys.indices) {
                             val value = if (dragging?.first == i) dragging.second else animatedGains[i].value
@@ -599,6 +594,12 @@ private fun EqCurve(
                             line.cubicTo(xs[i] + dx, ys[i], xs[i + 1] - dx, ys[i + 1], xs[i + 1], ys[i + 1])
                         }
                         line.lineTo(width, ys.last())
+                        area.reset()
+                        area.addPath(line)
+                        area.lineTo(width, mid)
+                        area.lineTo(0f, mid)
+                        area.close()
+                        drawPath(area, tone.copy(alpha = .12f))
                         drawPath(line, tone, style = stroke)
                         for (i in xs.indices) {
                             val handle = (if (dragging?.first == i) radius.value else 5f).dp.toPx()

@@ -62,8 +62,9 @@ internal fun DeviceTopBar(title: String, onBack: (() -> Unit)? = null, subtitle:
     val page = Surfaces.page
     TopAppBar(
         title = {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1,
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                val titleStyle = if (subtitle != null) MaterialTheme.typography.titleLargeEmphasized else MaterialTheme.typography.titleLarge
+                Text(title, style = titleStyle, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 subtitle?.invoke()
             }

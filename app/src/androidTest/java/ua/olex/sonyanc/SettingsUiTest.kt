@@ -58,20 +58,17 @@ class SettingsUiTest {
             compose.runOnIdle {assertEquals(Triple(key,field.index,choice.code),last)}
         }}}
     }
-    @Test fun touchTabsShowTheCurrentAssignmentAndOnlyWriteChangesForTheChosenSide() {
-        val key = AdvancedSettings.Key.TOUCH
+    @Test fun touchRowsShowAssignmentsAndWriteOnlyTheChosenSide() {
         val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
         content { setting, index, code -> writes.add(Triple(setting, index, code)) }
-        compose.onNodeWithText("Left earbud").assertDoesNotExist()
-        compose.onNodeWithText("Touch assignments").performScrollTo().performClick()
-        val left = compose.onNodeWithText("Left earbud").assertIsSelected()
-        compose.onNode(hasText("Noise control") and isSelectable()).assertIsSelected().performClick()
+        compose.onNodeWithText("Left earbud").performScrollTo().performClick()
+        compose.onNode(hasText("Noise control") and isSelectable()).assertIsSelected()
+        compose.onNodeWithText("Cancel").performClick()
         compose.runOnIdle { assertTrue(writes.isEmpty()) }
-        val right = compose.onNodeWithText("Right earbud").performClick().assertIsSelected()
-        assertTrue(left.getBoundsInRoot().right <= right.getBoundsInRoot().left)
+        compose.onNodeWithText("Right earbud").performScrollTo().performClick()
         compose.onNode(hasText("Playback") and isSelectable()).assertIsSelected()
-        compose.onNode(hasText("Off") and isSelectable()).performClick().assertIsSelected()
-        compose.runOnIdle { assertEquals(listOf(Triple(key, 2, 0xFF)), writes) }
+        compose.onNode(hasText("Off") and isSelectable()).performClick()
+        compose.runOnIdle { assertEquals(listOf(Triple(AdvancedSettings.Key.TOUCH, 2, 0xFF)), writes) }
     }
     @Test fun missingDeviceValuesNeverBecomeEnabledSwitches() {
         compose.setContent {AppTheme(dynamic=false){EarbudSettingsContent(emptyMap(),emptyMap())}}

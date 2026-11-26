@@ -1,16 +1,10 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
 
 package ua.olex.sonyanc
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.*
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -145,47 +139,6 @@ fun EarbudSettingsContent(
         fun has(feature: Feature) = !hideMissing || features[feature] != null
         val chatOn = code(Key.CHAT, 0) == 0
         val promptsOn = code(Key.GUIDANCE, 0) == 0
-        if (has(Key.TOUCH) || has(Key.GESTURES) || has(Key.CYCLE) || values[Key.PANEL] != null) {
-            var editTouch by rememberSaveable { mutableStateOf(false) }
-            var side by rememberSaveable { mutableIntStateOf(1) }
-            if (editTouch && values[Key.TOUCH] != null) {
-                ModalBottomSheet(onDismissRequest = { editTouch = false },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = UiTokens.pageInset).padding(bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("Touch assignments", style = MaterialTheme.typography.titleLarge)
-                        TouchAssignments(side, { side = it }, choices(Key.TOUCH, side), code(Key.TOUCH, side),
-                            busy(Key.TOUCH), notes[rowId(Key.TOUCH, side)]) { update(Key.TOUCH, side, it) }
-                    }
-                }
-            }
-            Column {
-                ListGroup("Touch and gestures") {
-                    if (!panelHidden && values[Key.PANEL] != null) item {
-                        val panel = values[Key.PANEL]
-                        SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Enable taps on the earbuds",
-                            panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), note = notes[rowId(Key.PANEL, 1)]) { on ->
-                            panel?.let { v -> update(Key.PANEL, 1, AdvancedSettings.panelCode(v, on)) }
-                        }
-                    }
-                    if (values[Key.TOUCH] != null) item { shape ->
-                        val summary = (1..2).joinToString(" · ") { ear ->
-                            val label = choices(Key.TOUCH, ear).firstOrNull { it.first == code(Key.TOUCH, ear) }?.second ?: "Device setting"
-                            "${if (ear == 1) "Left" else "Right"}: $label"
-                        }
-                        NavRow(shape, Glyph.TUNE, "Touch assignments", summary) { editTouch = true }
-                    }
-                    if (has(Key.CYCLE)) item {
-                        ChoiceRow(it, Glyph.NOISE_AWARE, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4),
-                            busy(Key.CYCLE), note = notes[rowId(Key.CYCLE, 4)]) { update(Key.CYCLE, 4, it) }
-                    }
-                    if (has(Key.GESTURES)) item {
-                        KeySwitch(it, Key.GESTURES, Glyph.FACE, "Head gestures", "Nod or shake your head to answer calls",
-                            code(Key.GESTURES, 0), busy(Key.GESTURES), true, update, notes[rowId(Key.GESTURES, 0)])
-                    }
-                }
-            }
-        }
         ListGroup("Sound") {
             if (has(Feature.DSEE)) item { FeatureSwitch(it, Feature.DSEE, Glyph.HQ, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
             if (has(Key.QUALITY)) item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
@@ -195,6 +148,33 @@ fun EarbudSettingsContent(
             if (chatOn && has(Key.CHAT_CONFIG)) {
                 item { ChoiceRow(it, Glyph.VOICE_SETTINGS, "Voice detection", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
                 item { ChoiceRow(it, Glyph.AUTOPLAY, "Music comes back", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
+            }
+        }
+        if (values[Key.TOUCH] != null || has(Key.GESTURES) || has(Key.CYCLE) || (!panelHidden && values[Key.PANEL] != null)) {
+            ListGroup("Touch and gestures") {
+                val panel = values[Key.PANEL]
+                if (!panelHidden && panel != null) item {
+                    SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Enable taps on the earbuds",
+                        AdvancedSettings.panelOn(panel), busy(Key.PANEL), note = notes[rowId(Key.PANEL, 1)]) { on ->
+                        update(Key.PANEL, 1, AdvancedSettings.panelCode(panel, on))
+                    }
+                }
+                if (values[Key.TOUCH] != null) {
+                    for (ear in 1..2) item {
+                        val left = ear == 1
+                        ChoiceRow(it, if (left) Glyph.SWIPE_LEFT else Glyph.SWIPE_RIGHT,
+                            if (left) "Left earbud" else "Right earbud", choices(Key.TOUCH, ear), code(Key.TOUCH, ear),
+                            busy(Key.TOUCH), note = notes[rowId(Key.TOUCH, ear)]) { choice -> update(Key.TOUCH, ear, choice) }
+                    }
+                }
+                if (has(Key.CYCLE)) item {
+                    ChoiceRow(it, Glyph.NOISE_AWARE, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4),
+                        busy(Key.CYCLE), note = notes[rowId(Key.CYCLE, 4)]) { update(Key.CYCLE, 4, it) }
+                }
+                if (has(Key.GESTURES)) item {
+                    KeySwitch(it, Key.GESTURES, Glyph.FACE, "Head gestures", "Nod or shake your head to answer calls",
+                        code(Key.GESTURES, 0), busy(Key.GESTURES), true, update, notes[rowId(Key.GESTURES, 0)])
+                }
             }
         }
         if (has(Key.SIDETONE)) ListGroup("Calls") {
@@ -207,45 +187,6 @@ fun EarbudSettingsContent(
         if (has(Key.GUIDANCE)) ListGroup("Spoken prompts") {
             item { KeySwitch(it, Key.GUIDANCE, Glyph.CAMPAIGN, "Voice prompts", "Spoken battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), true, update, notes[rowId(Key.GUIDANCE, 0)]) }
             if (promptsOn && has(Key.GUIDANCE_VOLUME)) item { ChoiceRow(it, Glyph.VOLUME, "Prompt volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), note = notes[rowId(Key.GUIDANCE_VOLUME, 0)]) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
-        }
-    }
-}
-
-@Composable
-private fun TouchAssignments(
-    side: Int, onSide: (Int) -> Unit, choices: List<Pair<Int, String>>, current: Int?,
-    busy: Boolean, note: RowNote?, onChoose: (Int) -> Unit,
-) {
-    if (current == null) {
-        Text("Connect to read touch controls", style = MaterialTheme.typography.bodyMedium)
-        return
-    }
-    Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-        for (ear in 1..2) {
-            val chosen = side == ear
-            ToggleButton(
-                checked = chosen, onCheckedChange = { onSide(ear) },
-                shapes = if (ear == 1) ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    else ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                modifier = Modifier.weight(1f).heightIn(min = UiTokens.minTouchTarget).semantics {
-                    role = Role.RadioButton
-                    selected = chosen
-                },
-            ) {
-                Text(if (ear == 1) "Left earbud" else "Right earbud", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
-    Column(Modifier.selectableGroup()) {
-        ListGroup {
-            for ((code, label) in choices) item { shape ->
-                val chosen = current == code
-                NavRow(
-                    shape, null, label, note = note.takeIf { chosen },
-                    modifier = Modifier.semantics { role = Role.RadioButton; selected = chosen },
-                    trailing = { RadioButton(selected = chosen, onClick = null) },
-                ) { if (!busy && !chosen) onChoose(code) }
-            }
         }
     }
 }
