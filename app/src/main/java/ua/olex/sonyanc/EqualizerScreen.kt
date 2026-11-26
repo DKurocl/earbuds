@@ -185,7 +185,7 @@ internal object EqualizerFile {
         return o.toString(2)
     }
     fun read(text: String): List<Int>? {
-        val input = text.trim().removePrefix("﻿").trim()
+        val input = text.trim().removePrefix("\uFEFF").trim()
         return if (input.startsWith("GraphicEQ:", ignoreCase = true)) readGraphicEq(input) else readJson(input)
     }
 
