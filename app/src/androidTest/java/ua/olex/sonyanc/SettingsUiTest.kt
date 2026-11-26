@@ -43,31 +43,57 @@ class SettingsUiTest {
         compose.onNodeWithText("Device controls").assertDoesNotExist()
         compose.onNodeWithText("Read setting").assertDoesNotExist()
     }
+    // The settings now open a full-screen choice page in its own dialog window.
+    // Scope actions to that window: the underlying settings row also contains the selected label.
+    private fun choiceOption(label: String) =
+        compose.onNode(hasText(label) and isSelectable() and hasAnyAncestor(isDialog()))
+
+    private fun closeChoicePage() {
+        compose.onNode(hasContentDescription("Back") and hasAnyAncestor(isDialog())).performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
+    }
+
     @Test fun everyChoiceIsReachableAndPreservesTheOtherFields() {
-        var last:Triple<AdvancedSettings.Key,Int,Int>?=null
-        content {key,index,code->last=Triple(key,index,code)}
-        val titles=mapOf(
+        val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
+        content { key, index, code -> writes.add(Triple(key, index, code)) }
+        val titles = mapOf(
             AdvancedSettings.Key.CYCLE to listOf("Noise control cycle"),
-            AdvancedSettings.Key.CHAT_CONFIG to listOf("Voice detection","Music comes back"),
+            AdvancedSettings.Key.CHAT_CONFIG to listOf("Voice detection", "Music comes back"),
             AdvancedSettings.Key.POWER to listOf("Automatic power off"),
             AdvancedSettings.Key.QUALITY to listOf("Bluetooth quality"),
             AdvancedSettings.Key.GUIDANCE_VOLUME to listOf("Prompt volume"))
-        titles.forEach {(key,labels)->key.fields.forEachIndexed {i,field->field.choices.forEach {choice->
-            compose.onNodeWithText(labels[i]).performScrollTo().performClick()
-            compose.onAllNodesWithText(choice.label).onLast().performClick()
-            compose.runOnIdle {assertEquals(Triple(key,field.index,choice.code),last)}
-        }}}
+        val expected = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
+        titles.forEach { (key, labels) ->
+            key.fields.forEachIndexed { i, field ->
+                var current = fixtures.getValue(key)[field.index]
+                field.choices.forEach { choice ->
+                    compose.onNodeWithText(labels[i]).performScrollTo().performClick()
+                    compose.onNode(isDialog()).assertExists()
+                    val currentLabel = field.choices.first { it.code == current }.label
+                    choiceOption(currentLabel).assertIsSelected()
+                    choiceOption(choice.label).performScrollTo().performClick()
+                    compose.onNode(isDialog()).assertDoesNotExist()
+                    // Choosing the current value closes the page without a redundant device write.
+                    if (choice.code != current) expected.add(Triple(key, field.index, choice.code))
+                    current = choice.code
+                    compose.runOnIdle { assertEquals(expected, writes) }
+                    compose.onNodeWithText(labels[i]).assert(hasText(choice.label))
+                }
+            }
+        }
     }
+
     @Test fun touchRowsShowAssignmentsAndWriteOnlyTheChosenSide() {
         val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
         content { setting, index, code -> writes.add(Triple(setting, index, code)) }
         compose.onNodeWithText("Left earbud").performScrollTo().performClick()
-        compose.onNode(hasText("Noise control") and isSelectable()).assertIsSelected()
-        compose.onNodeWithText("Cancel").performClick()
+        choiceOption("Noise control").assertIsSelected()
+        closeChoicePage()
         compose.runOnIdle { assertTrue(writes.isEmpty()) }
         compose.onNodeWithText("Right earbud").performScrollTo().performClick()
-        compose.onNode(hasText("Playback") and isSelectable()).assertIsSelected()
-        compose.onNode(hasText("Off") and isSelectable()).performClick()
+        choiceOption("Playback").assertIsSelected()
+        choiceOption("Off").performScrollTo().performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
         compose.runOnIdle { assertEquals(listOf(Triple(AdvancedSettings.Key.TOUCH, 2, 0xFF)), writes) }
     }
     @Test fun missingDeviceValuesNeverBecomeEnabledSwitches() {
@@ -112,11 +138,13 @@ class SettingsUiTest {
             assertTrue("$title value overlaps its label",label.boundsInRoot.bottom<=value.boundsInRoot.top+1f)
         }
     }
-    @Test fun choiceDialogShowsTheCurrentValueAndCancels() {
-        content()
+    @Test fun choicePageShowsTheCurrentValueAndBackDiscardsChanges() {
+        val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
+        content { key, index, code -> writes.add(Triple(key, index, code)) }
         compose.onNodeWithText("Bluetooth quality").performScrollTo().performClick()
-        compose.onNode(hasText("Sound quality") and isSelectable()).assertIsSelected()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Cancel").assertDoesNotExist()
+        choiceOption("Sound quality").assertIsSelected()
+        closeChoicePage()
+        compose.runOnIdle { assertTrue(writes.isEmpty()) }
+        compose.onNodeWithText("Bluetooth quality").assert(hasText("Sound quality"))
     }
 }
