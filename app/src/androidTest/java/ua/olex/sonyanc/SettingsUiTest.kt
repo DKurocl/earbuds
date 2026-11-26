@@ -47,7 +47,6 @@ class SettingsUiTest {
         var last:Triple<AdvancedSettings.Key,Int,Int>?=null
         content {key,index,code->last=Triple(key,index,code)}
         val titles=mapOf(
-            AdvancedSettings.Key.TOUCH to listOf("Left earbud","Right earbud"),
             AdvancedSettings.Key.CYCLE to listOf("Noise control cycle"),
             AdvancedSettings.Key.CHAT_CONFIG to listOf("Voice detection","Music comes back"),
             AdvancedSettings.Key.POWER to listOf("Automatic power off"),
@@ -58,6 +57,19 @@ class SettingsUiTest {
             compose.onAllNodesWithText(choice.label).onLast().performClick()
             compose.runOnIdle {assertEquals(Triple(key,field.index,choice.code),last)}
         }}}
+    }
+    @Test fun touchTabsShowTheCurrentAssignmentAndOnlyWriteChangesForTheChosenSide() {
+        val key = AdvancedSettings.Key.TOUCH
+        val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
+        content { setting, index, code -> writes.add(Triple(setting, index, code)) }
+        val left = compose.onNodeWithText("Left earbud").performScrollTo().assertIsSelected()
+        compose.onNode(hasText("Noise control") and isSelectable()).assertIsSelected().performClick()
+        compose.runOnIdle { assertTrue(writes.isEmpty()) }
+        val right = compose.onNodeWithText("Right earbud").performClick().assertIsSelected()
+        assertTrue(left.getBoundsInRoot().right <= right.getBoundsInRoot().left)
+        compose.onNode(hasText("Playback") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("Off") and isSelectable()).performScrollTo().performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals(listOf(Triple(key, 2, 0xFF)), writes) }
     }
     @Test fun missingDeviceValuesNeverBecomeEnabledSwitches() {
         compose.setContent {AppTheme(dynamic=false){EarbudSettingsContent(emptyMap(),emptyMap())}}
@@ -90,7 +102,7 @@ class SettingsUiTest {
                 AppTheme(dynamic=false) {EarbudSettingsContent(fixtures,DeviceSettingsProtocol.Feature.entries.associateWith{true})}
             }
         }
-        listOf("Left earbud","Right earbud","Automatic power off","Bluetooth quality","Prompt volume").forEach {title->
+        listOf("Automatic power off","Bluetooth quality","Prompt volume").forEach {title->
             compose.onNodeWithText(title).performScrollTo()
             val label=compose.onNode(hasText(title),useUnmergedTree=true).fetchSemanticsNode()
             // The value is the next text below the label in the same column (it may sit inside the

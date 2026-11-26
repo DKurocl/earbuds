@@ -204,6 +204,10 @@ private fun TouchAssignments(
     side: Int, onSide: (Int) -> Unit, choices: List<Pair<Int, String>>, current: Int?,
     busy: Boolean, note: RowNote?, onChoose: (Int) -> Unit,
 ) {
+    if (current == null) {
+        Text("Connect to read touch controls", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
     Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
         for (ear in 1..2) {
             val chosen = side == ear
@@ -220,19 +224,15 @@ private fun TouchAssignments(
             }
         }
     }
-    if (current == null) {
-        Text("Connect to read touch controls", style = MaterialTheme.typography.bodyMedium)
-    } else {
-        Column(Modifier.selectableGroup()) {
-            ListGroup {
-                for ((code, label) in choices) item { shape ->
-                    val chosen = current == code
-                    NavRow(
-                        shape, null, label, note = note.takeIf { chosen },
-                        modifier = Modifier.semantics { role = Role.RadioButton; selected = chosen },
-                        trailing = { RadioButton(selected = chosen, onClick = null) },
-                    ) { if (!busy && !chosen) onChoose(code) }
-                }
+    Column(Modifier.selectableGroup()) {
+        ListGroup {
+            for ((code, label) in choices) item { shape ->
+                val chosen = current == code
+                NavRow(
+                    shape, null, label, note = note.takeIf { chosen },
+                    modifier = Modifier.semantics { role = Role.RadioButton; selected = chosen },
+                    trailing = { RadioButton(selected = chosen, onClick = null) },
+                ) { if (!busy && !chosen) onChoose(code) }
             }
         }
     }
