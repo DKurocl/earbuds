@@ -139,19 +139,8 @@ fun EarbudSettingsContent(
         fun has(feature: Feature) = !hideMissing || features[feature] != null
         val chatOn = code(Key.CHAT, 0) == 0
         val promptsOn = code(Key.GUIDANCE, 0) == 0
-        ListGroup("Sound") {
-            if (has(Feature.DSEE)) item { FeatureSwitch(it, Feature.DSEE, Glyph.HQ, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
-            if (has(Key.QUALITY)) item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
-        }
-        if (has(Key.CHAT)) ListGroup("Conversation") {
-            item { KeySwitch(it, Key.CHAT, Glyph.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), true, update, notes[rowId(Key.CHAT, 0)]) }
-            if (chatOn && has(Key.CHAT_CONFIG)) {
-                item { ChoiceRow(it, Glyph.VOICE_SETTINGS, "Voice detection", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
-                item { ChoiceRow(it, Glyph.AUTOPLAY, "Music comes back", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
-            }
-        }
-        if (values[Key.TOUCH] != null || has(Key.GESTURES) || has(Key.CYCLE) || (!panelHidden && values[Key.PANEL] != null)) {
-            ListGroup("Touch and gestures") {
+        if (values[Key.TOUCH] != null || has(Key.CYCLE) || (!panelHidden && values[Key.PANEL] != null)) {
+            ListGroup("Controls") {
                 val panel = values[Key.PANEL]
                 if (!panelHidden && panel != null) item {
                     SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Enable taps on the earbuds",
@@ -171,18 +160,29 @@ fun EarbudSettingsContent(
                     ChoiceRow(it, Glyph.NOISE_AWARE, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4),
                         busy(Key.CYCLE), note = notes[rowId(Key.CYCLE, 4)]) { update(Key.CYCLE, 4, it) }
                 }
-                if (has(Key.GESTURES)) item {
-                    KeySwitch(it, Key.GESTURES, Glyph.FACE, "Head gestures", "Nod or shake your head to answer calls",
-                        code(Key.GESTURES, 0), busy(Key.GESTURES), true, update, notes[rowId(Key.GESTURES, 0)])
-                }
             }
         }
-        if (has(Key.SIDETONE)) ListGroup("Calls") {
-            item { KeySwitch(it, Key.SIDETONE, Glyph.MIC, "Hear my voice", "Hear your voice during calls", code(Key.SIDETONE, 0), busy(Key.SIDETONE), true, update, notes[rowId(Key.SIDETONE, 0)]) }
+        if (has(Key.CHAT)) ListGroup("Conversation") {
+            item { KeySwitch(it, Key.CHAT, Glyph.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), true, update, notes[rowId(Key.CHAT, 0)]) }
+            if (chatOn && has(Key.CHAT_CONFIG)) {
+                item { ChoiceRow(it, Glyph.VOICE_SETTINGS, "Voice detection", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
+                item { ChoiceRow(it, Glyph.AUTOPLAY, "Music comes back", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
+            }
         }
-        if (has(Feature.AUTO_PAUSE) || has(Key.POWER)) ListGroup("Wearing") {
+        ListGroup("Sound") {
+            if (has(Feature.DSEE)) item { FeatureSwitch(it, Feature.DSEE, Glyph.HQ, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
+            if (has(Key.QUALITY)) item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
+        }
+        if (has(Feature.AUTO_PAUSE) || has(Key.POWER)) ListGroup("In-ear detection") {
             if (has(Feature.AUTO_PAUSE)) item { FeatureSwitch(it, Feature.AUTO_PAUSE, Glyph.PAUSE_CIRCLE, "Pause when you remove an earbud", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }
             if (has(Key.POWER)) item { ChoiceRow(it, Glyph.POWER, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), note = notes[rowId(Key.POWER, 0)]) { c -> update(Key.POWER, 0, c) } }
+        }
+        if (has(Key.SIDETONE) || has(Key.GESTURES)) ListGroup("Calls") {
+            if (has(Key.SIDETONE)) item { KeySwitch(it, Key.SIDETONE, Glyph.MIC, "Hear my voice", "Hear your voice during calls", code(Key.SIDETONE, 0), busy(Key.SIDETONE), true, update, notes[rowId(Key.SIDETONE, 0)]) }
+            if (has(Key.GESTURES)) item {
+                KeySwitch(it, Key.GESTURES, Glyph.FACE, "Head gestures", "Nod or shake your head to answer calls",
+                    code(Key.GESTURES, 0), busy(Key.GESTURES), true, update, notes[rowId(Key.GESTURES, 0)])
+            }
         }
         if (has(Key.GUIDANCE)) ListGroup("Spoken prompts") {
             item { KeySwitch(it, Key.GUIDANCE, Glyph.CAMPAIGN, "Voice prompts", "Spoken battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), true, update, notes[rowId(Key.GUIDANCE, 0)]) }

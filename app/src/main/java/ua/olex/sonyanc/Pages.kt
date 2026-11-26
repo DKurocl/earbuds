@@ -134,6 +134,8 @@ fun AppSettingsContent(
     onProfiles: (() -> Unit)? = null, onBackup: (() -> Unit)? = null,
 ) {
     PageScaffold("App settings", onBack) {
+        // Grouped by what the owner is trying to do, as Android Settings groups by task:
+        // which earbuds, what happens to noise control, what happens at home, alerts, shortcuts, look.
         ListGroup("Earbuds") {
             // One pair of earbuds: the picker only appears when there is something to choose.
             if (devices.size > 1 || devices.none { it.address == selected }) devices.forEach { device ->
@@ -156,43 +158,16 @@ fun AppSettingsContent(
                 SwitchRow(it, Glyph.EARBUDS, "Show when connected",
                     "Show battery levels when you take the earbuds out", connectSheet, onChange = onConnectSheet)
             }
+        }
+        ListGroup("Noise control") {
             item {
                 ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
                     onOnConnect(OnConnect.entries[i])
                 }
             }
             item {
-                ChoiceRow(it, Glyph.HOME, "At home", listOf(-1 to "Same as everywhere") + OnConnect.entries.map { c -> c.ordinal to c.label },
-                    homeMode?.ordinal ?: -1) { i -> onHomeMode(OnConnect.entries.getOrNull(i)) }
-            }
-            if (homeMode != null) item { NavRow(it, Glyph.LOCATION, "Home", homeSummary, onClick = onSetHome) }
-            if (homeMode != null) item {
-                SwitchRow(it, Glyph.HQ, "Best sound at home", "LDAC at home, a steadier link when you're out", qualityByPlace, onChange = onQualityByPlace)
-            }
-        }
-        ListGroup("Timers & alerts") {
-            item {
-                ChoiceRow(it, Glyph.TIMER, "Ambient for a moment", AmbientTimer.CHOICES.map { m -> m to "$m minutes, then back" }, ambientMinutes) { m ->
-                    onAmbientMinutes(m)
-                }
-            }
-            item {
-                SwitchRow(it, Glyph.BATTERY, "Case battery reminder",
-                    "At ${CaseReminder.THRESHOLD}% or less when you open or put away the earbuds", caseReminder, onChange = onCaseReminder)
-            }
-            item {
-                SwitchRow(it, Glyph.EARBUDS, "Low earbud battery",
-                    "At ${LowBattery.THRESHOLD}% while listening, with time left", budsReminder, onChange = onBudsReminder)
-            }
-            item {
-                SwitchRow(it, Glyph.UPCOMING, "Charge before you go",
-                    "Before the time you usually take the earbuds out, if the case is under ${ChargeReminder.THRESHOLD} %", chargeReminder, onChange = onChargeReminder)
-            }
-        }
-        ListGroup("Automatic") {
-            item {
-                ChoiceRow(it, Glyph.UPCOMING, "Weekend on connect",
-                    listOf(-1 to "Use the usual setting") + OnConnect.entries.map { mode -> mode.ordinal to mode.label },
+                ChoiceRow(it, Glyph.UPCOMING, "On weekends",
+                    listOf(-1 to "Same as weekdays") + OnConnect.entries.map { mode -> mode.ordinal to mode.label },
                     weekendMode?.ordinal ?: -1) { index -> onWeekendMode(OnConnect.entries.getOrNull(index)) }
             }
             item {
@@ -201,28 +176,57 @@ fun AppSettingsContent(
                     else "Ambient when walking, noise cancelling when stopped", activityMode, onChange = onActivityMode)
             }
             item {
+                ChoiceRow(it, Glyph.TIMER, "Ambient for a moment", AmbientTimer.CHOICES.map { m -> m to "$m minutes, then back" }, ambientMinutes) { m ->
+                    onAmbientMinutes(m)
+                }
+            }
+            item {
                 ChoiceRow(it, Glyph.BEDTIME, "When Music's sleep timer ends", AfterSleep.entries.map { a -> a.ordinal to a.label }, afterSleep.ordinal) { i ->
                     onAfterSleep(AfterSleep.entries[i])
                 }
             }
         }
-        ListGroup("Appearance") {
-            item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Use your wallpaper palette in the app", dynamicColor, onChange = onDynamicColor) }
-            item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "Feedback on tap and confirmation", haptics, onChange = onHaptics) }
-            if (haptics) item { NavRow(it, Glyph.TUNE, "Vibrations", "Preview confirmation patterns", onClick = onVibrations) }
-        }
-        if (canAddTile || canPinWidget) ListGroup("System shortcuts") {
-            if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Cycle noise control from the notification shade", onClick = onAddTile) }
+        ListGroup("At home") {
             item {
-                ChoiceRow(it, Glyph.REFRESH, "Quick Settings tile cycles", listOf(0 to "ANC → Ambient → Off", 1 to "ANC ↔ Ambient"),
+                ChoiceRow(it, Glyph.HOME, "Noise control at home", listOf(-1 to "Same as everywhere") + OnConnect.entries.map { c -> c.ordinal to c.label },
+                    homeMode?.ordinal ?: -1) { i -> onHomeMode(OnConnect.entries.getOrNull(i)) }
+            }
+            if (homeMode != null) item { NavRow(it, Glyph.LOCATION, "Home location", homeSummary, onClick = onSetHome) }
+            if (homeMode != null) item {
+                SwitchRow(it, Glyph.HQ, "Best sound at home", "LDAC at home, a steadier link when you're out", qualityByPlace, onChange = onQualityByPlace)
+            }
+        }
+        ListGroup("Battery alerts") {
+            item {
+                SwitchRow(it, Glyph.BATTERY_LOW, "Low earbud battery",
+                    "At ${LowBattery.THRESHOLD}% while listening, with time left", budsReminder, onChange = onBudsReminder)
+            }
+            item {
+                SwitchRow(it, Glyph.BATTERY, "Case battery",
+                    "At ${CaseReminder.THRESHOLD}% or less when you open or put away the earbuds", caseReminder, onChange = onCaseReminder)
+            }
+            item {
+                SwitchRow(it, Glyph.UPCOMING, "Charge before you go",
+                    "Before the time you usually take the earbuds out, if the case is under ${ChargeReminder.THRESHOLD}%", chargeReminder, onChange = onChargeReminder)
+            }
+        }
+        if (canAddTile || canPinWidget) ListGroup("Shortcuts") {
+            if (canAddTile) item { NavRow(it, Glyph.QUIET, "Add Quick Settings tile", "Change noise control from the notification shade", onClick = onAddTile) }
+            if (canAddTile) item {
+                ChoiceRow(it, Glyph.REFRESH, "Tile switches between", listOf(0 to "ANC, Ambient and Off", 1 to "ANC and Ambient"),
                     if (tileTwoWay) 1 else 0) { i -> onTileTwoWay(i == 1) }
             }
             if (canPinWidget) item { NavRow(it, Glyph.WIDGET, "Add noise control widget", "ANC, Ambient and Off on your home screen", onClick = onPinWidget) }
             if (canPinWidget) item { NavRow(it, Glyph.BATTERY, "Add battery widget", "Left, right and case charge", onClick = onPinBatteryWidget) }
         }
-        if (onProfiles != null || onBackup != null) ListGroup("Personal settings") {
+        ListGroup("Look and feel") {
+            item { SwitchRow(it, Glyph.PALETTE, "Wallpaper colors", "Use your wallpaper palette in the app", dynamicColor, onChange = onDynamicColor) }
+            item { SwitchRow(it, Glyph.HAPTICS, "Haptics", "Feedback on tap and confirmation", haptics, onChange = onHaptics) }
+            if (haptics) item { NavRow(it, Glyph.TUNE, "Vibrations", "Preview confirmation patterns", onClick = onVibrations) }
+        }
+        if (onProfiles != null || onBackup != null) ListGroup("Your settings") {
             if (onProfiles != null) item { NavRow(it, Glyph.TUNE, "Personal profiles", "Save and recall noise control and EQ", onClick = onProfiles) }
-            if (onBackup != null) item { NavRow(it, Glyph.COPY, "Backup & restore", "Export or import portable settings", onClick = onBackup) }
+            if (onBackup != null) item { NavRow(it, Glyph.COPY, "Backup and restore", "Export or import portable settings", onClick = onBackup) }
         }
         ListGroup("About") {
             item { NavRow(it, Glyph.BUG, "Diagnostics", "Connection log for troubleshooting", onClick = onDiagnostics) }

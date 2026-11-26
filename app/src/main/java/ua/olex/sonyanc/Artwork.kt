@@ -45,7 +45,7 @@ enum class Glyph(val codepoint: Int) {
     BEDTIME(0xF159), WALK(0xE536), INSIGHTS(0xF092), UPCOMING(0xF238),
     // Listening level, ear tip fit and connected devices.
     EAR_SOUND(0xF356), DEVICES(0xE326), PHONE(0xE32C), COMPUTER(0xE30A), TABLET(0xE32F), DEVICE_OTHER(0xE337),
-    CHECK_CIRCLE(0xE86C), ERROR(0xE000), SWAP(0xE8D4), LINK_OFF(0xE16F), PLAY(0xE037);
+    CHECK_CIRCLE(0xE86C), ERROR(0xE000), SWAP(0xE8D4), LINK_OFF(0xE16F), PLAY(0xE037), PRIORITY(0xE645);
 
     val text: String = String(Character.toChars(codepoint))
 }

@@ -235,8 +235,8 @@ internal fun FitTestContent(state: FitTest.State, onBack: () -> Unit = {}, onSta
             modifier = Modifier.padding(horizontal = 4.dp),
         )
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FitSide("Left", state.left, busy, Modifier.weight(1f))
-            FitSide("Right", state.right, busy, Modifier.weight(1f))
+            FitSide("Left", R.drawable.device_bud_left, state.left, busy, Modifier.weight(1f))
+            FitSide("Right", R.drawable.device_bud_right, state.right, busy, Modifier.weight(1f))
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (busy) OutlinedButton(onClick = onCancel, modifier = Modifier.heightIn(min = 56.dp)) { Text("Cancel") }
@@ -248,7 +248,7 @@ internal fun FitTestContent(state: FitTest.State, onBack: () -> Unit = {}, onSta
 }
 
 @Composable
-private fun FitSide(label: String, good: Boolean?, busy: Boolean, modifier: Modifier) {
+private fun FitSide(label: String, picture: Int, good: Boolean?, busy: Boolean, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val (container, content) = when (good) {
         true -> cs.primaryContainer to cs.onPrimaryContainer
@@ -257,9 +257,14 @@ private fun FitSide(label: String, good: Boolean?, busy: Boolean, modifier: Modi
     }
     Surface(shape = RoundedCornerShape(UiTokens.cardRadius), color = container, contentColor = content, modifier = modifier) {
         Column(Modifier.padding(vertical = 24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+            // The earbud itself, as Pixel Buds shows it; a wavy ring while measuring, the verdict as a badge after.
+            Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
                 if (busy) CircularWavyProgressIndicator(Modifier.fillMaxSize())
-                else HushIcon(when (good) { true -> Glyph.CHECK_CIRCLE; false -> Glyph.ERROR; null -> Glyph.EARBUDS }, Modifier.size(48.dp), content, filled = good != null)
+                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(picture), null, Modifier.size(64.dp))
+                if (!busy && good != null) Surface(shape = androidx.compose.foundation.shape.CircleShape, color = content, contentColor = container,
+                    modifier = Modifier.align(Alignment.BottomEnd).size(32.dp)) {
+                    Box(contentAlignment = Alignment.Center) { HushIcon(if (good) Glyph.CHECK else Glyph.PRIORITY, Modifier.size(20.dp), container) }
+                }
             }
             Text(label, style = MaterialTheme.typography.titleMedium)
             Text(when (good) { true -> "Good seal"; false -> "Doesn't seal"; null -> if (busy) "Checking" else "Not checked" },

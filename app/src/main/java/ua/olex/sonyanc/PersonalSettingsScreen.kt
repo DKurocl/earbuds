@@ -50,7 +50,7 @@ internal fun PersonalProfilesContent(
 
 @Composable
 internal fun BackupContent(onBack: () -> Unit, export: () -> Unit, restore: () -> Unit) {
-    PageScaffold("Backup & restore", onBack) {
+    PageScaffold("Backup and restore", onBack) {
         ListGroup {
             item { NavRow(it, Glyph.COPY, "Export settings", "Save profiles, routines, and vibration choices to a JSON file", onClick = export) }
             item { NavRow(it, Glyph.REFRESH, "Restore settings", "Choose an Earbuds backup file", onClick = restore) }

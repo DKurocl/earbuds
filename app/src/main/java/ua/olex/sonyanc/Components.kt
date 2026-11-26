@@ -137,6 +137,7 @@ private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surf
 private val linkGlyphs = setOf(
     Glyph.BLUETOOTH, Glyph.LINK, Glyph.EARBUDS, Glyph.INFO, Glyph.WIDGET, Glyph.FIND, Glyph.COPY,
     Glyph.SWIPE_LEFT, Glyph.SWIPE_RIGHT, Glyph.FACE,
+    Glyph.DEVICES, Glyph.PHONE, Glyph.COMPUTER, Glyph.TABLET, Glyph.DEVICE_OTHER, Glyph.LINK_OFF,
 )
 private val routineGlyphs = setOf(
     Glyph.HOME, Glyph.LOCATION, Glyph.TIMER, Glyph.BATTERY, Glyph.POWER, Glyph.UPCOMING, Glyph.BATTERY_LOW,

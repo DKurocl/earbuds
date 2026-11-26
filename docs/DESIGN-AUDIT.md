@@ -62,3 +62,10 @@ style. The LDAC note in Device info is a tonal card with one action, as Settings
 | Settings | Measure switch, weekly limit (Standard 80 dB / Sensitive 75 dB) | Sony offers the same two WHO levels |
 | Ear tip fit | Big title, one line of help, two side cards (left, right), one button | Pixel Buds' "Checking seal" flow; the cards turn primary for a good seal and error for a poor one |
 | Connected devices | Connected and paired-before groups; Play here and a disconnect button; this phone marked and never offered for disconnect | Pixel and Sony list devices the same way; disconnecting this phone would drop the app's own link |
+
+## Settings grouping (3.1.1)
+
+| Page | Groups, in order | Why |
+|---|---|---|
+| App settings | Earbuds; Noise control; At home; Battery alerts; Shortcuts; Look and feel; Your settings; About | One group per task, as Android Settings groups; every automatic noise-control rule (connect, weekends, walking, a moment of Ambient, Music's sleep timer) now sits together instead of across "Earbuds", "Timers & alerts" and "Automatic" |
+| Earbud settings | Controls; Conversation; Sound; In-ear detection; Calls; Spoken prompts | Pixel Buds order: what you touch first, then sound, then wearing and calls; head gestures answer calls, so they moved to Calls |
