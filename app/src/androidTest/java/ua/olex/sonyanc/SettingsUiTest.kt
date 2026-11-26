@@ -62,13 +62,15 @@ class SettingsUiTest {
         val key = AdvancedSettings.Key.TOUCH
         val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
         content { setting, index, code -> writes.add(Triple(setting, index, code)) }
-        val left = compose.onNodeWithText("Left earbud").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("Left earbud").assertDoesNotExist()
+        compose.onNodeWithText("Touch assignments").performScrollTo().performClick()
+        val left = compose.onNodeWithText("Left earbud").assertIsSelected()
         compose.onNode(hasText("Noise control") and isSelectable()).assertIsSelected().performClick()
         compose.runOnIdle { assertTrue(writes.isEmpty()) }
         val right = compose.onNodeWithText("Right earbud").performClick().assertIsSelected()
         assertTrue(left.getBoundsInRoot().right <= right.getBoundsInRoot().left)
         compose.onNode(hasText("Playback") and isSelectable()).assertIsSelected()
-        compose.onNode(hasText("Off") and isSelectable()).performScrollTo().performClick().assertIsSelected()
+        compose.onNode(hasText("Off") and isSelectable()).performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(listOf(Triple(key, 2, 0xFF)), writes) }
     }
     @Test fun missingDeviceValuesNeverBecomeEnabledSwitches() {

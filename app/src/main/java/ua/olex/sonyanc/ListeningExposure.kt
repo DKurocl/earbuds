@@ -19,6 +19,13 @@ internal object ListeningPressure {
 
     fun level(payload: ByteArray): Int? = payload.getOrNull(2)?.let { it.toInt() and 0xFF }?.takeIf { it in 1..140 }
 
+    fun unavailable(payload: ByteArray): String? = when (payload.getOrNull(3)?.toInt()) {
+        0 -> "Play audio to measure"
+        1 -> "Paused during calls"
+        2 -> "Put in your earbuds"
+        else -> null
+    }
+
     suspend fun read(variant: Int): ByteArray? {
         val bus = SonyProtocol.TYPE_COMMAND_2
         return Headphones.exchange(700, connect = false, priority = CommandScheduler.Priority.BACKGROUND,
@@ -28,7 +35,7 @@ internal object ListeningPressure {
     }
 }
 
-data class ListeningExposure(val level: Int?, val fraction: Double) {
+data class ListeningExposure(val level: Int?, val fraction: Double, val unavailable: String? = null) {
     internal val percent: Int get() = (fraction * 100).toInt()
 }
 
@@ -78,7 +85,7 @@ internal fun rememberListeningExposure(enabled: Boolean, address: String?): List
             var lastSaved = SystemClock.elapsedRealtime()
             var generation: Long? = null
             var variant: Int? = null
-            var declined = false
+            var nextProbe = 0L
             var previous: Pair<Int, Long>? = null
             fun save() {
                 if (dirty && Prefs.deviceAddress(context) == address) {
@@ -92,10 +99,10 @@ internal fun rememberListeningExposure(enabled: Boolean, address: String?): List
                     if (generation != connection) {
                         generation = connection
                         variant = null
-                        declined = false
+                        nextProbe = 0L
                         previous = null
                     }
-                    val payload = if (audio?.isMusicActive == true && !declined && Headphones.state.value.connected &&
+                    val payload = if (SystemClock.elapsedRealtime() >= nextProbe && Headphones.state.value.connected &&
                         Headphones.state.value.pending == null) {
                         val known = variant
                         if (known != null) ListeningPressure.read(known)
@@ -105,7 +112,7 @@ internal fun rememberListeningExposure(enabled: Boolean, address: String?): List
                                 reply = ListeningPressure.read(candidate)
                                 if (reply != null) { variant = candidate; break }
                             }
-                            declined = reply == null
+                            if (reply == null) nextProbe = SystemClock.elapsedRealtime() + 60_000L
                             reply
                         }
                     } else null
@@ -124,10 +131,10 @@ internal fun rememberListeningExposure(enabled: Boolean, address: String?): List
                         shown = ListeningExposure(level, values.values.sum())
                     } else {
                         previous = null
-                        shown = shown?.copy(level = null)
+                        shown = ListeningExposure(null, values.values.sum(), payload?.let(ListeningPressure::unavailable) ?: "No current reading")
                     }
                     if (elapsed - lastSaved >= 60_000L) { save(); lastSaved = elapsed }
-                    delay(15_000)
+                    delay(if (level != null || audio?.isMusicActive == true) 15_000 else 30_000)
                 }
             } finally {
                 save()

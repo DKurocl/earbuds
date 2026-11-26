@@ -162,7 +162,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
 
     // ---- navigation: a back stack of pages with the system predictive back gesture ----
     var stack by rememberSaveable { mutableStateOf(listOf(Page.HOME.name)) }
-    val exposure = rememberListeningExposure(stack.lastOrNull() == Page.HOME.name && linked == true && device.connected, model.saved)
+    val exposure = rememberListeningExposure(stack.lastOrNull() == Page.HOME.name && device.connected, model.saved)
     fun open(page: Page) { if (stack.last() != page.name) stack = stack + page.name }
     fun back() { if (stack.size > 1) stack = stack.dropLast(1) }
     // The predictive back gesture lives in PageStack (Navigation.kt).

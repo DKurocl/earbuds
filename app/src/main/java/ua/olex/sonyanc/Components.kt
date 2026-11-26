@@ -46,7 +46,7 @@ fun PageScaffold(
 ) {
     Scaffold(
         containerColor = Surfaces.page,
-        topBar = { DeviceTopBar(title, onBack, actions) },
+        topBar = { DeviceTopBar(title, onBack, actions = actions) },
     ) { insets ->
         Column(
             Modifier.padding(insets).consumeWindowInsets(insets).fillMaxSize().verticalScroll(rememberScrollState())
@@ -58,12 +58,15 @@ fun PageScaffold(
 }
 
 @Composable
-internal fun DeviceTopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit) {
+internal fun DeviceTopBar(title: String, onBack: (() -> Unit)? = null, subtitle: (@Composable () -> Unit)? = null, actions: @Composable RowScope.() -> Unit) {
     val page = Surfaces.page
     TopAppBar(
         title = {
-            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Column {
+                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                subtitle?.invoke()
+            }
         },
         navigationIcon = {
             if (onBack != null) HeaderActionButton(HeaderAction(Glyph.BACK, "Back", onBack), Modifier.padding(start = 4.dp))

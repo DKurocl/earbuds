@@ -57,6 +57,8 @@ class PortableSettingsTest {
         assertEquals(80, ListeningPressure.level(reply))
         reply[2] = 0xFF.toByte()
         assertNull(ListeningPressure.level(reply))
+        reply[3] = 2
+        assertEquals("Put in your earbuds", ListeningPressure.unavailable(reply))
         assertEquals(1.0, ExposureLog.fraction(80, 80, 40 * 3600.0), 1e-12)
         assertEquals(1.0, ExposureLog.fraction(90, 90, 4 * 3600.0), 1e-12)
         val now = 200 * ExposureLog.HOUR_MS

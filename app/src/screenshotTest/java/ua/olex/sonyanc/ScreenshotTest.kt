@@ -231,8 +231,8 @@ class ScreenshotTest {
                 onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             )
         } }
-        compose.onNodeWithText("Case reserve").assertIsDisplayed()
-        compose.onNodeWithText("Listening level").assertDoesNotExist()
+        compose.onNodeWithText("Listening level").assertIsDisplayed()
+        compose.onNodeWithText("No reading yet").assertIsDisplayed()
         compose.runOnIdle { exposure.value = ListeningExposure(86, 1.2) }
         compose.onNodeWithText("86 dB").assertIsDisplayed()
         compose.onNodeWithText("Weekly estimate: turn down").assertIsDisplayed()

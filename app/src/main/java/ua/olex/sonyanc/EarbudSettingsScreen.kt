@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 
 package ua.olex.sonyanc
 
@@ -146,22 +146,34 @@ fun EarbudSettingsContent(
         val chatOn = code(Key.CHAT, 0) == 0
         val promptsOn = code(Key.GUIDANCE, 0) == 0
         if (has(Key.TOUCH) || has(Key.GESTURES) || has(Key.CYCLE) || values[Key.PANEL] != null) {
+            var editTouch by rememberSaveable { mutableStateOf(false) }
             var side by rememberSaveable { mutableIntStateOf(1) }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionTitle("Touch and gestures")
-                if (has(Key.TOUCH)) {
-                    TouchAssignments(
-                        side, { side = it }, choices(Key.TOUCH, side), code(Key.TOUCH, side),
-                        busy(Key.TOUCH), notes[rowId(Key.TOUCH, side)],
-                    ) { update(Key.TOUCH, side, it) }
+            if (editTouch && values[Key.TOUCH] != null) {
+                ModalBottomSheet(onDismissRequest = { editTouch = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = UiTokens.pageInset).padding(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("Touch assignments", style = MaterialTheme.typography.titleLarge)
+                        TouchAssignments(side, { side = it }, choices(Key.TOUCH, side), code(Key.TOUCH, side),
+                            busy(Key.TOUCH), notes[rowId(Key.TOUCH, side)]) { update(Key.TOUCH, side, it) }
+                    }
                 }
-                ListGroup {
+            }
+            Column {
+                ListGroup("Touch and gestures") {
                     if (!panelHidden && values[Key.PANEL] != null) item {
                         val panel = values[Key.PANEL]
                         SwitchRow(it, Glyph.EARBUDS, "Touch controls", "Enable taps on the earbuds",
                             panel?.let(AdvancedSettings::panelOn), busy(Key.PANEL), note = notes[rowId(Key.PANEL, 1)]) { on ->
                             panel?.let { v -> update(Key.PANEL, 1, AdvancedSettings.panelCode(v, on)) }
                         }
+                    }
+                    if (values[Key.TOUCH] != null) item { shape ->
+                        val summary = (1..2).joinToString(" · ") { ear ->
+                            val label = choices(Key.TOUCH, ear).firstOrNull { it.first == code(Key.TOUCH, ear) }?.second ?: "Device setting"
+                            "${if (ear == 1) "Left" else "Right"}: $label"
+                        }
+                        NavRow(shape, Glyph.TUNE, "Touch assignments", summary) { editTouch = true }
                     }
                     if (has(Key.CYCLE)) item {
                         ChoiceRow(it, Glyph.NOISE_AWARE, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4),

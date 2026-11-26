@@ -92,8 +92,21 @@ fun HushScreen(
     }
     var confirmPowerOff by remember { mutableStateOf(false) }
     if (confirmPowerOff) PowerOffDialog({ confirmPowerOff = false }) { confirmPowerOff = false; onPowerOff() }
+    val connectionLabel = when {
+        !granted -> "Bluetooth access required"
+        !bluetoothOn -> "Bluetooth is off"
+        !hasDevice -> "No earbuds selected"
+        !paired -> "Earbuds are no longer paired"
+        ready || (linked == true && status != Headphones.Status.FAILED) -> "Connected"
+        linked == false -> (lastSeen ?: batterySeenAt)?.let {
+            "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
+        } ?: "Earbuds disconnected"
+        connecting -> statusText(status)
+        else -> error ?: statusText(status)
+    }
+    val showConnectionProgress = (connecting && linked != true) || (ready && batteryRefreshing && battery == null)
     Scaffold(containerColor = Surfaces.page, topBar = {
-        DeviceTopBar(deviceName.ifBlank { "WF-1000XM5" }) {
+        DeviceTopBar(deviceName.ifBlank { "WF-1000XM5" }, subtitle = { ConnectionStatus(connectionLabel, showConnectionProgress) }) {
             val settings = HeaderAction(Glyph.SETTINGS, "Settings", onSettings)
             if (onProfiles != null) HeaderActionPair(HeaderAction(Glyph.TUNE, "Personal profiles", onProfiles), settings)
             else HeaderActionButton(settings)
@@ -124,22 +137,6 @@ fun HushScreen(
                 .padding(bottom = dockClearance),
             verticalArrangement = Arrangement.spacedBy(UiTokens.homeSectionGap),
         ) {
-            // Keep connection feedback under the device name so the controls stay in place.
-            val connectionLabel = when {
-                !granted -> "Bluetooth access required"
-                !bluetoothOn -> "Bluetooth is off"
-                !hasDevice -> "No earbuds selected"
-                !paired -> "Earbuds are no longer paired"
-                ready || (linked == true && status != Headphones.Status.FAILED) -> "Connected"
-                linked == false -> (lastSeen ?: batterySeenAt)?.let {
-                    "Disconnected · " + DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
-                } ?: "Earbuds disconnected"
-                connecting -> statusText(status)
-                else -> error ?: statusText(status)
-            }
-            val showConnectionProgress = (connecting && linked != true) || (ready && batteryRefreshing && battery == null)
-            Box(Modifier.introFade()) { ConnectionStatus(connectionLabel, showConnectionProgress) }
-
             when {
                 !granted -> SetupCard("Allow Bluetooth access", "Earbuds talks to your WF-1000XM5 directly. Nothing leaves your phone.", "Allow", Glyph.BLUETOOTH, onPermission)
                 !bluetoothOn -> SetupCard("Turn on Bluetooth", "Connect your earbuds in Android Bluetooth settings.", "Bluetooth settings", Glyph.BLUETOOTH, onBluetooth)
@@ -154,7 +151,7 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, exposure, onBatteryDetails,
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, exposure, ready, onBatteryDetails,
                             )
                         }
                     }
@@ -207,10 +204,10 @@ fun HushScreen(
 @Composable
 private fun ConnectionStatus(status: String, busy: Boolean) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 24.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        Modifier.heightIn(min = 18.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start),
     ) {
-        Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         if (busy) LoadingIndicator(Modifier.size(20.dp))
     }
@@ -667,7 +664,7 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
 /** Two equal tiles with matching surfaces for earbud and case estimates. */
 @Composable
 private fun ListeningTime(
-    battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, exposure: ListeningExposure?,
+    battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, exposure: ListeningExposure?, connected: Boolean,
     onBattery: () -> Unit,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -682,25 +679,24 @@ private fun ListeningTime(
             Text("Listening left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             Text(buds?.let(BatteryLife::short) ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
                 color = if (buds != null && buds < 60) cs.error else cs.onSurface)
-            if (exposure != null) {
-                Text(case?.let { "+${BatteryLife.short(it)} from case" } ?: "Case —",
-                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
+            Text(case?.let { "+${BatteryLife.short(it)} from case" } ?: "Case unavailable",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         HomeSummaryTile(RoundedCornerShape(10.dp, corner, corner, 10.dp), Modifier.weight(1f).fillMaxHeight(),
-            "Case reserve", onBattery.takeIf { exposure == null }) {
-            if (exposure == null) {
-                Text("Case reserve", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                Text(case?.let { "+${BatteryLife.short(it)}" } ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())
-            } else {
-                Text("Listening level", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                Text(exposure.level?.let { "$it dB" } ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())
-                Text(
-                    if (exposure.fraction >= 1.0) "Weekly estimate: turn down" else "Tracked here: ${exposure.percent}% of weekly allowance",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (exposure.fraction >= 1.0) cs.error else cs.onSurfaceVariant,
-                )
-            }
+            "Listening level", null) {
+            Text("Listening level", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+            Text(exposure?.level?.let { "$it dB" } ?: "— dB", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())
+            Text(
+                when {
+                    !connected -> "Disconnected"
+                    exposure == null -> "No reading yet"
+                    exposure.level == null && exposure.unavailable != null -> exposure.unavailable
+                    exposure.fraction >= 1.0 -> "Weekly estimate: turn down"
+                    else -> "${exposure.percent}% tracked this week"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if ((exposure?.fraction ?: 0.0) >= 1.0) cs.error else cs.onSurfaceVariant,
+            )
         }
     }
 }
@@ -711,7 +707,7 @@ private fun HomeSummaryTile(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val body: @Composable () -> Unit = {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically), content = content)
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp), content = content)
     }
     if (onClick != null) {
         Surface(onClick = onClick, shape = shape, color = Surfaces.estimate,
