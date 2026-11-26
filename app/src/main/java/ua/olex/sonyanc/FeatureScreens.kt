@@ -164,7 +164,8 @@ private fun WeekCard(summary: SafeListening.Summary?, reference: SafeListening.R
 @Composable
 private fun DaysCard(summary: SafeListening.Summary, reference: SafeListening.Reference) {
     val cs = MaterialTheme.colorScheme
-    val day = SimpleDateFormat("EEE", Locale.getDefault())
+    val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
+    val day = remember(locale) { SimpleDateFormat("EEE", locale) }
     val shares = summary.days.map { SafeListening.dose(it.pressure, reference, days = 1) }
     val top = maxOf(1.0, shares.maxOrNull() ?: 0.0)
     Surface(shape = RoundedCornerShape(UiTokens.cardRadius), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
