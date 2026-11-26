@@ -32,21 +32,16 @@ fun DeviceInfoContent(
 ) {
     var confirmOff by remember { mutableStateOf(false) }
     val connected = status == Headphones.Status.CONNECTED
-    if (confirmOff) AlertDialog(
-        onDismissRequest = { confirmOff = false },
-        title = { Text("Turn off earbuds?") },
-        text = { Text("Put them in the case and take them out again to turn them back on.") },
-        confirmButton = { TextButton(onClick = { confirmOff = false; onTurnOff() }) { Text("Turn off") } },
-        dismissButton = { TextButton(onClick = { confirmOff = false }) { Text("Cancel") } },
-    )
+    if (confirmOff) PowerOffDialog({ confirmOff = false }) { confirmOff = false; onTurnOff() }
     PageScaffold("Device info", onBack, actions = {
-        if (refreshing) LoadingIndicator(Modifier.padding(end = 12.dp).size(32.dp))
-        else IconButton(onClick = onRefresh, enabled = status != Headphones.Status.CONNECTING, modifier = Modifier.semantics { contentDescription = "Refresh" }) { HushIcon(Glyph.REFRESH) }
+        HeaderActionButton(HeaderAction(Glyph.REFRESH, "Refresh", {
+            if (!refreshing && status != Headphones.Status.CONNECTING) onRefresh()
+        }))
     }) {
         DeviceHero(deviceName, statusText(status))
         ListGroup {
-            item { InfoRow(it, Glyph.EQ, "Audio codec", if (connected) codec?.label ?: if (refreshing) null else "Not reported" else "\u2014") }
-            item { InfoRow(it, Glyph.INFO, "Firmware", if (connected) firmware else "\u2014") }
+            item { InfoRow(it, Glyph.EQ, "Audio codec", codec?.label ?: "Not reported") }
+            item { InfoRow(it, Glyph.INFO, "Firmware", firmware ?: "Not reported") }
         }
         if (ldacBlocked) HintCard(
             "LDAC is turned off by a setting",
@@ -68,6 +63,17 @@ fun DeviceInfoContent(
             item { NavRow(it, Glyph.POWER, "Turn off earbuds", danger = true, onClick = { confirmOff = true }) }
         }
     }
+}
+
+@Composable
+internal fun PowerOffDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Turn off earbuds?") },
+        text = { Text("Put them in the case and take them out again to turn them back on.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Turn off") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** Pixel's device details header: the owner's earbuds and case (the product render), name and state. */
@@ -230,8 +236,10 @@ internal fun DiagnosticsContent(
 ) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Diagnostics", onBack, actions = {
-        IconButton(onClick = onCopy, enabled = log.isNotEmpty(), modifier = Modifier.semantics { contentDescription = "Copy log" }) { HushIcon(Glyph.COPY) }
-        IconButton(onClick = onClear, enabled = log.isNotEmpty(), modifier = Modifier.semantics { contentDescription = "Clear log" }) { HushIcon(Glyph.CLEAR) }
+        HeaderActionPair(
+            HeaderAction(Glyph.COPY, "Copy log", onCopy, log.isNotEmpty()),
+            HeaderAction(Glyph.CLEAR, "Clear log", onClear, log.isNotEmpty()),
+        )
     }) {
         if (onCheck != null) ListGroup("Connection check") {
             item {

@@ -162,9 +162,12 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun readDeviceInfo() = viewModelScope.launch {
-        Headphones.readFirmware()
-        Headphones.readAdvanced(AdvancedSettings.Key.QUALITY)
+    fun readDeviceInfo(force: Boolean = false) = viewModelScope.launch {
+        if (force || Headphones.state.value.firmware == null) Headphones.readFirmware()
+        if (force || AdvancedSettings.Key.QUALITY !in Headphones.advanced.value &&
+            AdvancedSettings.Key.QUALITY !in Prefs.cachedAdvanced(ctx)) {
+            Headphones.readAdvanced(AdvancedSettings.Key.QUALITY)
+        }
     }
 
     fun preferQuality() = viewModelScope.launch {

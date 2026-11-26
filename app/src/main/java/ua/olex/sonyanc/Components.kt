@@ -18,7 +18,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -37,10 +36,7 @@ import androidx.compose.ui.unit.dp
 /** Shows a short message at the bottom of the screen; no-op outside the app shell (tests, previews). */
 val LocalMessages = staticCompositionLocalOf<(String) -> Unit> { {} }
 
-/**
- * A full-screen page with a large title that collapses on scroll, like Android settings.
- * Content scrolls in a Column so every row stays reachable for tests and accessibility.
- */
+/** Scrollable device page with a single title row and stable touch targets. */
 @Composable
 fun PageScaffold(
     title: String,
@@ -48,33 +44,12 @@ fun PageScaffold(
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    // A page that fits the screen doesn't scroll at all: the title collapses only when there is
-    // something below to scroll to.
-    val column = rememberScrollState()
-    val appBarState = rememberTopAppBarState()
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-        state = appBarState,
-        canScroll = { column.maxValue > 0 },
-    )
-    val page = Surfaces.page
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        containerColor = page,
-        topBar = {
-            val navigation: @Composable () -> Unit = {
-                FilledTonalIconButton(onClick = onBack,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                    modifier = Modifier.padding(start = 4.dp).semantics { contentDescription = "Back" }) { HushIcon(Glyph.BACK) }
-            }
-            val label: @Composable () -> Unit = { Text(title, maxLines = 1) }
-            val colors = TopAppBarDefaults.topAppBarColors(containerColor = page, scrolledContainerColor = page)
-            LargeFlexibleTopAppBar(
-                title = label, navigationIcon = navigation, actions = actions, colors = colors, scrollBehavior = scroll,
-            )
-        },
+        containerColor = Surfaces.page,
+        topBar = { DeviceTopBar(title, onBack, actions) },
     ) { insets ->
         Column(
-            Modifier.padding(insets).consumeWindowInsets(insets).fillMaxSize().verticalScroll(column)
+            Modifier.padding(insets).consumeWindowInsets(insets).fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = UiTokens.pageInset),
             verticalArrangement = Arrangement.spacedBy(UiTokens.pageSectionGap),
             content = { content(); Spacer(Modifier.height(12.dp)) },
@@ -82,32 +57,47 @@ fun PageScaffold(
     }
 }
 
-internal data class HeaderAction(val glyph: Glyph, val label: String, val onClick: () -> Unit)
+@Composable
+internal fun DeviceTopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit) {
+    val page = Surfaces.page
+    TopAppBar(
+        title = {
+            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        },
+        navigationIcon = {
+            if (onBack != null) HeaderActionButton(HeaderAction(Glyph.BACK, "Back", onBack), Modifier.padding(start = 4.dp))
+        },
+        actions = { Row(Modifier.padding(end = 8.dp), content = actions) },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = page, scrolledContainerColor = page),
+    )
+}
 
-/** Connect two related app-level actions, while each keeps its own touch and accessibility target. */
+internal data class HeaderAction(val glyph: Glyph, val label: String, val onClick: () -> Unit, val enabled: Boolean = true)
+
+@Composable
+internal fun HeaderActionButton(action: HeaderAction, modifier: Modifier = Modifier, leading: Boolean? = null) {
+    val cs = MaterialTheme.colorScheme
+    fun corners(outer: Int, inner: Int): RoundedCornerShape {
+        val start = if (leading == false) inner.dp else outer.dp
+        val end = if (leading == true) inner.dp else outer.dp
+        return RoundedCornerShape(topStart = start, topEnd = end, bottomStart = start, bottomEnd = end)
+    }
+    FilledTonalIconButton(
+        onClick = action.onClick, enabled = action.enabled,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = cs.surfaceContainerHigh, contentColor = cs.onSurfaceVariant,
+        ),
+        shapes = IconButtonDefaults.shapes(shape = corners(24, 7), pressedShape = corners(18, 5)),
+        modifier = modifier.size(UiTokens.minTouchTarget).semantics { contentDescription = action.label },
+    ) { HushIcon(action.glyph, Modifier.size(22.dp)) }
+}
+
 @Composable
 internal fun HeaderActionPair(start: HeaderAction, end: HeaderAction, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
-    val colors = IconButtonDefaults.filledTonalIconButtonColors(
-        containerColor = cs.surfaceContainerHigh,
-        contentColor = cs.onSurfaceVariant,
-    )
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-        @Composable fun Button(action: HeaderAction, leading: Boolean) {
-            fun corners(outer: Int, inner: Int): RoundedCornerShape {
-                val near = if (leading) outer.dp else inner.dp
-                val far = if (leading) inner.dp else outer.dp
-                return RoundedCornerShape(topStart = near, topEnd = far, bottomStart = near, bottomEnd = far)
-            }
-            FilledTonalIconButton(
-                onClick = action.onClick,
-                colors = colors,
-                shapes = IconButtonDefaults.shapes(shape = corners(24, 7), pressedShape = corners(18, 5)),
-                modifier = Modifier.size(UiTokens.minTouchTarget).semantics { contentDescription = action.label },
-            ) { HushIcon(action.glyph, Modifier.size(22.dp)) }
-        }
-        Button(start, leading = true)
-        Button(end, leading = false)
+        HeaderActionButton(start, leading = true)
+        HeaderActionButton(end, leading = false)
     }
 }
 
@@ -133,7 +123,7 @@ fun ListGroup(title: String? = null, build: GroupScope.() -> Unit) {
 @Composable
 fun SectionTitle(text: String) {
     Text(
-        text, style = MaterialTheme.typography.titleMedium,
+        text, style = MaterialTheme.typography.labelLargeEmphasized,
         color = MaterialTheme.colorScheme.primary, modifier = Modifier.semantics { heading() }.padding(start = 12.dp, top = 6.dp),
     )
 }

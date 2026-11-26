@@ -43,7 +43,7 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
   - Settings show their last known values at once and keep their shape while the earbuds are
     asked again; only the top bar shows that a read is running, and a row quietly updates if
     the answer differs. Rows ignore taps while their own setting is being read or written.
-- **Pages**: `PageScaffold` = `LargeFlexibleTopAppBar` that collapses on scroll, back arrow, actions.
+- **Pages**: A shared top bar keeps the title beside Back and uses the same tonal actions as Home.
 - **Messages**: write failures appear as a snackbar (`LocalMessages`); link problems as a
   banner under the device header (`ErrorBanner`).
 
@@ -51,14 +51,14 @@ come from Material's own tokens (`ExpressiveMotionTokens`, `ConnectedButtonGroup
 
 | Page | Content |
 |---|---|
-| Home (`HomeScreen.kt`) | Settings button only (gear → App settings), no logo or title. Device name, status line ("Connected · LDAC" / "Disconnected · 25 minutes ago"). Error banner. Battery rings L / case / R (disc, chip in the ring gap, wave while charging; tap to refresh). Listening-time tiles (tap → the Battery page grows out of the tile; no separate Battery row). Find (+ Connect when disconnected). More controls. Bottom **dock**: ANC / Ambient / Off as Material's connected `ButtonGroup` of `ToggleButton`s (56 dp, 2 dp apart, 8 dp inner corners, 4 dp pressed): the pressed button widens and its neighbours give way (`animateWidth`), the chosen one morphs into a pill; in ANC Speak-to-Chat (toggle button) and "Ambient · N min" (tonal button); in Ambient the timer countdown, Material's slider in whole steps, Low / Medium / High as a connected toggle group and Voice as its own toggle. |
-| Equalizer | Connected graph and Clear Bass sections. Five draggable bands share a neutral plot and gain labels, with primary reserved for the curve and active preset. Presets use connected Material buttons, including Custom, Flat and both saved slots. |
+| Home (`HomeScreen.kt`) | Device name, Profiles and Settings in the top bar. Connection status, battery rings, two matching summary tiles, Find, Bluetooth and Power off. Mode-specific sliders and shortcuts float above the ANC / Ambient / Off dock without a surrounding panel. |
+| Equalizer | Connected graph and Clear Bass sections. Five draggable bands share a neutral plot and gain labels, with primary reserved for the curve and active preset. Presets use connected Material buttons, including Custom, Flat and both saved slots. Import and Save use the standard document picker and two app-local slots. GraphicEQ is approximated using the six hardware controls. |
 | Earbud settings | Sound, Controls, Playback & connection, Voice prompts. Every value is read from the earbuds and written with read-back. |
 | Device info | Status, codec, firmware; LDAC hint; Find earbuds; Android Bluetooth settings; Turn off earbuds (confirmation). |
 | App settings | Device picker only when needed, display name, Stay in sync, When earbuds connect, At home (+ Home), Ambient for a moment length, case battery reminder, low earbud battery, wallpaper colors, haptics, Quick Settings tile and its cycle, both widgets, diagnostics, version. |
 | Diagnostics | Command log with copy and clear. |
 
-The home screen has no logo or app name (only the settings button); the CI visual check greps for the device name "WF-1000XM5".
+The CI visual check greps for the device name "WF-1000XM5".
 `DesignPreviewActivity` (debug only) renders every page from fixtures:
 `anc`, `ambient`, `error`, `permission`, `settings`, `settings-loading`, `equalizer`,
 `equalizer-preset`, `info`, `app`, `diagnostics`, `widgets`, `widgets-battery`.
@@ -81,6 +81,7 @@ than wide (`WidgetLayout.modes`). `WidgetAnimationTest` seeks the animators and 
   ambient, 12 h off, case two charges) and switches to the owner's measured drain (`BatteryLog`:
   same out-of-case session, not charging, falling readings, ≥ 30 min / ≥ 5 %), kept within
   0.5 to 1.5× the rating. The emptier earbud decides.
+- **Listening level**: the WF-1000XM5 reports sound pressure via [MDR v2 type 2](https://github.com/mos9527/SonyHeadphonesClient/tree/v1-compat). Earbuds makes a low-priority read only during playback on visible Home. The rolling estimate covers readings collected here. If there is no report or history, the right tile continues to show the case reserve.
 - **Instant start**: the last battery reading is stored and shown at launch, dimmed, with
   "Last seen 5 min ago", until the earbuds answer.
 - **LDAC hint**: Device info reads Bluetooth quality; when it is Stable connection and the codec

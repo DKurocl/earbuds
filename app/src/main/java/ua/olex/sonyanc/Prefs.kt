@@ -33,6 +33,8 @@ object Prefs {
     fun deviceAddress(ctx: Context): String? = p(ctx).getString("device", null)
     fun displayName(ctx: Context): String? = p(ctx).getString("display_name", null)?.takeUnless { it.isBlank() }
     fun setDisplayName(ctx: Context, value: String) = p(ctx).edit().putString("display_name", value).apply()
+    fun lastFirmware(ctx: Context): String? = p(ctx).getString("firmware", null)
+    fun saveFirmware(ctx: Context, value: String) = p(ctx).edit().putString("firmware", value).apply()
     fun deviceName(ctx: Context): String? = p(ctx).getString("device_name", null)?.takeUnless { it.isBlank() }
     fun saveDevice(ctx: Context, address: String, name: String?) =
         p(ctx).edit().putString("device", address).putString("device_name", name).apply()
@@ -83,7 +85,7 @@ object Prefs {
         listOf(
             "mode", "voice", "level", "codec", "battery_at", "linked", "last_seen",
             "cache_advanced", "cache_features", "cache_eq", "last_eq_preset", "panel_refused",
-            "battery_log", "battery_health", "buds_reminded_session",
+            "battery_log", "battery_health", "buds_reminded_session", "firmware", "eq_saved_1", "eq_saved_2", "listening_exposure",
         ).forEach { editor.remove(it) }
         editor.apply()
         batteryHistory = null
@@ -190,6 +192,14 @@ object Prefs {
         val bands = parts.getOrNull(1).orEmpty().split(',').filter { it.isNotEmpty() }.map { it.toIntOrNull() ?: return null }
         if (bands.size !in listOf(0, 6) || bands.any { it !in -10..10 }) null else EqualizerProtocol.State(preset, bands)
     }
+    fun savedSound(ctx: Context, slot: Int): List<Int>? = p(ctx).getString("eq_saved_$slot", null)
+        ?.split(',')?.mapNotNull(String::toIntOrNull)?.takeIf { it.size == 6 && it.all { gain -> gain in -10..10 } }
+
+    fun saveSound(ctx: Context, slot: Int, bands: List<Int>) {
+        require(slot in 1..2 && bands.size == 6 && bands.all { it in -10..10 })
+        p(ctx).edit().putString("eq_saved_$slot", bands.joinToString(",")).apply()
+    }
+
     fun lastEnabledEqualizerPreset(ctx: Context): Int =
         p(ctx).getInt("last_eq_preset", 0xA0).takeIf { it != 0 && it in EqualizerProtocol.presets } ?: 0xA0
 

@@ -162,6 +162,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
 
     // ---- navigation: a back stack of pages with the system predictive back gesture ----
     var stack by rememberSaveable { mutableStateOf(listOf(Page.HOME.name)) }
+    val exposure = rememberListeningExposure(stack.lastOrNull() == Page.HOME.name && linked == true && device.connected, model.saved)
     fun open(page: Page) { if (stack.last() != page.name) stack = stack + page.name }
     fun back() { if (stack.size > 1) stack = stack.dropLast(1) }
     // The predictive back gesture lives in PageStack (Navigation.kt).
@@ -170,6 +171,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission(), model::onPermission)
     val widgetManager = remember { AppWidgetManager.getInstance(ctx) }
     fun bluetooth() = ctx.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+
     /** Google Find Hub, where the earbuds are registered; its web page if the app is missing. */
     fun findHub() {
         val app = ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.adm")
@@ -253,6 +255,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         paired = model.saved == null || model.devices.any { it.address == model.saved },
                         batterySeenAt = device.batterySeenAt, batteryCodec = device.codec?.code,
                         onFind = ::findHub, onBatteryDetails = { open(Page.BATTERY) },
+                        onPowerOff = { model.turnOff() }, turningOff = model.turningOff, exposure = exposure,
                         speakToChat = (advanced[AdvancedSettings.Key.CHAT] ?: cachedAdvanced[AdvancedSettings.Key.CHAT])
                             ?.firstOrNull()?.let { it == 0 }?.takeIf { linked != false },
                         onSpeakToChat = { model.setSpeakToChat(it) },
@@ -271,16 +274,16 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                     Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) })
                     Page.DEVICE -> {
                         LaunchedEffect(startTick) { model.readDeviceInfo() }
-                        val quality = advanced[AdvancedSettings.Key.QUALITY]?.firstOrNull()
+                        val quality = (advanced[AdvancedSettings.Key.QUALITY] ?: cachedAdvanced[AdvancedSettings.Key.QUALITY])?.firstOrNull()
                         val ldac = device.codec?.code == 0x10
                         DeviceInfoContent(
                             model.displayName, device.status, device.codec, device.firmware,
                             // "Stable connection" keeps the earbuds off LDAC; say so only when it matters.
-                            ldacBlocked = device.connected && quality == 1 && !ldac,
-                            hdAudioOff = device.connected && device.codecLive && quality == 0 && !ldac,
+                            ldacBlocked = linked == true && quality == 1 && !ldac,
+                            hdAudioOff = linked == true && device.codec != null && quality == 0 && !ldac,
                             onPreferQuality = { model.preferQuality() },
                             refreshing = device.codecRefreshing || device.batteryRefreshing || model.turningOff,
-                            onBack = ::back, onRefresh = { model.refreshInfo() }, onBluetooth = ::bluetooth,
+                            onBack = ::back, onRefresh = { model.refreshInfo(); model.readDeviceInfo(force = true) }, onBluetooth = ::bluetooth,
                             onFind = ::findHub, onTurnOff = { model.turnOff() },
                         )
                     }

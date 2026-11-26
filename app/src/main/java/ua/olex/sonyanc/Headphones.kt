@@ -79,7 +79,7 @@ object Headphones {
     internal val conn = SonyConnection(scope, ::addLog, ::onPayload) {
         _state.update {
             it.copy(status = Status.DISCONNECTED, ncConfirmed = false, codecLive = false,
-                liveBatteryParts = emptySet(), firmware = null)
+                liveBatteryParts = emptySet())
         }
         EarbudSettingsLink.clearDeviceSettings()
         DeviceReads.invalidate()
@@ -94,7 +94,7 @@ object Headphones {
             val battery = Prefs.lastBattery(app)
             _state.update {
                 it.copy(nc = Prefs.lastNc(app), battery = battery?.first, batterySeenAt = battery?.second,
-                    codec = Prefs.lastCodec(app)?.let(CodecProtocol::State))
+                    codec = Prefs.lastCodec(app)?.let(CodecProtocol::State), firmware = Prefs.lastFirmware(app))
             }
         }
     }
@@ -245,7 +245,7 @@ object Headphones {
         // Only when Android reports no audio link and no connect broadcast says otherwise.
         if (Prefs.linked(app) != true && !audioLinked(adapter)) return fail("Earbuds aren't connected. Take them out of the case.")
         _state.update {
-            it.copy(status = Status.CONNECTING, ncConfirmed = false, liveBatteryParts = emptySet(), codecLive = false, firmware = null)
+            it.copy(status = Status.CONNECTING, ncConfirmed = false, liveBatteryParts = emptySet(), codecLive = false)
         }
         val generation: Long
         try {
@@ -376,7 +376,11 @@ object Headphones {
     /** Updates state from any reply or notification. Waiters are matched separately. */
     private fun decode(type: Int, p: ByteArray) {
         val op = p.firstOrNull()?.toInt()?.and(255) ?: return
-        if (type == CMD) AdvancedSettings.firmware(p)?.let { fw -> _state.update { it.copy(firmware = fw) }; return }
+        if (type == CMD) AdvancedSettings.firmware(p)?.let { fw ->
+            if (_state.value.firmware != fw) Prefs.saveFirmware(app, fw)
+            _state.update { it.copy(firmware = fw) }
+            return
+        }
         AdvancedSettings.parse(type, p)?.let { (key, value) ->
             EarbudSettingsLink.advancedInquiries[key] = p[1].toInt() and 255
             EarbudSettingsLink._advanced.update { it + (key to value) }

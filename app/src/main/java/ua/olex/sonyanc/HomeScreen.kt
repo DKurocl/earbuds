@@ -78,9 +78,9 @@ fun HushScreen(
     speakToChat: Boolean? = null, onSpeakToChat: (Boolean) -> Unit = {},
     ambientMinutes: Int = 5, ambientUntil: Long? = null, ambientReturn: Mode = Mode.ANC, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
     linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true,
-    onProfiles: (() -> Unit)? = null,
+    onProfiles: (() -> Unit)? = null, onPowerOff: () -> Unit = {},
+    turningOff: Boolean = false, exposure: ListeningExposure? = null,
 ) {
-    val cs = MaterialTheme.colorScheme
     val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
     val connecting = status == Headphones.Status.CONNECTING && linked != false
     val canControl = granted && hasDevice && bluetoothOn && paired && linked != false
@@ -90,34 +90,27 @@ fun HushScreen(
         if (haptics) feedback.performHapticFeedback(HapticFeedbackType.SegmentTick)
         onMode(value)
     }
+    var confirmPowerOff by remember { mutableStateOf(false) }
+    if (confirmPowerOff) PowerOffDialog({ confirmPowerOff = false }) { confirmPowerOff = false; onPowerOff() }
     Scaffold(containerColor = Surfaces.page, topBar = {
-        // No logo or app name: the device header below says what this is. Settings stay in reach.
-        Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(end = 8.dp, top = 8.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.End,
-        ) {
+        DeviceTopBar(deviceName.ifBlank { "WF-1000XM5" }) {
             val settings = HeaderAction(Glyph.SETTINGS, "Settings", onSettings)
-            if (onProfiles != null) {
-                HeaderActionPair(HeaderAction(Glyph.TUNE, "Personal profiles", onProfiles), settings, Modifier.introFade())
-            } else {
-                val tonal = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.surfaceContainerHigh)
-                FilledTonalIconButton(onClick = onSettings, colors = tonal,
-                    modifier = Modifier.size(UiTokens.minTouchTarget).introFade().semantics { contentDescription = "Settings" }) {
-                    HushIcon(Glyph.SETTINGS, color = cs.onSurfaceVariant)
-                }
-            }
+            if (onProfiles != null) HeaderActionPair(HeaderAction(Glyph.TUNE, "Personal profiles", onProfiles), settings)
+            else HeaderActionButton(settings)
         }
     }) { insets ->
         val density = LocalDensity.current
         var dockHeight by remember { mutableStateOf(0.dp) }
+        var optionsHeight by remember { mutableStateOf(0.dp) }
         val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        val dockClearance = if (showModeDock) (dockHeight - navigationBottom).coerceAtLeast(0.dp) else 0.dp
+        val optionsClearance = if (optionsHeight > 0.dp) dockHeight else 0.dp
+        val dockClearance = if (showModeDock && optionsClearance == 0.dp) (dockHeight - navigationBottom).coerceAtLeast(0.dp) else 0.dp
         Box(Modifier.padding(top = insets.calculateTopPadding()).fillMaxSize()) {
         // Pull down to read battery and codec again (also connects if needed).
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = manualRefreshing, onRefresh = { if (canControl) onBattery() }, state = pull,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().padding(bottom = optionsClearance),
             indicator = {
                 PullToRefreshDefaults.LoadingIndicator(state = pull, isRefreshing = manualRefreshing,
                     modifier = Modifier.align(Alignment.TopCenter).then(
@@ -127,7 +120,8 @@ fun HushScreen(
         ) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = UiTokens.pageInset)
-                .navigationBarsPadding().padding(bottom = dockClearance),
+                .then(if (optionsClearance == 0.dp) Modifier.navigationBarsPadding() else Modifier)
+                .padding(bottom = dockClearance),
             verticalArrangement = Arrangement.spacedBy(UiTokens.homeSectionGap),
         ) {
             // Keep connection feedback under the device name so the controls stay in place.
@@ -144,7 +138,7 @@ fun HushScreen(
                 else -> error ?: statusText(status)
             }
             val showConnectionProgress = (connecting && linked != true) || (ready && batteryRefreshing && battery == null)
-            Box(Modifier.introFade()) { Header(deviceName, connectionLabel, showConnectionProgress) }
+            Box(Modifier.introFade()) { ConnectionStatus(connectionLabel, showConnectionProgress) }
 
             when {
                 !granted -> SetupCard("Allow Bluetooth access", "Earbuds talks to your WF-1000XM5 directly. Nothing leaves your phone.", "Allow", Glyph.BLUETOOTH, onPermission)
@@ -160,26 +154,19 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, onClick = onBatteryDetails,
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, exposure, onBatteryDetails,
                             )
                         }
                     }
 
                     Row(Modifier.fillMaxWidth().introFade(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        // Only what is used day to day. The control link opens and closes by itself (no
-                        // Disconnect); Android's Bluetooth settings are one level down in Device info.
                         BigAction(Glyph.FIND, "Find", onClick = onFind)
-                        if (linked != false && (status == Headphones.Status.FAILED ||
-                                (status == Headphones.Status.DISCONNECTED && linked == null))) {
-                            BigAction(Glyph.REFRESH, "Connect", onClick = onConnect)
-                        }
+                        BigAction(Glyph.BLUETOOTH, if (linked == false || status == Headphones.Status.FAILED) "Connect" else "Bluetooth",
+                            onClick = if (status == Headphones.Status.FAILED && linked == true) onConnect else onBluetooth)
+                        BigAction(Glyph.POWER, "Power off", enabled = !turningOff && (ready || linked == true)) { confirmPowerOff = true }
                     }
 
                     Column {
-                        if (canControl && (ready || nc != null)) {
-                            val options = pending?.takeIf { it.mode == nc?.mode } ?: nc
-                            ModeCard(options, ::choose, DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient))
-                        }
                         Box(Modifier.introFade()) { ListGroup("More controls") {
                             item {
                                 NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass",
@@ -201,25 +188,31 @@ fun HushScreen(
         }
         }
         // Noise control floats at the bottom: on a 6.8" phone that is where the thumb is.
-        if (showModeDock) ModeDock(
-            nc, pending, canControl, ::choose,
+        if (showModeDock) Column(
             Modifier.align(Alignment.BottomCenter).introFade().onSizeChanged { dockHeight = with(density) { it.height.toDp() } },
-        )
+        ) {
+            val options = pending?.takeIf { it.mode == nc?.mode } ?: nc
+            Box(Modifier.onSizeChanged { optionsHeight = with(density) { it.height.toDp() } }) {
+                FloatingModeOptions(
+                    options.takeIf { canControl }, ::choose,
+                    DockExtras(speakToChat, onSpeakToChat, ambientMinutes, ambientUntil, ambientReturn, onAmbientFor, onStayInAmbient),
+                )
+            }
+            ModeDock(nc, pending, canControl, ::choose)
+        }
         }
     }
 }
 
 @Composable
-private fun Header(name: String, status: String, busy: Boolean) {
-    val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(name.ifBlank { "WF-1000XM5" }, style = MaterialTheme.typography.headlineLargeEmphasized, textAlign = TextAlign.Center,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row(Modifier.heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(status, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
-                textAlign = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            if (busy) LoadingIndicator(Modifier.size(20.dp))
-        }
+private fun ConnectionStatus(status: String, busy: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 24.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+    ) {
+        Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        if (busy) LoadingIndicator(Modifier.size(20.dp))
     }
 }
 
@@ -366,7 +359,7 @@ private fun BatteryRing(
                     charging -> Glyph.BATTERY_CHARGING
                     value <= 20 -> Glyph.BATTERY_LOW
                     else -> Glyph.BATTERY
-                }, Modifier.padding(top = (CHIP - 16.dp) / 2).size(16.dp).graphicsLayer { alpha = shown }, chipContent, filled = true,
+                }, Modifier.padding(top = (CHIP - 18.dp) / 2).size(18.dp).graphicsLayer { alpha = shown }, chipContent, filled = true,
             )
         }
         Row(
@@ -430,9 +423,9 @@ class DockExtras(
     val minutes: Int, val until: Long?, val returnMode: Mode, val onAmbientFor: () -> Unit, val onStay: () -> Unit,
 )
 
-/** The chosen mode's options as a card in the page; it grows in and out with the mode. */
+/** Controls float directly above the mode buttons. */
 @Composable
-private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
+private fun FloatingModeOptions(state: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
     val motion = MaterialTheme.motionScheme
     val card = state?.mode?.takeIf { it != Mode.OFF }
     var lastCard by remember { mutableStateOf(card) }
@@ -442,7 +435,7 @@ private fun ModeCard(state: NcState?, onChoose: (NcState) -> Unit, extras: DockE
         enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Top),
         exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Top),
     ) {
-        Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth().padding(bottom = UiTokens.homeSectionGap)) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
             AnimatedContent(
                 lastCard, label = "mode card",
                 transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
@@ -671,70 +664,60 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
     }
 }
 
-/**
- * Listening time as two equal tiles under the rings: what the earbuds have left, and what the
- * case adds. Big numbers on tonal icons, centered; the age of the reading only when it is old.
- */
+/** Two equal tiles with matching surfaces for earbud and case estimates. */
 @Composable
-private fun ListeningTime(battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, onClick: () -> Unit) {
+private fun ListeningTime(
+    battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, exposure: ListeningExposure?,
+    onBattery: () -> Unit,
+) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    // The owner's measured drain once known; Sony's rating until then.
+    val cs = MaterialTheme.colorScheme
     val rate = remember(battery, mode) { Prefs.drainRate(ctx, mode) }
-    val buds = battery?.let { BatteryLife.budsMinutes(it, mode, rate, codec) } ?: return
-    // Shown whenever the case's level is known, even when it adds little: tiles never come and go.
-    val case = BatteryLife.caseMinutes(battery, mode, rate, codec)
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Both tiles have the same parts, so they come out the same height without intrinsics
-        // (which the rolling digits, built on AnimatedContent, cannot answer).
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            StatTile(BatteryLife.short(buds), "Listening left", Modifier.weight(1f), low = buds < 60, innerEnd = case != null, onClick = onClick) {
-                HushIcon(Glyph.EARBUDS, Modifier.size(22.dp), it, filled = true)
-            }
-            if (case != null) StatTile("+" + BatteryLife.short(case), "Case reserve", Modifier.weight(1f), innerStart = true, onClick = onClick) {
-                Icon(painterResource(R.drawable.ic_case_mark), null, tint = it, modifier = Modifier.size(22.dp))
+    val buds = battery?.let { BatteryLife.budsMinutes(it, mode, rate, codec) }
+    val case = battery?.let { BatteryLife.caseMinutes(it, mode, rate, codec) }
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        val corner = PageMotion.CARD_CORNER
+        HomeSummaryTile(RoundedCornerShape(corner, 10.dp, 10.dp, corner), Modifier.weight(1f).fillMaxHeight(),
+            "Battery history", onBattery) {
+            Text("Listening left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+            Text(buds?.let(BatteryLife::short) ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
+                color = if (buds != null && buds < 60) cs.error else cs.onSurface)
+            if (exposure != null) {
+                Text(case?.let { "+${BatteryLife.short(it)} from case" } ?: "Case —",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         }
-
+        HomeSummaryTile(RoundedCornerShape(10.dp, corner, corner, 10.dp), Modifier.weight(1f).fillMaxHeight(),
+            "Case reserve", onBattery.takeIf { exposure == null }) {
+            if (exposure == null) {
+                Text("Case reserve", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                Text(case?.let { "+${BatteryLife.short(it)}" } ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())
+            } else {
+                Text("Listening level", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                Text(exposure.level?.let { "$it dB" } ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())
+                Text(
+                    if (exposure.fraction >= 1.0) "Weekly estimate: turn down" else "Tracked here: ${exposure.percent}% of weekly allowance",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (exposure.fraction >= 1.0) cs.error else cs.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun StatTile(value: String, label: String, modifier: Modifier, low: Boolean = false, innerStart: Boolean = false, innerEnd: Boolean = false, onClick: () -> Unit = {}, icon: @Composable (Color) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val accent = when {
-        low -> cs.errorContainer
-        innerStart -> cs.secondaryContainer
-        else -> cs.primaryContainer
+private fun HomeSummaryTile(
+    shape: RoundedCornerShape, modifier: Modifier, actionLabel: String, onClick: (() -> Unit)?,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val body: @Composable () -> Unit = {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically), content = content)
     }
-    val onAccent = when {
-        low -> cs.onErrorContainer
-        innerStart -> cs.onSecondaryContainer
-        else -> cs.onPrimaryContainer
-    }
-    // Tapping either tile opens the Battery page (history and measured battery life) as a
-    // normal page, the same way every other page opens.
-    // Pressed, the tile settles in a little and its corners tighten, with Material's springs.
-    val press = remember { MutableInteractionSource() }
-    val pressed by press.collectIsPressedAsState()
-    val corner by animateDpAsState(if (pressed) 20.dp else PageMotion.CARD_CORNER, MaterialTheme.motionScheme.fastSpatialSpec(), label = "corner")
-    val squeeze by animateFloatAsState(if (pressed) 0.96f else 1f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "squeeze")
-    val start = if (innerStart) 10.dp else corner
-    val end = if (innerEnd) 10.dp else corner
-    Surface(onClick = onClick, shape = RoundedCornerShape(start, end, end, start), color = if (innerStart) Surfaces.card else Surfaces.estimate, interactionSource = press,
-        modifier = modifier
-            .graphicsLayer { scaleX = squeeze; scaleY = squeeze }
-            .semantics(mergeDescendants = true) { onClick(label = "Battery history", action = null) }) {
-        Column(
-            Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Surface(shape = CircleShape, color = accent, modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) { icon(onAccent) }
-            }
-            RollingText(value, MaterialTheme.typography.headlineSmallEmphasized, color = if (low) cs.error else cs.onSurface)
-            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1,
-                autoSize = fitText(MaterialTheme.typography.labelMedium))
-        }
+    if (onClick != null) {
+        Surface(onClick = onClick, shape = shape, color = Surfaces.estimate,
+            modifier = modifier.semantics { onClick(label = actionLabel, action = null) }, content = body)
+    } else {
+        Surface(shape = shape, color = Surfaces.estimate, modifier = modifier, content = body)
     }
 }
 

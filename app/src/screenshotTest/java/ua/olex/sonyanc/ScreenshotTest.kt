@@ -221,6 +221,24 @@ class ScreenshotTest {
         compose.onNodeWithText("Turn on to edit bands").assertIsDisplayed()
     }
 
+    @Test fun homeShowsSoundPressureOnlyWhenTheEarbudsReportIt() {
+        val exposure = mutableStateOf<ListeningExposure?>(null)
+        compose.setContent { AppTheme(dynamic = false) {
+            HushScreen(
+                status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.OFF),
+                pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
+                granted = true, hasDevice = true, exposure = exposure.value,
+                onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
+            )
+        } }
+        compose.onNodeWithText("Case reserve").assertIsDisplayed()
+        compose.onNodeWithText("Listening level").assertDoesNotExist()
+        compose.runOnIdle { exposure.value = ListeningExposure(86, 1.2) }
+        compose.onNodeWithText("86 dB").assertIsDisplayed()
+        compose.onNodeWithText("Weekly estimate: turn down").assertIsDisplayed()
+        compose.onNodeWithText("Case reserve").assertDoesNotExist()
+    }
+
     @Test fun batteryRingsDoNotRequestRefreshAndBackgroundReadsDoNotShowIt() {
         var refreshRequests = 0
         val background = mutableStateOf(false)
@@ -397,17 +415,14 @@ class ScreenshotTest {
             confirmed.value = requested.single()
             pending.value = null
         }
-        val positions = List(48) {
+        repeat(48) {
             compose.mainClock.advanceTimeByFrame()
-            more.getBoundsInRoot().top.value
+            assertEquals(initialMore, more.getBoundsInRoot().top)
         }
         offButton.assertIsSelected()
         assertEquals(initialButtons, dockBounds())
-        assertTrue("Options should collapse after the earbuds confirm Off", positions.last() < initialMore.value)
-        val frameSteps = (listOf(initialMore.value) + positions).zipWithNext { a, b -> kotlin.math.abs(a - b) }
-        assertTrue("The mode card lost a full section gap in a single frame: $frameSteps",
-            frameSteps.all { it < UiTokens.homeSectionGap.value })
-        assertTrue("The collapse should have visible intermediate positions", positions.distinct().size > 5)
+        compose.onNodeWithText("Ambient · 5 min").assertDoesNotExist()
+
     }
 
     @Test fun floatingModesLeaveSpaceToOpenTheLastRow() {
@@ -438,7 +453,8 @@ class ScreenshotTest {
             assertEquals("The shared dock should cover the page between mode buttons", dockColor, bitmap.getPixel(gapX, gapY))
             bitmap.recycle()
         }
-        assertTrue("The scroll viewport should continue behind the mode buttons", viewport.getBoundsInRoot().bottom > button.bottom)
+        val floatingControls = compose.onNodeWithText("Ambient level").getBoundsInRoot()
+        assertTrue("Page content must stop above the transparent controls", viewport.getBoundsInRoot().bottom <= floatingControls.top)
         viewport.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         val deviceInfo = compose.onNodeWithContentDescription("Device info").assertIsDisplayed()
         assertTrue("The last row should clear the mode buttons", deviceInfo.getBoundsInRoot().bottom < button.top)

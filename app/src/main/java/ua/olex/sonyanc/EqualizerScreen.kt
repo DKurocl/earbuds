@@ -4,7 +4,6 @@ package ua.olex.sonyanc
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
@@ -38,7 +37,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private class EqualizerWrite(val shown: EqualizerProtocol.State, val preset: Int?, val bands: List<Int>?)
+private class EqualizerWrite(val shown: EqualizerProtocol.State, val preset: Int?, val bands: List<Int>?, val slot: Int?)
 
 private data class EqEdit(val index: Int, val gain: Int)
 
@@ -47,8 +46,15 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val eq by Headphones.equalizer.collectAsState()
     val scope = rememberCoroutineScope()
+    val pair = Prefs.deviceAddress(ctx)
+    var cached by remember(pair) { mutableStateOf(Prefs.cachedEqualizer(ctx)) }
+    LaunchedEffect(eq, pair) { if (eq != null) cached = eq }
+    var slots by remember(pair) { mutableStateOf((1..2).associateWith { Prefs.savedSound(ctx, it) }) }
+    var lastSlot by remember(pair) { mutableStateOf<Int?>(null) }
+    var toSave by remember(pair) { mutableStateOf<List<Int>?>(null) }
+    var overwrite by remember(pair) { mutableStateOf<Int?>(null) }
     // Only the first live read gates editing. Refreshes leave active controls in place.
-    var busy by remember { mutableStateOf(eq == null) }
+    var busy by remember { mutableStateOf(eq == null && cached == null) }
     var failed by remember { mutableStateOf(false) }
     val showMessage by rememberUpdatedState(LocalMessages.current)
     var pending by remember { mutableStateOf<EqualizerWrite?>(null) }
@@ -58,24 +64,27 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
             val confirmed = Headphones.writeEqualizer(request.preset, request.bands)
             if (pending === request) {
                 pending = null
-                if (!confirmed) showMessage("Change not confirmed")
+                if (confirmed) lastSlot = request.slot else showMessage("Change not confirmed")
             }
         }
     }
     suspend fun load() {
-        busy = eq == null
+        busy = eq == null && cached == null
         try { failed = Headphones.readEqualizer() == null } finally { busy = false }
     }
     LaunchedEffect(resumeTick) { load() }
-    fun write(preset: Int? = null, bands: List<Int>? = null) {
+    fun write(preset: Int? = null, bands: List<Int>? = null, slot: Int? = null) {
         val base = eq ?: return
         val previous = pending
-        if (previous != null && previous.preset == preset && previous.bands == bands) return
+        if (previous != null && previous.preset == preset && previous.bands == bands && previous.slot == slot) return
         if (previous == null && ((bands == null && preset == base.preset) ||
-                (bands != null && base.preset == CUSTOM && bands == base.bands))) return
+                (bands != null && base.preset == CUSTOM && bands == base.bands))) {
+            lastSlot = slot
+            return
+        }
         val shown = if (bands != null) EqualizerProtocol.State(CUSTOM, bands)
             else EqualizerProtocol.State(requireNotNull(preset), emptyList())
-        val request = EqualizerWrite(shown, preset, bands)
+        val request = EqualizerWrite(shown, preset, bands, slot)
         pending = request
         writes.trySend(request)
     }
@@ -102,18 +111,57 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
                 }.getOrNull()
                 text?.let(EqualizerFile::read)
             }
-            if (bands == null) toast(ctx, "This file isn't an Earbuds sound") else write(bands = bands)
+            if (bands == null) showMessage("Choose an Earbuds JSON or a GraphicEQ text file.")
+            else if (Prefs.deviceAddress(ctx) == pair) toSave = bands
         }
     }
-    // The last known sound shows at once while the earbuds are asked again; controls stay
-    // disabled until the live answer arrives (busy), so nothing is ever written from the cache.
-    val cached = remember { Prefs.cachedEqualizer(ctx) }
+    fun save(slot: Int, bands: List<Int>) {
+        if (Prefs.deviceAddress(ctx) != pair) return
+        Prefs.saveSound(ctx, slot, bands)
+        slots = slots + (slot to bands)
+        toSave = null
+        overwrite = null
+        showMessage("Saved to Saved $slot")
+    }
+    toSave?.let { bands ->
+        val replacing = overwrite
+        if (replacing != null) AlertDialog(
+            onDismissRequest = { overwrite = null },
+            title = { Text("Replace Saved $replacing?") },
+            confirmButton = { TextButton(onClick = { save(replacing, bands) }) { Text("Replace") } },
+            dismissButton = { TextButton(onClick = { overwrite = null }) { Text("Back") } },
+        ) else AlertDialog(
+            onDismissRequest = { toSave = null },
+            title = { Text("Save preset") },
+            text = { Column {
+                Text("Presets are stored in Earbuds. Tap a saved slot to apply it. GraphicEQ curves are fitted to the earbuds’ six controls.")
+                for (slot in 1..2) {
+                    TextButton(onClick = {
+                        if (slots[slot] == null) save(slot, bands) else overwrite = slot
+                    }) { Text("Saved $slot") }
+                }
+            } },
+            confirmButton = { TextButton(onClick = { toSave = null }) { Text("Cancel") } },
+        )
+    }
+    val shown = pending?.shown ?: eq ?: cached
+    val slot = pending?.slot ?: lastSlot
+    val selectedSlot = if (shown?.preset == CUSTOM) {
+        slot?.takeIf { slots[it] == shown.bands } ?: slots.entries.firstOrNull { it.value == shown.bands }?.key
+    } else null
     EqualizerContent(
-        pending?.shown ?: eq ?: cached.takeIf { busy }, busy, failed && eq == null, onBack,
+        shown, busy, failed && shown == null, onBack,
         onRetry = { scope.launch { load() } },
-        onPreset = { write(preset = it) },
+        onPreset = { preset ->
+            val index = preset - 0xA0
+            val stored = slots[index]
+            if (stored != null) write(bands = stored, slot = index) else write(preset = preset)
+        },
         onBands = { write(bands = it) },
         onToggle = { write(preset = if (it) Prefs.lastEnabledEqualizerPreset(ctx) else OFF) },
+        editable = eq != null,
+        selectedSlot = selectedSlot,
+        onSave = shown?.bands?.takeIf { it.size == 6 && pending == null }?.let { bands -> { toSave = bands } },
         applyingPreset = pending?.preset != null,
         exportReady = pending == null && eq?.bands?.size == 6,
         pendingBands = eq?.bands.takeIf { pending?.preset != null },
@@ -126,8 +174,7 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
 private fun toast(ctx: android.content.Context, text: String) = android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_SHORT).show()
 
 /**
- * A sound saved as a small JSON file: the five bands and Clear Bass, -10..10 each. Importing
- * always writes it as Custom, so any preset someone tuned travels as its exact curve.
+ * Earbuds JSON maps directly to Sony gains. GraphicEQ is sampled on a logarithmic frequency axis.
  */
 internal object EqualizerFile {
     private const val FORMAT = "earbuds-sound"
@@ -137,7 +184,12 @@ internal object EqualizerFile {
         if (state.bands.size == 6) o.put("clearBass", state.bands[0]).put("bands", org.json.JSONArray(state.bands.drop(1)))
         return o.toString(2)
     }
-    fun read(text: String): List<Int>? = runCatching {
+    fun read(text: String): List<Int>? {
+        val input = text.trim().removePrefix("﻿").trim()
+        return if (input.startsWith("GraphicEQ:", ignoreCase = true)) readGraphicEq(input) else readJson(input)
+    }
+
+    private fun readJson(text: String): List<Int>? = runCatching {
         val o = org.json.JSONObject(text)
         if (o.optString("format") != FORMAT) return null
         val a = o.getJSONArray("bands")
@@ -145,6 +197,33 @@ internal object EqualizerFile {
         val bands = listOf(o.optInt("clearBass", 0)) + List(5) { a.getInt(it) }
         bands.takeIf { b -> b.all { it in -10..10 } }
     }.getOrNull()
+    private val pairSeparator = Regex("\\s+")
+
+    private fun readGraphicEq(text: String): List<Int>? {
+        val points = text.substringAfter(':').split(';').filter { it.isNotBlank() }.map { entry ->
+            val fields = entry.trim().split(pairSeparator)
+            if (fields.size != 2) return null
+            val hz = fields[0].toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 } ?: return null
+            val gain = fields[1].toDoubleOrNull()?.takeIf { it.isFinite() && it in -120.0..120.0 } ?: return null
+            hz to gain
+        }
+        if (points.size < 2 || points.zipWithNext().any { (a, b) -> a.first >= b.first }) return null
+        return (listOf(63.0) + BAND_HZ).map { frequency ->
+            val i = points.indexOfFirst { it.first >= frequency }
+            val gain = when {
+                i < 0 -> points.last().second
+                i == 0 -> points.first().second
+                else -> {
+                    val (lo, a) = points[i - 1]
+                    val (hi, b) = points[i]
+                    val position = kotlin.math.ln(frequency / lo) / kotlin.math.ln(hi / lo)
+                    a + (b - a) * position
+                }
+            }
+            gain.roundToInt().coerceIn(-10, 10)
+        }
+    }
+
 }
 
 /** The five bands' centres, as Sony's app labels them. */
@@ -162,27 +241,14 @@ fun EqualizerContent(
     onRetry: () -> Unit = {}, onPreset: (Int) -> Unit = {}, onBands: (List<Int>) -> Unit = {},
     onExport: () -> Unit = {}, onImport: () -> Unit = {},
     applyingPreset: Boolean = false, exportReady: Boolean = state?.bands?.size == 6, pendingBands: List<Int>? = null,
-    haptics: Boolean = true,
+    haptics: Boolean = true, editable: Boolean = true,
+    selectedSlot: Int? = null, onSave: (() -> Unit)? = null,
     onToggle: (Boolean) -> Unit = { onPreset(if (it) CUSTOM else OFF) },
 ) {
     val cs = MaterialTheme.colorScheme
     PageScaffold("Equalizer", onBack, actions = {
-        if (busy) LoadingIndicator(Modifier.padding(end = 4.dp).size(32.dp))
-        var menu by remember { mutableStateOf(false) }
-        Box {
-            IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "More options" }) {
-                // more_vert, drawn: three dots (the app's symbol subset has no overflow icon).
-                val dot = cs.onSurfaceVariant
-                Canvas(Modifier.size(24.dp)) {
-                    val r = 2.dp.toPx()
-                    for (y in listOf(6f, 12f, 18f)) drawCircle(dot, r, Offset(size.width / 2, y.dp.toPx()))
-                }
-            }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(16.dp)) {
-                DropdownMenuItem(text = { Text("Export sound") }, enabled = exportReady, onClick = { menu = false; onExport() })
-                DropdownMenuItem(text = { Text("Import sound") }, enabled = !busy && state != null, onClick = { menu = false; onImport() })
-            }
-        }
+        HeaderActionButton(HeaderAction(Glyph.COPY, "Export preset", onExport, exportReady))
+
     }) {
         when {
             state == null && unavailable -> SoundCard {
@@ -201,7 +267,7 @@ fun EqualizerContent(
                     edit?.let { change -> confirmed.toMutableList().also { it[change.index] = change.gain } } ?: confirmed
                 }
                 val activeBand = edit?.index?.minus(1)
-                val controlsReady = !busy && !applyingPreset && on && gains != null
+                val controlsReady = editable && !busy && !applyingPreset && on && gains != null
                 LaunchedEffect(controlsReady) { if (!controlsReady) edit = null }
                 fun commit(index: Int, gain: Int) {
                     val latest = gains.orEmpty()
@@ -214,6 +280,7 @@ fun EqualizerContent(
                 val editingSound = edit?.let { gains?.get(it.index) != it.gain } == true
                 val presetName = when {
                     editingSound && on -> "Custom"
+                    selectedSlot != null -> "Saved $selectedSlot"
                     flat -> "Flat"
                     else -> EqualizerProtocol.presets[state.preset] ?: "Custom"
                 }
@@ -231,7 +298,7 @@ fun EqualizerContent(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Text(presetName, Modifier.weight(1f), style = MaterialTheme.typography.titleLargeEmphasized)
-                                Switch(checked = on, enabled = !busy, onCheckedChange = onToggle,
+                                Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
                                     thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
                                     modifier = Modifier.semantics { contentDescription = "Equalizer" })
                             }
@@ -263,11 +330,17 @@ fun EqualizerContent(
                     )
                 }
                 PresetGroups(
-                    active = state.preset, flat = flat,
-                    enabled = !busy && edit == null,
+                    active = selectedSlot?.let { 0xA0 + it } ?: state.preset, flat = flat && selectedSlot == null,
+                    enabled = editable && !busy && edit == null,
                     onPreset = onPreset,
                     onFlat = { onBands(listOf(gains?.first() ?: 0) + List(5) { 0 }) },
                 )
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("Import preset") }
+            FilledTonalButton(onClick = { onSave?.invoke() }, enabled = onSave != null, modifier = Modifier.weight(1f)) {
+                Text("Save preset")
             }
         }
     }
