@@ -372,7 +372,7 @@ private fun BandReadouts(gains: List<Int>?, active: Int?, editable: Boolean, onG
                 ) {
                     Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1,
                         autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(9.sp, MaterialTheme.typography.labelSmall.fontSize, .5.sp))
-                    Text(gain?.let(::signed) ?: "–", style = MaterialTheme.typography.labelLarge.withTabularFigures(), maxLines = 1)
+                    Text(gain?.let(::signed) ?: "-", style = MaterialTheme.typography.labelLarge.withTabularFigures(), maxLines = 1)
                 }
             }
         }
@@ -396,7 +396,7 @@ private fun ClearBass(gain: Int?, enabled: Boolean, editing: Boolean, haptics: B
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Clear Bass", Modifier.weight(1f), style = MaterialTheme.typography.titleSmallEmphasized)
                 Text(
-                    gain?.let(::signed) ?: "–",
+                    gain?.let(::signed) ?: "-",
                     style = MaterialTheme.typography.titleSmall.withTabularFigures(),
                     color = if (gain != null && gain != 0) cs.primary else cs.onSurfaceVariant,
                 )

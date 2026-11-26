@@ -1,6 +1,6 @@
 # Earbuds 2.0 review
 
-This release combines roadmap 1.19–1.24 with the 2.0 verification and release work.
+This release combines roadmap 1.19 to 1.24 with the 2.0 verification and release work.
 The app controls the paired Sony WF‑1000XM5 over Sony V2 RFCOMM. Android handles audio
 and pairing. The app language is English.
 

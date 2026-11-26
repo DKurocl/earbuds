@@ -237,7 +237,7 @@ private fun HistoryChart(part: Part, readings: List<Reading>, start: Long, end: 
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(shown?.let { "${it.percent}%" } ?: "–", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(), color = if (shown != null) series else ink)
+            Text(shown?.let { "${it.percent}%" } ?: "-", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(), color = if (shown != null) series else ink)
             Text(readableDate, style = MaterialTheme.typography.bodySmall, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(

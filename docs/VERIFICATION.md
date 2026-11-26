@@ -18,7 +18,7 @@ The regression holds both outer controls, checks the stretch, fixed outside edge
 
 ## Pixel feedback after build 223
 
-The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/earbuds/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget. The follow-up recording shows the pull-to-refresh indicator passing over the case badge about 1.8–2.0 seconds into the clip, after the app switch. The Equalizer and Device info summaries also change as hardware reads complete.
+The owner reported five issues on a Pixel 10 Pro XL running [build 223](https://github.com/DKurocl/earbuds/releases/tag/build-223). The screenshots cover the Equalizer, Battery, lock screen dashboard, and compact home screen widget. The follow-up recording shows the pull-to-refresh indicator passing over the case badge about 1.8 to 2.0 seconds into the clip, after the app switch. The Equalizer and Device info summaries also change as hardware reads complete.
 
 | Observation | Candidate verification |
 |---|---|

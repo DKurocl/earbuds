@@ -692,7 +692,7 @@ private fun ListeningTime(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Listening time left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                    Text(buds?.let(BatteryLife::short) ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
+                    Text(buds?.let(BatteryLife::short) ?: "-", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
                         color = if (buds != null && buds < 60) cs.error else cs.onSurface)
                     Text(case?.let { "The case adds ${BatteryLife.short(it)}" } ?: "Case level unknown",
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
