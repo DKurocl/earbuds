@@ -249,28 +249,49 @@ fun SwitchRow(
     val haptics = LocalHapticFeedback.current
     // One press for the row and the switch: the thumb grows under the finger, as in Android Settings.
     val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    SegmentedListItem(
-        interactionSource = press,
+    // The row is laid out here rather than by ListItem so the switch always sits on the row's
+    // vertical centre, also next to a two- or three-line summary (ListItem pins it to the top).
+    Surface(
         onClick = {
-            if (busy) return@SegmentedListItem
-            // The same toggle feel as Android's own settings switches.
+            if (busy) return@Surface
             haptics.performHapticFeedback(if (checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
             onChange(!checked)
         },
-        shapes = shape, enabled = enabled, colors = rowColors(),
-        leadingContent = leading(glyph), supportingContent = supporting(summary, note),
-        trailingContent = {
-            // Android's own switch slides without overshoot; the expressive scheme's bouncy spring
-            // made the thumb wobble as it landed, so the switch alone keeps the standard motion.
-            MaterialTheme(motionScheme = MotionScheme.standard()) {
-                Switch(
-                    checked = checked, onCheckedChange = null, enabled = enabled, interactionSource = press,
-                    thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), MaterialTheme.colorScheme.primary) }) else null,
-                )
-            }
-        },
+        enabled = enabled, shape = shape.shape, color = Surfaces.card, interactionSource = press,
         modifier = Modifier.fillMaxWidth().semantics { role = Role.Switch; toggleableState = ToggleableState(checked) },
-    ) { Text(title) }
+    ) {
+        Row(Modifier.heightIn(min = 72.dp).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                CompositionLocalProvider(
+                    LocalTextStyle provides MaterialTheme.typography.bodyMedium,
+                    LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant,
+                ) { supporting(summary, note)?.invoke() }
+            }
+            PixelSwitch(checked, enabled, press)
+        }
+    }
+}
+
+/**
+ * Pixel Settings' switch (SettingsLib's expressive MaterialSwitch): the thumb always carries an icon,
+ * a check when on and a cross when off, the icon swaps at once, and the thumb slides without
+ * overshoot and grows while pressed. Colours come from the dynamic scheme as in Settings.
+ */
+@Composable
+fun PixelSwitch(checked: Boolean, enabled: Boolean = true, interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null) {
+    val cs = MaterialTheme.colorScheme
+    MaterialTheme(motionScheme = MotionScheme.standard()) {
+        Switch(
+            checked = checked, onCheckedChange = null, enabled = enabled, interactionSource = interactionSource,
+            colors = SwitchDefaults.colors(uncheckedThumbColor = cs.outline, uncheckedIconColor = cs.surfaceContainerHighest),
+            thumbContent = {
+                HushIcon(if (checked) Glyph.CHECK else Glyph.CLOSE, Modifier.size(SwitchDefaults.IconSize),
+                    if (checked) cs.onPrimaryContainer else cs.surfaceContainerHighest)
+            },
+        )
+    }
 }
 
 /** A multiple-choice setting: shows the current value and opens a radio dialog, like Android settings. */
@@ -410,12 +431,7 @@ fun MainSwitchBar(title: String, checked: Boolean, enabled: Boolean = true, onCh
     ) {
         Row(Modifier.padding(start = 28.dp, end = 20.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), modifier = Modifier.weight(1f))
-            MaterialTheme(motionScheme = MotionScheme.standard()) {
-                Switch(
-                    checked = checked, onCheckedChange = null, enabled = enabled, interactionSource = press,
-                    thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                )
-            }
+            PixelSwitch(checked, enabled, press)
         }
     }
 }
