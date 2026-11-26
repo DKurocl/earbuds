@@ -419,37 +419,33 @@ class DockExtras(
 @Composable
 private fun FloatingModeOptions(state: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
     val motion = MaterialTheme.motionScheme
-    val card = state?.mode?.takeIf { it != Mode.OFF }
-    var lastCard by remember { mutableStateOf(card) }
-    if (card != null) lastCard = card
+    val mode = state?.mode?.takeIf { it != Mode.OFF }
+    var lastMode by remember { mutableStateOf(mode) }
+    if (mode != null) lastMode = mode
     AnimatedVisibility(
-        visible = card != null,
+        visible = mode != null,
         enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Top),
         exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Top),
     ) {
-        Surface(
+        AnimatedContent(
+            lastMode,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            shape = UiTokens.compactCardShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-            shadowElevation = 6.dp,
-        ) {
-            AnimatedContent(
-                lastCard, label = "mode card",
-                transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() } },
-            ) { shown ->
-                Box(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                    when (shown) {
-                        Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
-                        else -> Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            extras.speakToChat?.let { on ->
-                                SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
-                                    extras.onSpeakToChat(!on)
-                                }
-                            }
-                            SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
-                                description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
+            label = "Mode controls",
+            transitionSpec = {
+                fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using
+                    SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() }
+            },
+        ) { shown ->
+            when (shown) {
+                Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
+                else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    extras.speakToChat?.let { on ->
+                        SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
+                            extras.onSpeakToChat(!on)
                         }
                     }
+                    SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
+                        description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                 }
             }
         }
@@ -554,7 +550,7 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
     var dragging by remember { mutableStateOf(false) }
     LaunchedEffect(state.level, dragging) { if (!dragging) level = state.level.toFloat() }
     val presets = listOf("Low" to 5, "Medium" to 12, "High" to 20)
-    Column(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // A running "Ambient for a moment": the way back, and one tap to stay.
         extras.until?.let { until ->
             var now by remember(until) { mutableLongStateOf(System.currentTimeMillis()) }
@@ -571,27 +567,35 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
                 }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Ambient level", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            RollingText("${level.roundToInt()}", MaterialTheme.typography.titleMedium, color = cs.primary)
-        }
         val slider = remember { SliderState(value = level, steps = 19, trackRange = 0f..20f) }
         LaunchedEffect(level) { if (slider.value != level) slider.value = level }
-        Slider(
-            state = slider,
-            onValueChange = {
-                dragging = true
-                slider.value = it
-                val step = slider.value.roundToInt()
-                if (step != level.roundToInt()) feedback.performHapticFeedback(
-                    if (presets.any { p -> p.second == step }) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick,
+        Surface(shape = CircleShape, color = cs.surfaceContainerHighest, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Ambient level", style = MaterialTheme.typography.labelLarge, maxLines = 2,
+                    modifier = Modifier.widthIn(max = 108.dp))
+                Slider(
+                    state = slider,
+                    onValueChange = {
+                        dragging = true
+                        slider.value = it
+                        val step = slider.value.roundToInt()
+                        if (step != level.roundToInt()) feedback.performHapticFeedback(
+                            if (presets.any { p -> p.second == step }) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick,
+                        )
+                        level = step.toFloat()
+                    },
+                    onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
+                    track = { SliderDefaults.Track(sliderState = it, trackCornerSize = androidx.compose.ui.unit.Dp.Unspecified, drawTick = { _, _ -> }) },
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
                 )
-                level = step.toFloat()
-            },
-            onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
-            track = { SliderDefaults.Track(sliderState = it, trackCornerSize = androidx.compose.ui.unit.Dp.Unspecified, drawTick = { _, _ -> }) },
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
-        )
+                RollingText("${level.roundToInt()}", MaterialTheme.typography.titleSmall, color = cs.primary)
+            }
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             // The three levels are one choice: a connected group. Voice focus is its own switch.
             Row(Modifier.weight(3f).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
@@ -636,7 +640,7 @@ private fun SoftChip(
         else -> ToggleButton(
             checked = selected, onCheckedChange = { onClick() },
             shapes = shapes ?: ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight),
-            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHigh, contentColor = cs.onSurface),
+            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
             contentPadding = padding, content = content,
             modifier = sized.semantics {
                 contentDescription = description

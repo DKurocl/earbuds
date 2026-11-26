@@ -428,10 +428,12 @@ class ScreenshotTest {
     @Test fun floatingModesLeaveSpaceToOpenTheLastRow() {
         var opened = false
         var dockColor = 0
+        var pageColor = 0
         compose.setContent {
             AppTheme(dynamic = false) {
                 val color = MaterialTheme.colorScheme.surfaceContainerHighest.toArgb()
-                SideEffect { dockColor = color }
+                val background = Surfaces.page.toArgb()
+                SideEffect { dockColor = color; pageColor = background }
                 HushScreen(
                     status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT),
                     pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
@@ -459,6 +461,17 @@ class ScreenshotTest {
         val deviceInfo = compose.onNodeWithContentDescription("Device info").assertIsDisplayed()
         assertTrue("The last row should clear the entire dock", deviceInfo.getBoundsInRoot().bottom < floatingControls.top)
         assertEquals(button, ambient.getBoundsInRoot())
+        val high = compose.onNodeWithContentDescription("High").getBoundsInRoot()
+        val voice = compose.onNodeWithContentDescription("Voice focus").getBoundsInRoot()
+        val optionsGapX = with(compose.density) { ((high.right + voice.left) / 2).roundToPx() }
+        val optionsGapY = with(compose.density) { ((voice.top + voice.bottom) / 2).roundToPx() }
+        compose.runOnIdle {
+            val root = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            assertEquals("The gap between floating controls shows the page", pageColor, bitmap.getPixel(optionsGapX, optionsGapY))
+            bitmap.recycle()
+        }
         deviceInfo.performTouchInput { click(center) }
         compose.runOnIdle { assertTrue(opened) }
     }

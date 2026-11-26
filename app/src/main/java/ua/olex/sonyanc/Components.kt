@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** Shows a short message at the bottom of the screen; no-op outside the app shell (tests, previews). */
 val LocalMessages = staticCompositionLocalOf<(String) -> Unit> { {} }
@@ -62,8 +63,10 @@ internal fun DeviceTopBar(title: String, onBack: (() -> Unit)? = null, subtitle:
     val page = Surfaces.page
     TopAppBar(
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                val titleStyle = if (subtitle != null) MaterialTheme.typography.titleLargeEmphasized else MaterialTheme.typography.titleLarge
+            Column(Modifier.padding(start = if (onBack != null) 6.dp else 0.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                val titleStyle = if (onBack != null) MaterialTheme.typography.headlineSmallEmphasized
+                    .copy(fontSize = 26.sp, lineHeight = 32.sp) else MaterialTheme.typography.titleLargeEmphasized
                 Text(title, style = titleStyle, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 subtitle?.invoke()
