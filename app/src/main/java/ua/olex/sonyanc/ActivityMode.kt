@@ -1,5 +1,11 @@
 package ua.olex.sonyanc
 
+import kotlinx.coroutines.withTimeoutOrNull
+
+import kotlinx.coroutines.flow.distinctUntilChanged
+
+import kotlinx.coroutines.flow.map
+
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -18,7 +24,8 @@ import ua.olex.sonyanc.SonyProtocol.Mode
  * "Ambient while walking": Ambient when the owner starts walking (hear the street), noise
  * cancelling once they have stood or sat still for a minute. It listens to the phone's step
  * detector, a low-power hardware sensor, and only while the earbuds are connected (Stay in sync
- * keeps the app present then). Without GPS, Play services or polling.
+ * keeps the app present then). Without GPS, Play services or polling: the step sensor is batched
+ * by the sensor hub, and the decision loop sleeps until a step, a mode change or a deadline.
  *
  * It never fights the owner: Off is left alone, and a mode chosen by hand (app, widget, tile or
  * a touch on the earbuds) holds for [HOLD_MS] before walking may change it again.
@@ -31,6 +38,7 @@ object ActivityMode {
 
     private var listener: SensorEventListener? = null
     private var watch: Job? = null
+    private val wake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val steps = ArrayDeque<Long>()
     @Volatile private var walking = false
     @Volatile private var lastStep = 0L
@@ -67,9 +75,18 @@ object ActivityMode {
         sensors.registerListener(l, detector, SensorManager.SENSOR_DELAY_NORMAL, 5_000_000)
         listener = l
         watch = Headphones.scope.launch {
+            // Event-driven, not polled: it wakes on the first steps of a walk, on a mode or sync
+            // change, and once when a walk has been still long enough or a hand-made hold ends.
+            launch {
+                Headphones.state.map { Triple(it.nc?.mode, it.ncConfirmed, it.pending) }.distinctUntilChanged()
+                    .collect { wake.trySend(Unit) }
+            }
             var seen = Headphones.state.value.nc?.mode
             while (isActive) {
-                delay(5_000)
+                val before = SystemClock.elapsedRealtime()
+                val untilStill = if (walking) (lastStep + STILL_MS - before).coerceAtLeast(1_000L) else Long.MAX_VALUE
+                val untilHold = if (before < heldUntil) heldUntil - before else Long.MAX_VALUE
+                withTimeoutOrNull(minOf(untilStill, untilHold)) { wake.receive() }
                 val now = SystemClock.elapsedRealtime()
                 // A change nobody here asked for was made by hand: hold off for a while.
                 val revision = ModeControl.revision
@@ -97,6 +114,6 @@ object ActivityMode {
         lastStep = now
         steps.addLast(now)
         while (steps.isNotEmpty() && now - steps.first() > WALK_WINDOW_MS) steps.removeFirst()
-        if (steps.size >= WALK_STEPS) walking = true
+        if (steps.size >= WALK_STEPS && !walking) { walking = true; wake.trySend(Unit) }
     }
 }

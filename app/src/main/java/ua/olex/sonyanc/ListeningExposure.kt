@@ -112,7 +112,9 @@ internal fun rememberListeningExposure(enabled: Boolean, address: String?): List
                                 reply = ListeningPressure.read(candidate)
                                 if (reply != null) { variant = candidate; break }
                             }
-                            if (reply == null) nextProbe = SystemClock.elapsedRealtime() + 60_000L
+                            // No answer to either variant: these earbuds don't report it. Ask again
+                            // only after a reconnect, not every minute while Home is open.
+                            if (reply == null) nextProbe = Long.MAX_VALUE
                             reply
                         }
                     } else null
