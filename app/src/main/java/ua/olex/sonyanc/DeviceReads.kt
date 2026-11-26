@@ -61,6 +61,7 @@ internal object DeviceReads {
             var batteryRetry = 8_000L
             var equalizerAsked = false
             var chatAsked = false
+            var functionsAsked = false
             val generation = conn.generation
             while (usage.foreground && conn.connected && conn.generation == generation) {
                 _state.first { it.pending == null || !it.connected }
@@ -74,6 +75,14 @@ internal object DeviceReads {
                 if (EarbudSettingsLink._equalizer.value == null && !equalizerAsked) { equalizerAsked = true; EarbudSettingsLink.readEqualizer(Priority.BACKGROUND) }
                 // Speak-to-Chat once per connection, for its toggle in the dock.
                 if (AdvancedSettings.Key.CHAT !in EarbudSettingsLink._advanced.value && !chatAsked) { chatAsked = true; EarbudSettingsLink.readAdvanced(AdvancedSettings.Key.CHAT, Priority.BACKGROUND) }
+                // What these earbuds support, then their listening log: once per connection.
+                if (!functionsAsked) {
+                    functionsAsked = true
+                    SupportedFunctions.refresh(Headphones.app)
+                    SafeListening.load(Headphones.app)
+                    SafeListening.sync(Headphones.app)
+                }
+                if (!usage.foreground || !conn.connected) break
                 if (qualityCheckedFor != generation) {
                     qualityCheckedFor = generation
                     EarbudSettingsLink.keepQuality()

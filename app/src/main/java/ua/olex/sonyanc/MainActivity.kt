@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() { ConnectedSheet.appVisible = false; Headphones.release(); super.onStop() }
 }
 
-private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS, BATTERY, VIBRATIONS, PROFILES, BACKUP }
+private enum class Page { HOME, EQUALIZER, EARBUDS, DEVICE, APP, DIAGNOSTICS, BATTERY, VIBRATIONS, PROFILES, BACKUP, LISTENING, FIT, DEVICES }
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -122,6 +122,8 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
     val scope = rememberCoroutineScope()
     val device by Headphones.state.collectAsStateWithLifecycle()
     val linked by remember(ctx) { Prefs.linkedChanges(ctx) }.collectAsStateWithLifecycle(Prefs.linked(ctx))
+    val functions by SupportedFunctions.codes.collectAsStateWithLifecycle()
+    val listening by SafeListening.state.collectAsStateWithLifecycle()
     DisposableEffect(ctx, model) {
         val changes = object : BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: Intent) {
@@ -267,8 +269,17 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         onStayInAmbient = model::stayInAmbient,
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && linked == false },
                         onProfiles = { open(Page.PROFILES) }.takeIf { model.saved != null },
+                        extras = buildList {
+                            if (SafeListening.type(functions) != null) add(HomeLink(Glyph.EAR_SOUND, "Listening level",
+                                listeningSummary(listening, SafeListening.reference(ctx), SafeListening.enabled(ctx))) { open(Page.LISTENING) })
+                            if (functions?.contains(SupportedFunctions.FIT_TEST) == true) add(HomeLink(Glyph.CHECK_CIRCLE, "Ear tip fit", "Check how well the tips seal") { open(Page.FIT) })
+                            if (Multipoint.type(functions) != null) add(HomeLink(Glyph.DEVICES, "Connected devices", "Switch between your phone and other devices") { open(Page.DEVICES) })
+                        },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
+                    Page.LISTENING -> ListeningLevelScreen(::back)
+                    Page.FIT -> FitTestScreen(::back)
+                    Page.DEVICES -> DevicesScreen(::back)
                     Page.BATTERY -> BatteryScreen(::back)
                     Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) })
                     Page.DEVICE -> {
@@ -284,6 +295,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                             refreshing = device.codecRefreshing || device.batteryRefreshing || model.turningOff,
                             onBack = ::back, onRefresh = { model.refreshInfo(); model.readDeviceInfo(force = true) }, onBluetooth = ::bluetooth,
                             onFind = ::findHub, onTurnOff = { model.turnOff() },
+                            functions = functions,
                         )
                     }
                     Page.APP -> AppSettingsContent(

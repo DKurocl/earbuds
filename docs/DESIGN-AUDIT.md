@@ -1,4 +1,4 @@
-# Design audit, element by element (3.0.15)
+# Design audit, element by element (3.1)
 
 Reference: the owner's Android 17 Settings and Google's Material 3 Expressive apps (Pixel Buds,
 Clock, Settings). Each element: what it is now, and why it is this way and not another.
@@ -25,7 +25,7 @@ Clock, Settings). Each element: what it is now, and why it is this way and not a
 | Profiles button | Tune icon | Kept; the Earbud settings row now uses the earbuds icon, so the two no longer share one icon |
 | Battery rings | Three rings with a status chip on top | Pixel Device details battery; unchanged |
 | Listening card | "Listening time left", the estimate, "The case adds …", an arrow | One card that leads to Battery; the arrow says it opens something; plain words instead of "+12 h from case" |
-| Listening level card | Removed | The earbuds never answered the guessed command; Sony's Safe Listening protocol is not documented anywhere public (Gadgetbridge has none). No made-up numbers |
+| More controls extras | Listening level, Ear tip fit, Connected devices as rows | Shown only when the earbuds list the function (support-function read, docs/SONY-FEATURES.md); Pixel Buds puts such tools in the same list |
 | Find / Bluetooth / Power off | Three round tonal buttons with labels | Quick actions as in Google Home and Pixel Buds |
 | More controls | Equalizer, Earbud settings, Device info as rows | Settings-style navigation rows |
 | Mode bar | Floating pill with ANC, Ambient, Off; nothing behind it | M3E floating toolbar; the list scrolls under it |
@@ -51,3 +51,14 @@ style. The LDAC note in Device info is a tonal card with one action, as Settings
 
 - Ambient while walking no longer polls every 5 s; it waits for steps, mode changes or a deadline.
 - The listening level reads are gone with the feature.
+
+## Listening level, Ear tip fit, Connected devices
+
+| Element | Now | Why |
+|---|---|---|
+| Week card | Primary container, the week's share of the limit in display size, a wavy progress bar, average dB and time | One number answers "am I fine"; the wavy bar is the M3E progress indicator; the card turns error-coloured above 100 % |
+| Now | The earbuds' live dB, or why there is none | Read every few seconds (the interval the earbuds give) only while the page is open |
+| Last 7 days | Rounded bars, today in full primary | Pixel's wellbeing charts; a full bar is one day's share, so a red bar means that day alone used more than its part |
+| Settings | Measure switch, weekly limit (Standard 80 dB / Sensitive 75 dB) | Sony offers the same two WHO levels |
+| Ear tip fit | Big title, one line of help, two side cards (left, right), one button | Pixel Buds' "Checking seal" flow; the cards turn primary for a good seal and error for a poor one |
+| Connected devices | Connected and paired-before groups; Play here and a disconnect button; this phone marked and never offered for disconnect | Pixel and Sony list devices the same way; disconnecting this phone would drop the app's own link |

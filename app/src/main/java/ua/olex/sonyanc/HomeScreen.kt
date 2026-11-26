@@ -62,6 +62,9 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** A row under More controls for a function these earbuds reported. */
+data class HomeLink(val glyph: Glyph, val title: String, val summary: String, val onClick: () -> Unit)
+
 /** Pixel-Buds-style device page: header, battery rings, quick actions, noise control, more controls. */
 @Composable
 fun HushScreen(
@@ -80,6 +83,7 @@ fun HushScreen(
     linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true,
     onProfiles: (() -> Unit)? = null, onPowerOff: () -> Unit = {},
     turningOff: Boolean = false,
+    extras: List<HomeLink> = emptyList(),
 ) {
     val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
     val connecting = status == Headphones.Status.CONNECTING && linked != false
@@ -168,6 +172,9 @@ fun HushScreen(
                             item {
                                 NavRow(it, Glyph.EARBUDS, "Earbud settings", "Touch controls and voice prompts",
                                     modifier = Modifier.semantics { contentDescription = "Earbud settings" }, onClick = onEarbuds)
+                            }
+                            extras.forEach { link ->
+                                item { NavRow(it, link.glyph, link.title, link.summary, onClick = link.onClick) }
                             }
                             item {
                                 NavRow(it, Glyph.INFO, "Device info", "Codec and firmware",

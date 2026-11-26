@@ -28,9 +28,11 @@ fun DeviceInfoContent(
     deviceName: String, status: Headphones.Status, codec: CodecProtocol.State?, firmware: String?,
     refreshing: Boolean, onBack: () -> Unit = {}, onRefresh: () -> Unit = {}, onBluetooth: () -> Unit = {},
     onTurnOff: () -> Unit = {}, ldacBlocked: Boolean = false, onPreferQuality: () -> Unit = {},
-    onFind: () -> Unit = {}, hdAudioOff: Boolean = false,
+    onFind: () -> Unit = {}, hdAudioOff: Boolean = false, functions: Set<Int>? = null,
 ) {
     var confirmOff by remember { mutableStateOf(false) }
+    var showFunctions by remember { mutableStateOf(false) }
+    if (showFunctions && functions != null) FunctionsDialog(functions) { showFunctions = false }
     val connected = status == Headphones.Status.CONNECTED
     if (confirmOff) PowerOffDialog({ confirmOff = false }) { confirmOff = false; onTurnOff() }
     PageScaffold("Device info", onBack, actions = {
@@ -42,6 +44,9 @@ fun DeviceInfoContent(
         ListGroup {
             item { InfoRow(it, Glyph.EQ, "Audio codec", codec?.label ?: "Not reported") }
             item { InfoRow(it, Glyph.INFO, "Firmware", firmware ?: "Not reported") }
+            if (functions != null) item {
+                NavRow(it, Glyph.INSIGHTS, "Earbud functions", "${functions.size} reported by the earbuds", onClick = { showFunctions = true })
+            }
         }
         if (ldacBlocked) HintCard(
             "LDAC is turned off by a setting",

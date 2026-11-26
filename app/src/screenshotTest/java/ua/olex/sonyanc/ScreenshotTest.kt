@@ -586,6 +586,40 @@ class ScreenshotTest {
         EarbudSettingsContent(settingsFixture, DeviceSettingsProtocol.Feature.entries.associateWith { true })
     }
 
+    private fun listeningFixture(): SafeListening.State {
+        // A week of listening at about 76 dB, a louder Saturday: Pa^2 minutes x 60 x 100000 per raw unit.
+        val day = 86_400_000L
+        val levels = listOf(74, 76, 0, 78, 85, 75, 76)
+        val hours = listOf(2, 3, 0, 2, 4, 1, 2)
+        val entries = levels.indices.flatMap { i ->
+            if (hours[i] == 0) emptyList() else {
+                val pa2 = 4e-10 * Math.pow(10.0, levels[i] / 10.0)
+                val raw = (pa2 * 60 * 60 * 100_000).toLong()
+                (0 until hours[i]).flatMap { h -> listOf(1, 2).map { side -> SafeListening.Entry(NOW - (6 - i) * day - h * 3_600_000L, side, 60, raw) } }
+            }
+        }
+        return SafeListening.State(type = 3, available = true, summary = SafeListening.summary(entries, emptyList(), NOW, 2), live = SafeListening.Live(71, null))
+    }
+
+    @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
+    @Test fun listeningLevel() = shoot("page-listening") {
+        ListeningLevelContent(listeningFixture(), connected = true, on = true, reference = SafeListening.Reference.STANDARD)
+    }
+
+    @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")
+    @Test fun fitTestResult() = shoot("page-fit") {
+        FitTestContent(FitTest.State(FitTest.Phase.DONE, left = true, right = false))
+    }
+
+    @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
+    @Test fun connectedDevices() = shoot("page-devices") {
+        DevicesContent(Multipoint.State(Multipoint.Devices(listOf(
+            Multipoint.Device("AA:BB:CC:DD:EE:FF", "Pixel 10 Pro XL", 1),
+            Multipoint.Device("11:22:33:44:55:66", "ThinkPad X1", 2),
+            Multipoint.Device("22:33:44:55:66:77", "Galaxy Tab S9", 0),
+        ), playing = 1)), me = "Pixel 10 Pro XL", canSwitch = true)
+    }
+
     @Config(qualifiers = "w432dp-h880dp-night-xxhdpi")
     @Test fun equalizer() = shoot("page-equalizer") {
         EqualizerContent(EqualizerProtocol.State(0xA0, listOf(3, 4, 1, -2, 2, 6)), busy = false, unavailable = false)

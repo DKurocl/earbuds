@@ -96,6 +96,8 @@ object Headphones {
                 it.copy(nc = Prefs.lastNc(app), battery = battery?.first, batterySeenAt = battery?.second,
                     codec = Prefs.lastCodec(app)?.let(CodecProtocol::State), firmware = Prefs.lastFirmware(app))
             }
+            SupportedFunctions.load(app)
+            SafeListening.load(app)
         }
     }
 
@@ -371,7 +373,15 @@ object Headphones {
     private fun onPayload(type: Int, p: ByteArray) {
         decode(type, p)
         commands.received(type, p)
+        frames.tryEmit(type to p)
     }
+
+    /** Every frame from the earbuds, for exchanges that span several notifications (logs, fit test). */
+    internal val frames = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Int, ByteArray>>(extraBufferCapacity = 64)
+
+    /** Sends on the shared wire without waiting for a particular reply; the caller listens on [frames]. */
+    internal suspend fun post(payload: ByteArray, type: Byte, priority: CommandScheduler.Priority = CommandScheduler.Priority.NORMAL): Boolean =
+        commands.run(priority) { conn.connected && conn.send(payload, type) }
 
     /** Updates state from any reply or notification. Waiters are matched separately. */
     private fun decode(type: Int, p: ByteArray) {

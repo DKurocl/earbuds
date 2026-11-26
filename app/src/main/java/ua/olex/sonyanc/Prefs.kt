@@ -86,9 +86,11 @@ object Prefs {
             "mode", "voice", "level", "codec", "battery_at", "linked", "last_seen",
             "cache_advanced", "cache_features", "cache_eq", "last_eq_preset", "panel_refused",
             "battery_log", "battery_health", "buds_reminded_session", "firmware", "eq_saved_1", "eq_saved_2", "listening_exposure",
+            "functions", "sl_log", "sl_now", "sl_last", "sl_synced",
         ).forEach { editor.remove(it) }
         editor.apply()
         batteryHistory = null
+        SupportedFunctions.forget(); SafeListening.forget(); Multipoint.forget()
     }
 
     // ---- Android's Bluetooth link, from ACL broadcasts (see ConnectionReceiver) ----
