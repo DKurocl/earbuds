@@ -13,7 +13,7 @@ import ua.olex.sonyanc.DeviceSettingsProtocol.Feature
 
 /** Shows the remembered settings immediately and reads any values missing on this device. */
 @Composable
-fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}) {
+fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, onFitTest: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val values by Headphones.advanced.collectAsState()
     val features by Headphones.features.collectAsState()
@@ -72,7 +72,7 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}) {
     val panelRefused by EarbudSettingsLink.panelRefused.collectAsState()
     EarbudSettingsContent(
         shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused, hideMissing = scannedGeneration != null && (shownValues.isNotEmpty() || shownFeatures.isNotEmpty()),
-        onRefresh = { scope.launch { load(force = true) } },
+        onRefresh = { scope.launch { load(force = true) } }, onFitTest = onFitTest,
         onUpdate = { key, index, code ->
             if (writing == null && key !in loading) scope.launch {
                 writing = key; notes = notes - rowId(key, index)
@@ -120,6 +120,7 @@ fun EarbudSettingsContent(
     panelHidden: Boolean = false,
     /** The earbuds are connected and were asked: a setting they did not answer is left out. */
     hideMissing: Boolean = false,
+    onFitTest: (() -> Unit)? = null,
 ) {
     // As Android's own settings: each row says in one line what it does; no illustration on top.
     val update = onUpdate
@@ -178,6 +179,10 @@ fun EarbudSettingsContent(
         ListGroup("Sound") {
             if (has(Feature.DSEE)) item { FeatureSwitch(it, Feature.DSEE, Glyph.HQ, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
             if (has(Key.QUALITY)) item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
+        }
+        // A tool, not a setting: it sits with what concerns wearing the earbuds.
+        if (onFitTest != null) ListGroup("Fit") {
+            item { NavRow(it, null, "Ear tip fit", "Check how well each tip seals", onClick = onFitTest) }
         }
         if (has(Feature.AUTO_PAUSE) || has(Key.POWER)) ListGroup("In-ear detection") {
             if (has(Feature.AUTO_PAUSE)) item { FeatureSwitch(it, Feature.AUTO_PAUSE, Glyph.PAUSE_CIRCLE, "Pause when you remove an earbud", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }

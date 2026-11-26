@@ -99,6 +99,7 @@ internal fun ListeningLevelContent(
         HeaderActionButton(HeaderAction(Glyph.REFRESH, "Refresh", onRefresh, enabled = on && connected && !state.syncing))
     }) {
         val summary = state.summary
+        MainSwitchBar("Measure listening level", on, onChange = onEnabled)
         WeekCard(summary, reference, on, state.syncing)
         if (on) ListGroup("Now") {
             item {
@@ -107,12 +108,9 @@ internal fun ListeningLevelContent(
             }
         }
         if (on && summary != null) DaysCard(summary, reference)
-        ListGroup("Settings") {
+        if (on) ListGroup("Limit") {
             item {
-                SwitchRow(it, Glyph.EAR_SOUND, "Measure listening level", "Your earbuds keep the log; the phone reads it when you open the app", on, onChange = onEnabled)
-            }
-            item {
-                ChoiceRow(it, Glyph.INSIGHTS, "Weekly limit", SafeListening.Reference.entries.map { r -> r.ordinal to r.short }, reference.ordinal) { i ->
+                ChoiceRow(it, Glyph.INSIGHTS, "Weekly limit", SafeListening.Reference.entries.map { r -> r.ordinal to "${r.label}: ${r.detail}" }, reference.ordinal) { i ->
                     onReference(SafeListening.Reference.entries[i])
                 }
             }

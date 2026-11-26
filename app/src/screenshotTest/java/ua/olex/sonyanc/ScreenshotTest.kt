@@ -464,7 +464,8 @@ class ScreenshotTest {
             status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.ANC, level = 12), pending = null,
             fresh = true, error = null, battery = SonyProtocol.Battery(69, 70, 78, caseCharging = false), granted = true, hasDevice = true,
             onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {}, onProfiles = {},
-            speakToChat = true,
+            speakToChat = true, listeningLevel = "42%",
+            extras = listOf(HomeLink(Glyph.DEVICES, "Connected devices", "Switch between your phone and other devices", Accent.CONNECTION) {}),
         )
     }
 

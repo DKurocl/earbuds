@@ -63,7 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A row under More controls for a function these earbuds reported. */
-data class HomeLink(val glyph: Glyph, val title: String, val summary: String, val onClick: () -> Unit)
+data class HomeLink(val glyph: Glyph, val title: String, val summary: String, val accent: Accent = Accent.APPS, val onClick: () -> Unit)
 
 /** Pixel-Buds-style device page: header, battery rings, quick actions, noise control, more controls. */
 @Composable
@@ -84,6 +84,7 @@ fun HushScreen(
     onProfiles: (() -> Unit)? = null, onPowerOff: () -> Unit = {},
     turningOff: Boolean = false,
     extras: List<HomeLink> = emptyList(),
+    listeningLevel: String? = null, onListeningLevel: () -> Unit = {},
 ) {
     val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
     val connecting = status == Headphones.Status.CONNECTING && linked != false
@@ -160,6 +161,7 @@ fun HushScreen(
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
                                 battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, ready, onBatteryDetails,
+                                level = listeningLevel, onLevel = onListeningLevel,
                             )
                         }
                     }
@@ -174,18 +176,18 @@ fun HushScreen(
                     Column {
                         Box(Modifier.introFade()) { ListGroup("More controls") {
                             item {
-                                NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass",
+                                NavRow(it, Glyph.EQ, "Equalizer", "Presets and Clear Bass", accent = Accent.SOUND,
                                     modifier = Modifier.semantics { contentDescription = "Equalizer" }, onClick = onEqualizer)
                             }
                             item {
-                                NavRow(it, Glyph.EARBUDS, "Earbud settings", "Touch controls and voice prompts",
+                                NavRow(it, Glyph.EARBUDS, "Earbud settings", "Touch controls and voice prompts", accent = Accent.APPS,
                                     modifier = Modifier.semantics { contentDescription = "Earbud settings" }, onClick = onEarbuds)
                             }
                             extras.forEach { link ->
-                                item { NavRow(it, link.glyph, link.title, link.summary, onClick = link.onClick) }
+                                item { NavRow(it, link.glyph, link.title, link.summary, accent = link.accent, onClick = link.onClick) }
                             }
                             item {
-                                NavRow(it, Glyph.INFO, "Device info", "Codec and firmware",
+                                NavRow(it, Glyph.INFO, "Device info", "Codec and firmware", accent = Accent.SYSTEM,
                                     modifier = Modifier.semantics { contentDescription = "Device info" }, onClick = onConnection)
                             }
                         } }
@@ -661,7 +663,7 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
 @Composable
 private fun ListeningTime(
     battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, connected: Boolean,
-    onBattery: () -> Unit,
+    onBattery: () -> Unit, level: String? = null, onLevel: () -> Unit = {},
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val cs = MaterialTheme.colorScheme
@@ -682,10 +684,16 @@ private fun ListeningTime(
                     Text(case?.let { "The case adds ${BatteryLife.short(it)}" } ?: "Case level unknown",
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
-                HushIcon(Glyph.BACK, Modifier.size(24.dp).graphicsLayer { rotationZ = 180f }, cs.onSurfaceVariant)
+                if (level == null) HushIcon(Glyph.BACK, Modifier.size(24.dp).graphicsLayer { rotationZ = 180f }, cs.onSurfaceVariant)
             }
         }
-
+        // The week's share of the safe-listening limit, beside the battery, when the earbuds measure it.
+        if (level != null) HomeSummaryTile(RoundedCornerShape(corner), Modifier.weight(0.72f).fillMaxHeight(), "Listening level", onLevel) {
+            Text("Listening", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, maxLines = 1)
+            Text(level, style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(), maxLines = 1)
+            Text("of weekly limit", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1,
+                autoSize = fitText(MaterialTheme.typography.bodyMedium))
+        }
     }
 }
 

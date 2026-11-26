@@ -290,24 +290,10 @@ fun EqualizerContent(
                 }
 
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // As a Settings switch row: what it is, which sound is on, and the switch.
-                    Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("Use equalizer", style = MaterialTheme.typography.titleLarge)
-                                Text(if (on) presetName else "Off", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                            }
-                            MaterialTheme(motionScheme = MotionScheme.standard()) {
-                                Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
-                                    thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                                    modifier = Modifier.semantics { contentDescription = "Equalizer" })
-                            }
-                        }
-                    }
+                    // Android's main switch: the page's one on/off, as "Use charging optimisation".
+                    MainSwitchBar("Use equalizer", on, enabled = editable && !busy) { onToggle(it) }
+                    Text(if (on) presetName else "Off", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 28.dp, top = 8.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
                     Spacer(Modifier.height(8.dp))
                     Box(contentAlignment = Alignment.Center) {
                         EqCurve(

@@ -130,55 +130,53 @@ fun ListGroup(title: String? = null, build: GroupScope.() -> Unit) {
 @Composable
 fun SectionTitle(text: String) {
     Text(
-        text, style = MaterialTheme.typography.labelLargeEmphasized,
-        color = MaterialTheme.colorScheme.primary, modifier = Modifier.semantics { heading() }.padding(start = 12.dp, top = 6.dp),
+        text, style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary, modifier = Modifier.semantics { heading() }.padding(start = 16.dp, top = 8.dp),
     )
 }
 
 @Composable
-private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surfaces.card)
+private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = Surfaces.card, disabledContainerColor = Surfaces.card)
 
-private val linkGlyphs = setOf(
-    Glyph.BLUETOOTH, Glyph.LINK, Glyph.EARBUDS, Glyph.INFO, Glyph.WIDGET, Glyph.FIND, Glyph.COPY,
-    Glyph.SWIPE_LEFT, Glyph.SWIPE_RIGHT, Glyph.FACE,
-    Glyph.DEVICES, Glyph.PHONE, Glyph.COMPUTER, Glyph.TABLET, Glyph.DEVICE_OTHER, Glyph.LINK_OFF,
-)
-private val routineGlyphs = setOf(
-    Glyph.HOME, Glyph.LOCATION, Glyph.TIMER, Glyph.BATTERY, Glyph.POWER, Glyph.UPCOMING, Glyph.BATTERY_LOW,
-    Glyph.BATTERY_CHARGING, Glyph.BEDTIME, Glyph.WALK, Glyph.INSIGHTS, Glyph.CHAT, Glyph.VOICE_SETTINGS,
-    Glyph.AUTOPLAY, Glyph.MIC, Glyph.CAMPAIGN, Glyph.VOLUME,
-)
 
 /**
  * A row's icon in a light circle coloured by what it is about, as Android's own Settings (and
  * Music): sound, power, connection, the app. The "fixed" tones of the wallpaper's palette read the
  * same in light and dark; a destructive row takes the error colour.
  */
-private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> Unit)? = glyph?.let { g -> {
-    val cs = MaterialTheme.colorScheme
-    val (container, glyphColor) = when {
-        danger -> cs.errorContainer to cs.onErrorContainer
-        g in linkGlyphs -> cs.secondaryContainer to cs.onSecondaryContainer
-        g in routineGlyphs -> cs.tertiaryContainer to cs.onTertiaryContainer
-        else -> cs.primaryContainer to cs.onPrimaryContainer
-    }
+/**
+ * The top level of Android Settings marks each entry with a bright disc of a fixed hue and a filled
+ * symbol in a deep tone of the same hue (sound pink, connections cyan, battery green...). Only the
+ * pages that lead somewhere get one; settings inside a page keep the plain symbol.
+ */
+enum class Accent(val disc: Long, val ink: Long) {
+    SOUND(0xFFFFAFD8, 0xFF5F1145), CONNECTION(0xFF7DD3F7, 0xFF003548), APPS(0xFFA8C7FA, 0xFF0B305F),
+    BATTERY(0xFF86D993, 0xFF003916), DISPLAY(0xFFFFB68A, 0xFF552100), STORAGE(0xFFFDC424, 0xFF3F2E00), SYSTEM(0xFFC4C7C5, 0xFF2D3133),
+}
 
-    Surface(shape = CircleShape, color = container, contentColor = glyphColor, modifier = Modifier.size(40.dp)) {
-        Box(contentAlignment = Alignment.Center) { HushIcon(g, Modifier.size(22.dp), glyphColor) }
+@Composable
+private fun accentDisc(glyph: Glyph, accent: Accent) {
+    Surface(shape = CircleShape, color = Color(accent.disc), modifier = Modifier.size(40.dp)) {
+        Box(contentAlignment = Alignment.Center) { HushIcon(glyph, Modifier.size(24.dp), Color(accent.ink), filled = true) }
     }
-} }
+}
+
+// Inside a page Android Settings draws no row icons at all (Battery and charging, Battery health):
+// only entries that open a section carry one, in a coloured disc (see Accent). Rows here are text.
+@Suppress("UNUSED_PARAMETER")
+private fun leading(glyph: Glyph?, danger: Boolean = false): (@Composable () -> Unit)? = null
 
 @Composable
 fun NavRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, summary: String? = null,
     enabled: Boolean = true, trailing: (@Composable () -> Unit)? = null, danger: Boolean = false, note: RowNote? = null,
-    modifier: Modifier = Modifier, onClick: () -> Unit,
+    modifier: Modifier = Modifier, accent: Accent? = null, onClick: () -> Unit,
 ) {
     val error = MaterialTheme.colorScheme.error
     SegmentedListItem(
         onClick = onClick, shapes = shape, enabled = enabled,
         colors = if (danger) ListItemDefaults.segmentedColors(containerColor = Surfaces.card, contentColor = error, leadingContentColor = error) else rowColors(),
-        leadingContent = leading(glyph, danger), trailingContent = trailing,
+        leadingContent = if (accent != null && glyph != null) ({ accentDisc(glyph, accent) }) else leading(glyph, danger), trailingContent = trailing,
         supportingContent = supporting(summary, note),
         modifier = modifier.fillMaxWidth(),
     ) { Text(title) }
@@ -285,70 +283,36 @@ fun ChoiceRow(
         InfoRow(shape, glyph, title, if (busy) null else "Not available")
         return
     }
-    val cs = MaterialTheme.colorScheme
     val haptics = LocalHapticFeedback.current
-    fun pick(code: Int) {
-        if (busy || code == selected) return
-        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        onSelect(code)
-    }
-    // As Google's own settings do it: two or three short choices sit in the row as a connected
-    // button group (Pixel Buds' noise control, Android's dark theme); longer lists open in place
-    // as radio rows. Nothing pops over the page, and the row keeps its place in the group.
-    val inline = choices.size in 2..3 && choices.all { it.second.length <= 16 }
+    // As Android Settings: the row shows the current value; a tap opens a page of its own with the
+    // options as radio rows (Screen timeout, Dark theme). Choosing one goes straight back.
     var open by remember { mutableStateOf(false) }
     val chosen = choices.firstOrNull { it.first == selected }?.second ?: "Device setting"
-    Column(
-        Modifier.fillMaxWidth().clip(shape.shape).background(Surfaces.card)
-            .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
-    ) {
-        val header: @Composable () -> Unit = {
-            // Plain ListItem puts 4 dp more after the icon than the segmented rows; pulled back so
-            // every title in a group starts on the same line.
-            val sub = supporting(if (inline) null else chosen, note)
-            ListItem(
-                headlineContent = { Box(Modifier.offset(x = (-4).dp)) { Text(title) } },
-                supportingContent = sub?.let { { Box(Modifier.offset(x = (-4).dp)) { it() } } },
-                leadingContent = leading(glyph),
-                trailingContent = if (inline) null else ({
-                    val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "chevron")
-                    HushIcon(Glyph.EXPAND, Modifier.graphicsLayer { rotationZ = turn }, cs.onSurfaceVariant)
-                }),
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
+    NavRow(shape, glyph, title, chosen, enabled = enabled, note = note) { if (!busy) open = true }
+    if (open) ChoicePage(title, choices, selected, onDismiss = { open = false }) { code ->
+        open = false
+        if (code != selected) {
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            onSelect(code)
         }
-        if (inline) {
-            header()
-            Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).selectableGroup(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-            ) {
-                choices.forEachIndexed { index, (code, label) ->
-                    ToggleButton(
-                        checked = code == selected, onCheckedChange = { pick(code) }, enabled = enabled,
-                        shapes = when (index) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                        colors = ToggleButtonDefaults.colors(containerColor = Surfaces.control),
-                        contentPadding = PaddingValues(horizontal = 4.dp),
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { role = Role.RadioButton; this.selected = code == selected },
-                    ) { Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
-                }
-            }
-        } else {
-            Box(Modifier.selectable(selected = open, enabled = enabled, role = Role.DropdownList) { if (!busy) open = !open }) { header() }
-            if (open) Column(Modifier.selectableGroup().padding(bottom = 8.dp)) {
+    }
+}
+
+@Composable
+private fun ChoicePage(title: String, choices: List<Pair<Int, String>>, selected: Int?, onDismiss: () -> Unit, onSelect: (Int) -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        PageScaffold(title, onDismiss) {
+            ListGroup {
                 choices.forEach { (code, label) ->
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 52.dp)
-                            .selectable(code == selected, enabled = enabled, role = Role.RadioButton) { pick(code); open = false }
-                            .padding(start = 72.dp, end = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        RadioButton(selected = code == selected, onClick = null)
-                        Text(label, style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
+                    item { shape ->
+                        SegmentedListItem(
+                            onClick = { onSelect(code) }, shapes = shape, colors = rowColors(),
+                            leadingContent = { RadioButton(selected = code == selected, onClick = null) },
+                            modifier = Modifier.fillMaxWidth().semantics { role = Role.RadioButton; this.selected = code == selected },
+                        ) { Text(label) }
                     }
                 }
             }
@@ -423,5 +387,35 @@ fun RollingText(
                     ) { c -> Text(c.toString(), style = base, maxLines = 1, softWrap = false) }
                 }
             }
+    }
+}
+
+/**
+ * Android's main switch: the one on/off that the whole page depends on ("Use charging
+ * optimisation"), a tall pill in the primary container colour above the page's other settings.
+ */
+@Composable
+fun MainSwitchBar(title: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val haptics = LocalHapticFeedback.current
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Surface(
+        onClick = {
+            haptics.performHapticFeedback(if (checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+            onChange(!checked)
+        },
+        enabled = enabled, shape = RoundedCornerShape(36.dp), color = cs.primaryContainer, contentColor = cs.onPrimaryContainer,
+        interactionSource = press,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp).semantics { role = Role.Switch; toggleableState = ToggleableState(checked) },
+    ) {
+        Row(Modifier.padding(start = 28.dp, end = 20.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), modifier = Modifier.weight(1f))
+            MaterialTheme(motionScheme = MotionScheme.standard()) {
+                Switch(
+                    checked = checked, onCheckedChange = null, enabled = enabled, interactionSource = press,
+                    thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
+                )
+            }
+        }
     }
 }

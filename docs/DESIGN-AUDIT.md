@@ -80,3 +80,14 @@ style. The LDAC note in Device info is a tonal card with one action, as Settings
 | Settings rows | A change shows at once and is corrected only if the earbuds refuse it | The row used to wait for the answer and then jump |
 | Equalizer | Controls stay lit while a change is confirmed; taps wait instead | Every step greyed the curve, Clear Bass and presets out and back |
 | Battery rings | No swell when the mode changes | The rings are about charge; the mode bar answers a mode change |
+
+## 3.3: Android Settings rules
+
+| Rule | Where | Why |
+|---|---|---|
+| A coloured disc with a filled symbol only on entries that open a section | Home, More controls | The top level of Android Settings; inside a page rows have no icons (Battery and charging) |
+| Rows inside a page are text only | Every settings page | As Display and touch, Battery and charging |
+| A choice shows its value; a tap opens its own page of radio rows | Every multiple choice | As Screen timeout and Dark theme; no lists over the page, no buttons in rows |
+| The page's one on/off is a main switch bar | Equalizer, Listening level | As Use Dark theme, Use adaptive brightness |
+| Tools sit inside the section they belong to | Ear tip fit in Earbud settings | More controls lists sections only |
+| Listening level beside the battery estimate | Home | Two numbers about the same listening, side by side |

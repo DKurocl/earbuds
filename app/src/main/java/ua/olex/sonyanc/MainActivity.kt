@@ -1,6 +1,7 @@
 package ua.olex.sonyanc
 
 import android.Manifest
+import kotlin.math.roundToInt
 import android.annotation.SuppressLint
 import android.appwidget.AppWidgetManager
 import android.content.ClipData
@@ -269,11 +270,11 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         onStayInAmbient = model::stayInAmbient,
                         lastSeen = Prefs.lastSeen(ctx).takeIf { it > 0 && linked == false },
                         onProfiles = { open(Page.PROFILES) }.takeIf { model.saved != null },
+                        listeningLevel = if (SafeListening.type(functions) != null && SafeListening.enabled(ctx))
+                            listening.summary?.let { "${(it.dose(SafeListening.reference(ctx)) * 100).roundToInt()}%" } ?: "-" else null,
+                        onListeningLevel = { open(Page.LISTENING) },
                         extras = buildList {
-                            if (SafeListening.type(functions) != null) add(HomeLink(Glyph.EAR_SOUND, "Listening level",
-                                listeningSummary(listening, SafeListening.reference(ctx), SafeListening.enabled(ctx))) { open(Page.LISTENING) })
-                            if (functions?.contains(SupportedFunctions.FIT_TEST) == true) add(HomeLink(Glyph.CHECK_CIRCLE, "Ear tip fit", "Check how well the tips seal") { open(Page.FIT) })
-                            if (Multipoint.type(functions) != null) add(HomeLink(Glyph.DEVICES, "Connected devices", "Switch between your phone and other devices") { open(Page.DEVICES) })
+                            if (Multipoint.type(functions) != null) add(HomeLink(Glyph.DEVICES, "Connected devices", "Switch between your phone and other devices", Accent.CONNECTION) { open(Page.DEVICES) })
                         },
                     )
                     Page.EQUALIZER -> EqualizerScreen(::back, startTick)
@@ -281,7 +282,8 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                     Page.FIT -> FitTestScreen(::back)
                     Page.DEVICES -> DevicesScreen(::back)
                     Page.BATTERY -> BatteryScreen(::back)
-                    Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) })
+                    Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) },
+                        onFitTest = { open(Page.FIT) }.takeIf { functions?.contains(SupportedFunctions.FIT_TEST) == true })
                     Page.DEVICE -> {
                         LaunchedEffect(startTick) { model.readDeviceInfo() }
                         val quality = (advanced[AdvancedSettings.Key.QUALITY] ?: cachedAdvanced[AdvancedSettings.Key.QUALITY])?.firstOrNull()
