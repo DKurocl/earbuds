@@ -69,3 +69,14 @@ style. The LDAC note in Device info is a tonal card with one action, as Settings
 |---|---|---|
 | App settings | Earbuds; Noise control; At home; Battery alerts; Shortcuts; Look and feel; Your settings; About | One group per task, as Android Settings groups; every automatic noise-control rule (connect, weekends, walking, a moment of Ambient, Music's sleep timer) now sits together instead of across "Earbuds", "Timers & alerts" and "Automatic" |
 | Earbud settings | Controls; Conversation; Sound; In-ear detection; Calls; Spoken prompts | Pixel Buds order: what you touch first, then sound, then wearing and calls; head gestures answer calls, so they moved to Calls |
+
+## 3.2
+
+| Element | Now | Why |
+|---|---|---|
+| Home header | Only the actions in the bar; name and state centred above the rings | A two-line title next to round buttons could not line up; Pixel's Device details centres the name and state over the device |
+| Choices | Two or three short options: a connected button group in the row; longer lists open in place as radio rows | Google's settings and Pixel Buds choose in place; nothing pops over the page |
+| Switches | Standard motion (no overshoot), the thumb grows while the row is pressed | The expressive spring made the thumb wobble as it landed; Android's switch does not |
+| Settings rows | A change shows at once and is corrected only if the earbuds refuse it | The row used to wait for the answer and then jump |
+| Equalizer | Controls stay lit while a change is confirmed; taps wait instead | Every step greyed the curve, Clear Bass and presets out and back |
+| Battery rings | No swell when the mode changes | The rings are about charge; the mode bar answers a mode change |

@@ -95,14 +95,6 @@ internal fun ListeningLevelContent(
     state: SafeListening.State, connected: Boolean, on: Boolean, reference: SafeListening.Reference,
     onBack: () -> Unit = {}, onRefresh: () -> Unit = {}, onEnabled: (Boolean) -> Unit = {}, onReference: (SafeListening.Reference) -> Unit = {},
 ) {
-    var choosing by remember { mutableStateOf(false) }
-    if (choosing) ChoiceDialog(
-        "Weekly limit", SafeListening.Reference.entries.map { it.ordinal to "${it.label}: ${it.detail}" }, reference.ordinal,
-        onDismiss = { choosing = false },
-    ) { picked ->
-        choosing = false
-        onReference(SafeListening.Reference.entries[picked])
-    }
     PageScaffold("Listening level", onBack, actions = {
         HeaderActionButton(HeaderAction(Glyph.REFRESH, "Refresh", onRefresh, enabled = on && connected && !state.syncing))
     }) {
@@ -119,7 +111,11 @@ internal fun ListeningLevelContent(
             item {
                 SwitchRow(it, Glyph.EAR_SOUND, "Measure listening level", "Your earbuds keep the log; the phone reads it when you open the app", on, onChange = onEnabled)
             }
-            item { NavRow(it, Glyph.INSIGHTS, "Weekly limit", "${reference.label}: ${reference.detail}", onClick = { choosing = true }) }
+            item {
+                ChoiceRow(it, Glyph.INSIGHTS, "Weekly limit", SafeListening.Reference.entries.map { r -> r.ordinal to r.short }, reference.ordinal) { i ->
+                    onReference(SafeListening.Reference.entries[i])
+                }
+            }
         }
         Text(
             "Your earbuds measure the sound that reaches your ears. The limit follows the WHO and ITU safe listening standard (H.870); left and right are averaged.",

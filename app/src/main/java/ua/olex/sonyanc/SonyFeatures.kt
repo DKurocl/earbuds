@@ -163,9 +163,9 @@ internal object SafeListening {
     // ---- math (Sony's SlConstant) --------------------------------------------------------------
     private const val PA2_SCALE = 100_000.0
     private const val REF_PA2 = 20e-6 * 20e-6
-    enum class Reference(val label: String, val detail: String, val allowancePa2Min: Double) {
-        STANDARD("Standard", "80 dB for 40 hours a week", 1.6 * 60),
-        SENSITIVE("Sensitive", "75 dB for 40 hours a week", 0.51 * 60),
+    enum class Reference(val label: String, val short: String, val detail: String, val allowancePa2Min: Double) {
+        STANDARD("Standard", "Standard, 80 dB", "80 dB for 40 hours a week", 1.6 * 60),
+        SENSITIVE("Sensitive", "Sensitive, 75 dB", "75 dB for 40 hours a week", 0.51 * 60),
     }
 
     /** Pa^2 minutes from a raw sound pressure sum. */

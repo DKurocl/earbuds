@@ -33,6 +33,10 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.selected
 
 /** Shows a short message at the bottom of the screen; no-op outside the app shell (tests, previews). */
 val LocalMessages = staticCompositionLocalOf<(String) -> Unit> { {} }
@@ -245,7 +249,10 @@ fun SwitchRow(
         return
     }
     val haptics = LocalHapticFeedback.current
+    // One press for the row and the switch: the thumb grows under the finger, as in Android Settings.
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     SegmentedListItem(
+        interactionSource = press,
         onClick = {
             if (busy) return@SegmentedListItem
             // The same toggle feel as Android's own settings switches.
@@ -255,10 +262,14 @@ fun SwitchRow(
         shapes = shape, enabled = enabled, colors = rowColors(),
         leadingContent = leading(glyph), supportingContent = supporting(summary, note),
         trailingContent = {
-            Switch(
-                checked = checked, onCheckedChange = null, enabled = enabled,
-                thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), MaterialTheme.colorScheme.primary) }) else null,
-            )
+            // Android's own switch slides without overshoot; the expressive scheme's bouncy spring
+            // made the thumb wobble as it landed, so the switch alone keeps the standard motion.
+            MaterialTheme(motionScheme = MotionScheme.standard()) {
+                Switch(
+                    checked = checked, onCheckedChange = null, enabled = enabled, interactionSource = press,
+                    thumbContent = if (checked) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), MaterialTheme.colorScheme.primary) }) else null,
+                )
+            }
         },
         modifier = Modifier.fillMaxWidth().semantics { role = Role.Switch; toggleableState = ToggleableState(checked) },
     ) { Text(title) }
@@ -270,16 +281,79 @@ fun ChoiceRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, choices: List<Pair<Int, String>>, selected: Int?,
     busy: Boolean = false, enabled: Boolean = true, note: RowNote? = null, onSelect: (Int) -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
     if (selected == null) {
         InfoRow(shape, glyph, title, if (busy) null else "Not available")
         return
     }
-    // Same quiet rule as SwitchRow: the last known value, no spinner, taps wait for the answer.
-    NavRow(shape, glyph, title, choices.firstOrNull { it.first == selected }?.second ?: "Device setting", enabled = enabled, note = note) {
-        if (!busy) open = true
+    val cs = MaterialTheme.colorScheme
+    val haptics = LocalHapticFeedback.current
+    fun pick(code: Int) {
+        if (busy || code == selected) return
+        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        onSelect(code)
     }
-    if (open) ChoiceDialog(title, choices, selected, onDismiss = { open = false }) { open = false; onSelect(it) }
+    // As Google's own settings do it: two or three short choices sit in the row as a connected
+    // button group (Pixel Buds' noise control, Android's dark theme); longer lists open in place
+    // as radio rows. Nothing pops over the page, and the row keeps its place in the group.
+    val inline = choices.size in 2..3 && choices.all { it.second.length <= 16 }
+    var open by remember { mutableStateOf(false) }
+    val chosen = choices.firstOrNull { it.first == selected }?.second ?: "Device setting"
+    Column(
+        Modifier.fillMaxWidth().clip(shape.shape).background(Surfaces.card)
+            .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
+    ) {
+        val header: @Composable () -> Unit = {
+            // Plain ListItem puts 4 dp more after the icon than the segmented rows; pulled back so
+            // every title in a group starts on the same line.
+            val sub = supporting(if (inline) null else chosen, note)
+            ListItem(
+                headlineContent = { Box(Modifier.offset(x = (-4).dp)) { Text(title) } },
+                supportingContent = sub?.let { { Box(Modifier.offset(x = (-4).dp)) { it() } } },
+                leadingContent = leading(glyph),
+                trailingContent = if (inline) null else ({
+                    val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "chevron")
+                    HushIcon(Glyph.EXPAND, Modifier.graphicsLayer { rotationZ = turn }, cs.onSurfaceVariant)
+                }),
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+        }
+        if (inline) {
+            header()
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            ) {
+                choices.forEachIndexed { index, (code, label) ->
+                    ToggleButton(
+                        checked = code == selected, onCheckedChange = { pick(code) }, enabled = enabled,
+                        shapes = when (index) {
+                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
+                        colors = ToggleButtonDefaults.colors(containerColor = Surfaces.control),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { role = Role.RadioButton; this.selected = code == selected },
+                    ) { Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
+                }
+            }
+        } else {
+            Box(Modifier.selectable(selected = open, enabled = enabled, role = Role.DropdownList) { if (!busy) open = !open }) { header() }
+            if (open) Column(Modifier.selectableGroup().padding(bottom = 8.dp)) {
+                choices.forEach { (code, label) ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                            .selectable(code == selected, enabled = enabled, role = Role.RadioButton) { pick(code); open = false }
+                            .padding(start = 72.dp, end = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        RadioButton(selected = code == selected, onClick = null)
+                        Text(label, style = MaterialTheme.typography.bodyLarge, color = cs.onSurface)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

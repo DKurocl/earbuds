@@ -110,7 +110,9 @@ fun HushScreen(
     }
     val showConnectionProgress = (connecting && linked != true) || (ready && batteryRefreshing && battery == null)
     Scaffold(containerColor = Surfaces.page, topBar = {
-        DeviceTopBar(deviceName.ifBlank { "WF-1000XM5" }, subtitle = { ConnectionStatus(connectionLabel, showConnectionProgress) }) {
+        // Only the actions sit in the bar; the name and state are centred above the rings, as in
+        // Pixel's Device details, so nothing in the bar has to line up with a two-line title.
+        DeviceTopBar("") {
             val settings = HeaderAction(Glyph.SETTINGS, "Settings", onSettings)
             if (onProfiles != null) HeaderActionPair(HeaderAction(Glyph.TUNE, "Personal profiles", onProfiles), settings)
             else HeaderActionButton(settings)
@@ -137,6 +139,12 @@ fun HushScreen(
                 .padding(bottom = if (showModeDock) dockHeight else 0.dp),
             verticalArrangement = Arrangement.spacedBy(UiTokens.homeSectionGap),
         ) {
+            Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() }, horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(deviceName.ifBlank { "WF-1000XM5" }, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp, lineHeight = 36.sp),
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                ConnectionStatus(connectionLabel, showConnectionProgress, centered = true)
+            }
             when {
                 !granted -> SetupCard("Allow Bluetooth access", "Earbuds talks to your WF-1000XM5 directly. Nothing leaves your phone.", "Allow", Glyph.BLUETOOTH, onPermission)
                 !bluetoothOn -> SetupCard("Turn on Bluetooth", "Connect your earbuds in Android Bluetooth settings.", "Bluetooth settings", Glyph.BLUETOOTH, onBluetooth)
@@ -203,12 +211,12 @@ fun HushScreen(
 }
 
 @Composable
-private fun ConnectionStatus(status: String, busy: Boolean) {
+private fun ConnectionStatus(status: String, busy: Boolean, centered: Boolean = false) {
     Row(
-        Modifier.heightIn(min = 18.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start),
+        Modifier.heightIn(min = 20.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, if (centered) Alignment.CenterHorizontally else Alignment.Start),
     ) {
-        Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite })
         if (busy) LoadingIndicator(Modifier.size(16.dp))
@@ -224,43 +232,20 @@ internal fun Batteries(
     // (docs/icon/device_pictures.py).
     val budL = painterResource(R.drawable.device_bud_left)
     val budR = painterResource(R.drawable.device_bud_right)
-    // When the earbuds confirm a new mode, a small swell runs through the rings, left to right:
-    // the answer comes from the earbuds, not from the button that was tapped.
-    val swell = remember { List(3) { Animatable(1f) } }
-    var lastConfirmed by remember { mutableStateOf(confirmed) }
-    SideEffect { if (confirmed != null) lastConfirmed = confirmed }
-    val seen = remember { arrayOfNulls<Mode>(1) }
+    // The rings show charge only; a mode change does not move them (the mode bar answers that).
     val motionEnabled = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
-    val grow = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
-    LaunchedEffect(lastConfirmed, motionEnabled) {
-        val mode = lastConfirmed
-        val was = seen[0]
-        seen[0] = mode
-        if (!motionEnabled) {
-            swell.forEach { it.snapTo(1f) }
-            return@LaunchedEffect
-        }
-        if (mode == null || was == null || was == mode) return@LaunchedEffect
-        listOf(0, 2, 1).forEachIndexed { order, ring ->
-            launch {
-                delay(order * 70L)
-                swell[ring].animateTo(1.06f, grow)
-                swell[ring].animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 380f))
-            }
-        }
-    }
     Row(
         Modifier.fillMaxWidth().clip(UiTokens.cardShape).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         // Equal thirds: each label has a bounded width to shrink into at the largest font sizes.
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, dimCached, motionEnabled, { swell[0].value }) { BudArt(budL) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Left", b.left, b.leftCharging, 0 in live, dimCached, motionEnabled) { BudArt(budL) } }
         Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) {
-            BatteryRing("Case", b.case, b.caseCharging, 2 in live, dimCached, motionEnabled, { swell[2].value }) {
+            BatteryRing("Case", b.case, b.caseCharging, 2 in live, dimCached, motionEnabled) {
                 Image(painterResource(R.drawable.device_case), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
-        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, dimCached, motionEnabled, { swell[1].value }) { BudArt(budR) } }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { BatteryRing("Right", b.right, b.rightCharging, 1 in live, dimCached, motionEnabled) { BudArt(budR) } }
     }
 }
 

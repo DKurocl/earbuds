@@ -161,7 +161,7 @@ fun AppSettingsContent(
         }
         ListGroup("Noise control") {
             item {
-                ChoiceRow(it, Glyph.LINK, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
+                ChoiceRow(it, Glyph.QUIET, "When earbuds connect", OnConnect.entries.map { c -> c.ordinal to c.label }, onConnect.ordinal) { i ->
                     onOnConnect(OnConnect.entries[i])
                 }
             }
@@ -206,7 +206,7 @@ fun AppSettingsContent(
                     "At ${CaseReminder.THRESHOLD}% or less when you open or put away the earbuds", caseReminder, onChange = onCaseReminder)
             }
             item {
-                SwitchRow(it, Glyph.UPCOMING, "Charge before you go",
+                SwitchRow(it, Glyph.BATTERY_CHARGING, "Charge before you go",
                     "Before the time you usually take the earbuds out, if the case is under ${ChargeReminder.THRESHOLD}%", chargeReminder, onChange = onChargeReminder)
             }
         }

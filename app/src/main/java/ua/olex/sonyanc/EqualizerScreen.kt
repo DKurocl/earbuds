@@ -269,6 +269,9 @@ fun EqualizerContent(
                 }
                 val activeBand = edit?.index?.minus(1)
                 val controlsReady = editable && !busy && !applyingPreset && on && gains != null
+                // How the controls look does not follow each write: they stay lit while the earbuds
+                // confirm a change (taps then wait), so nothing greys out and back on every step.
+                val controlsLit = editable && on && displayed != null
                 LaunchedEffect(controlsReady) { if (!controlsReady) edit = null }
                 fun commit(index: Int, gain: Int) {
                     val latest = gains.orEmpty()
@@ -298,17 +301,19 @@ fun EqualizerContent(
                                 Text("Use equalizer", style = MaterialTheme.typography.titleLarge)
                                 Text(if (on) presetName else "Off", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             }
-                            Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
-                                thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                                modifier = Modifier.semantics { contentDescription = "Equalizer" })
+                            MaterialTheme(motionScheme = MotionScheme.standard()) {
+                                Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
+                                    thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
+                                    modifier = Modifier.semantics { contentDescription = "Equalizer" })
+                            }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
                     Box(contentAlignment = Alignment.Center) {
                         EqCurve(
-                            gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
+                            gains = displayed?.subList(1, 6), enabled = controlsLit && edit?.index != 0,
                             activeBand = activeBand, haptics = haptics,
-                            onGain = { index, value -> edit = EqEdit(index + 1, value) },
+                            onGain = { index, value -> if (controlsReady) edit = EqEdit(index + 1, value) },
                             onFinish = { index, value -> if (value != null) commit(index + 1, value) else edit = null },
                         )
                         if (shownBands == null && !applyingPreset) {
@@ -319,19 +324,19 @@ fun EqualizerContent(
                             )
                         }
                     }
-                    BandReadouts(displayed, activeBand, controlsReady && edit == null) { index, gain -> commit(index + 1, gain) }
+                    BandReadouts(displayed, activeBand, controlsLit && edit == null) { index, gain -> commit(index + 1, gain) }
                 }
                 ClearBass(
                     gain = displayed?.first(),
-                    enabled = controlsReady && (edit == null || edit?.index == 0),
+                    enabled = controlsLit && (edit == null || edit?.index == 0),
                     editing = edit?.index == 0, haptics = haptics,
-                    onGain = { edit = EqEdit(0, it) },
+                    onGain = { if (controlsReady) edit = EqEdit(0, it) },
                     onFinish = { commit(0, it) },
                 )
                 PresetGroups(
                     active = selectedSlot?.let { 0xA0 + it } ?: state.preset, flat = flat && selectedSlot == null,
-                    enabled = editable && !busy && edit == null,
-                    onPreset = onPreset,
+                    enabled = editable && !busy,
+                    onPreset = { if (edit == null) onPreset(it) },
                     onFlat = { onBands(listOf(gains?.first() ?: 0) + List(5) { 0 }) },
                 )
             }

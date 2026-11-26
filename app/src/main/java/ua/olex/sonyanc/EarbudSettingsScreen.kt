@@ -22,8 +22,12 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}) {
         .collectAsState(remember(ctx) { Prefs.cachedAdvanced(ctx) })
     val cachedFeatures by remember(ctx) { Prefs.cachedFeatureChanges(ctx) }
         .collectAsState(remember(ctx) { Prefs.cachedFeatures(ctx) })
-    val shownValues = cachedValues + values
-    val shownFeatures = cachedFeatures + features
+    // A change shows at once, as Android's own switches do; the earbuds' answer then confirms it,
+    // or puts the old value back with a note. Without this the row waited, then jumped.
+    var optimistic by remember { mutableStateOf<Map<Key, List<Int>>>(emptyMap()) }
+    var optimisticFeatures by remember { mutableStateOf<Map<Feature, Boolean>>(emptyMap()) }
+    val shownValues = cachedValues + values + optimistic
+    val shownFeatures = cachedFeatures + features + optimisticFeatures
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(emptySet<Key>()) }
     var featureLoading by remember { mutableStateOf(emptySet<Feature>()) }
@@ -76,6 +80,7 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}) {
                 // the earbuds keep on one side): that row says so, as it changes by itself.
                 val before = shownValues[key]
                 val planned = before?.let { AdvancedSettings.patch(key, it, index, code) }
+                if (planned != null) optimistic = optimistic + (key to planned)
                 try {
                     if (!Headphones.writeAdvancedField(key, index, code)) note(rowId(key, index), RowNote("The earbuds didn't take this change", error = true))
                     else if (key == Key.TOUCH && before != null && planned != null && index in 1..2) {
@@ -84,14 +89,15 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}) {
                             RowNote(if (planned[other] == AdvancedSettings.PLAYBACK) "Playback moved here: one earbud always keeps it" else "Swapped with the other earbud"))
                     }
                 }
-                finally { writing = null }
+                finally { writing = null; optimistic = optimistic - key }
             }
         },
         onBasic = { feature, wanted ->
             if (feature !in featureLoading) scope.launch {
                 featureLoading = featureLoading + feature; notes = notes - feature.name
+                optimisticFeatures = optimisticFeatures + (feature to wanted)
                 try { if (!Headphones.writeFeature(feature, wanted)) note(feature.name, RowNote("The earbuds didn't take this change", error = true)) }
-                finally { featureLoading = featureLoading - feature }
+                finally { featureLoading = featureLoading - feature; optimisticFeatures = optimisticFeatures - feature }
             }
         },
     )
