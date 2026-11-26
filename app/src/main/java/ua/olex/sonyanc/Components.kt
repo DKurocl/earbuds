@@ -63,19 +63,19 @@ internal fun DeviceTopBar(title: String, onBack: (() -> Unit)? = null, subtitle:
     val page = Surfaces.page
     TopAppBar(
         title = {
-            Column(Modifier.padding(start = if (onBack != null) 6.dp else 0.dp),
+            Column(Modifier.padding(start = if (onBack != null) 12.dp else 4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                val titleStyle = if (onBack != null) MaterialTheme.typography.headlineSmallEmphasized
-                    .copy(fontSize = 26.sp, lineHeight = 32.sp) else MaterialTheme.typography.titleLargeEmphasized
+                // As Android 17's Settings: one regular-weight 28 sp title on every page, Home too.
+                val titleStyle = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp, lineHeight = 36.sp)
                 Text(title, style = titleStyle, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 subtitle?.invoke()
             }
         },
         navigationIcon = {
-            if (onBack != null) HeaderActionButton(HeaderAction(Glyph.BACK, "Back", onBack), Modifier.padding(start = 4.dp))
+            if (onBack != null) HeaderActionButton(HeaderAction(Glyph.BACK, "Back", onBack), Modifier.padding(start = 8.dp))
         },
-        actions = { Row(Modifier.padding(end = 8.dp), content = actions) },
+        actions = { Row(Modifier.padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), content = actions) },
         colors = TopAppBarDefaults.topAppBarColors(containerColor = page, scrolledContainerColor = page),
     )
 }
@@ -85,26 +85,22 @@ internal data class HeaderAction(val glyph: Glyph, val label: String, val onClic
 @Composable
 internal fun HeaderActionButton(action: HeaderAction, modifier: Modifier = Modifier, leading: Boolean? = null) {
     val cs = MaterialTheme.colorScheme
-    fun corners(outer: Int, inner: Int): RoundedCornerShape {
-        val start = if (leading == false) inner.dp else outer.dp
-        val end = if (leading == true) inner.dp else outer.dp
-        return RoundedCornerShape(topStart = start, topEnd = end, bottomStart = start, bottomEnd = end)
-    }
+    // A plain tonal circle, as Android 17's Settings draws its back button; actions sit apart, never joined.
     FilledTonalIconButton(
         onClick = action.onClick, enabled = action.enabled,
         colors = IconButtonDefaults.filledTonalIconButtonColors(
             containerColor = cs.surfaceContainerHigh, contentColor = cs.onSurfaceVariant,
         ),
-        shapes = IconButtonDefaults.shapes(shape = corners(24, 7), pressedShape = corners(18, 5)),
+        shapes = IconButtonDefaults.shapes(shape = CircleShape, pressedShape = RoundedCornerShape(16.dp)),
         modifier = modifier.size(UiTokens.minTouchTarget).semantics { contentDescription = action.label },
     ) { HushIcon(action.glyph, Modifier.size(22.dp)) }
 }
 
 @Composable
 internal fun HeaderActionPair(start: HeaderAction, end: HeaderAction, modifier: Modifier = Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-        HeaderActionButton(start, leading = true)
-        HeaderActionButton(end, leading = false)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HeaderActionButton(start)
+        HeaderActionButton(end)
     }
 }
 

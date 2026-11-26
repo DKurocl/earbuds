@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -155,15 +156,17 @@ internal fun TextStyle.withTabularFigures() = copy(fontFeatureSettings = "tnum",
 
 /** Shared surface levels, with a quiet tint for the main battery estimate. */
 object Surfaces {
+    // The same steps as Android 17's Settings: the page one tone up from plain surface, rows a
+    // step lighter (dark) or white (light), controls on them one more step.
     val page: Color
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surface
+        get() = MaterialTheme.colorScheme.surfaceContainer
     val card: Color
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surfaceContainer
+        get() = with(MaterialTheme.colorScheme) { if (surface.luminance() < 0.5f) surfaceContainerHigh else surfaceBright }
     val control: Color
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.colorScheme.surfaceContainerHigh
+        get() = MaterialTheme.colorScheme.surfaceContainerHighest
     val estimate: Color
         @Composable @ReadOnlyComposable
         get() = with(MaterialTheme.colorScheme) { lerp(surfaceContainerHigh, primaryContainer, .26f) }
