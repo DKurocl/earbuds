@@ -84,7 +84,7 @@ object Prefs {
         val editor = p(ctx).edit().putString("device", address).putString("device_name", name)
         listOf(
             "mode", "voice", "level", "codec", "battery_at", "linked", "last_seen",
-            "cache_advanced", "cache_features", "cache_eq", "last_eq_preset", "panel_refused",
+            "cache_advanced", "cache_features", "cache_eq", "last_eq_preset", "last_eq_bands", "panel_refused",
             "battery_log", "battery_health", "buds_reminded_session", "firmware", "eq_saved_1", "eq_saved_2", "listening_exposure",
             "functions", "sl_log", "sl_now", "sl_last", "sl_synced",
         ).forEach { editor.remove(it) }
@@ -202,12 +202,22 @@ object Prefs {
         p(ctx).edit().putString("eq_saved_$slot", bands.joinToString(",")).apply()
     }
 
-    fun lastEnabledEqualizerPreset(ctx: Context): Int =
-        p(ctx).getInt("last_eq_preset", 0xA0).takeIf { it != 0 && it in EqualizerProtocol.presets } ?: 0xA0
+    fun lastEnabledEqualizer(ctx: Context): EqualizerProtocol.State? {
+        val prefs = p(ctx)
+        val preset = prefs.getInt("last_eq_preset", 0).takeIf { it != 0 && it in EqualizerProtocol.presets } ?: return null
+        val bands = prefs.getString("last_eq_bands", null).orEmpty().split(',')
+            .mapNotNull(String::toIntOrNull).takeIf { it.size == 6 && it.all { gain -> gain in -10..10 } }.orEmpty()
+        return EqualizerProtocol.State(preset, bands)
+    }
 
     fun cacheEqualizer(ctx: Context, eq: EqualizerProtocol.State) {
-        val editor = p(ctx).edit().putString("cache_eq", "${eq.preset}|${eq.bands.joinToString(",")}")
-        if (eq.preset != 0) editor.putInt("last_eq_preset", eq.preset)
+        val prefs = p(ctx)
+        val editor = prefs.edit().putString("cache_eq", "${eq.preset}|${eq.bands.joinToString(",")}")
+        if (eq.preset != 0) {
+            if (eq.bands.size == 6) editor.putString("last_eq_bands", eq.bands.joinToString(","))
+            else if (prefs.getInt("last_eq_preset", 0) != eq.preset) editor.remove("last_eq_bands")
+            editor.putInt("last_eq_preset", eq.preset)
+        }
         editor.apply()
     }
 

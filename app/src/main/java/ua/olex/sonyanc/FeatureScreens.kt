@@ -47,7 +47,7 @@ internal fun minutesText(minutes: Double): String {
 internal fun listeningSummary(state: SafeListening.State, reference: SafeListening.Reference, on: Boolean): String = when {
     !on -> "Off"
     state.summary == null -> "Measured by your earbuds"
-    else -> "${(state.summary.dose(reference) * 100).roundToInt()}% of this week's limit"
+    else -> "${(state.summary.dose(reference) * 100).roundToInt()}% of weekly limit"
 }
 
 private fun liveText(live: SafeListening.Live?, connected: Boolean): String = when {
@@ -100,13 +100,13 @@ internal fun ListeningLevelContent(
     }) {
         val summary = state.summary
         MainSwitchBar("Measure listening level", on, onChange = onEnabled)
-        WeekCard(summary, reference, on, state.syncing)
         if (on) ListGroup("Now") {
             item {
                 InfoRow(it, Glyph.EAR_SOUND, "Sound at your ears",
                     if (state.available == false) "Not available right now" else liveText(state.live, connected))
             }
         }
+        if (on) ExposureCard(summary, reference, state.syncing)
         if (on && summary != null) DaysCard(summary, reference)
         if (on) ListGroup("Limit") {
             item {
@@ -123,36 +123,38 @@ internal fun ListeningLevelContent(
     }
 }
 
-/** The week at a glance: the share of the limit, big, with a wavy bar, as Google's wellbeing cards do. */
+/** The accumulated exposure is separate from the current sound level. */
 @Composable
-private fun WeekCard(summary: SafeListening.Summary?, reference: SafeListening.Reference, on: Boolean, syncing: Boolean) {
+private fun ExposureCard(summary: SafeListening.Summary?, reference: SafeListening.Reference, syncing: Boolean) {
     val cs = MaterialTheme.colorScheme
     val dose = summary?.dose(reference)
     val over = (dose ?: 0.0) >= 1.0
-    Surface(shape = RoundedCornerShape(UiTokens.cardRadius), color = if (over) cs.errorContainer else cs.primaryContainer,
-        contentColor = if (over) cs.onErrorContainer else cs.onPrimaryContainer, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("This week", style = MaterialTheme.typography.titleMedium)
-            Text(
-                when { !on -> "Off"; dose == null -> if (syncing) "Reading" else "No data yet"; else -> "${(dose * 100).roundToInt()}%" },
-                style = MaterialTheme.typography.displayMedium,
-                modifier = Modifier.semantics { contentDescription = if (dose == null) "No data" else "${(dose * 100).roundToInt()} percent of the weekly limit" },
-            )
-            if (on && dose != null) {
-                Text(if (over) "Above this week's limit. Lower the volume for the next days." else "of this week's limit",
-                    style = MaterialTheme.typography.bodyLarge)
-                LinearWavyProgressIndicator(
+    Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Exposure", style = MaterialTheme.typography.titleMediumEmphasized)
+            if (dose != null) {
+                val indicatorColor = if (over) cs.error else cs.primary
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "${(dose * 100).roundToInt()}%", style = MaterialTheme.typography.headlineMediumEmphasized.withTabularFigures(),
+                        color = indicatorColor,
+                    )
+                    Text("of weekly limit", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                }
+                LinearProgressIndicator(
                     progress = { dose.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(),
-                    color = if (over) cs.error else cs.primary, trackColor = (if (over) cs.onErrorContainer else cs.onPrimaryContainer).copy(alpha = .18f),
+                    color = indicatorColor, trackColor = cs.surfaceContainerHighest,
                 )
                 Text(
-                    listOfNotNull(summary.averageDb?.let { "Average ${it.roundToInt()} dB" }, minutesText(summary.minutes), reference.label).joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
+                    listOfNotNull(summary.averageDb?.let { "Average ${it.roundToInt()} dB" }, minutesText(summary.minutes)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                 )
-            } else if (on && syncing) {
-                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(), color = cs.primary)
-            } else if (on) {
-                Text("Listen for a while with the earbuds in. The log fills in hour by hour.", style = MaterialTheme.typography.bodyMedium)
+                if (over) Text("Above the weekly limit", style = MaterialTheme.typography.bodyMedium, color = cs.error)
+            } else {
+                Text(
+                    if (syncing) "Reading exposure" else "No readings yet",
+                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                )
             }
         }
     }
@@ -165,7 +167,6 @@ private fun DaysCard(summary: SafeListening.Summary, reference: SafeListening.Re
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
     val day = remember(locale) { SimpleDateFormat("EEE", locale) }
     val shares = summary.days.map { SafeListening.dose(it.pressure, reference, days = 1) }
-    val top = maxOf(1.0, shares.maxOrNull() ?: 0.0)
     Surface(shape = RoundedCornerShape(UiTokens.cardRadius), color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Last 7 days", style = MaterialTheme.typography.titleMedium)
@@ -177,12 +178,13 @@ private fun DaysCard(summary: SafeListening.Summary, reference: SafeListening.Re
                         val barColor = when { share >= 1.0 -> cs.error; today -> cs.primary; else -> cs.primary.copy(alpha = .55f) }
                         val track = cs.surfaceContainerHighest
                         Canvas(Modifier.weight(1f).width(20.dp).semantics {
-                            contentDescription = "${day.format(d.start)}: ${(share * 100).roundToInt()} percent of a day's limit"
+                            contentDescription = if (d.minutes <= 0) "${day.format(d.start)}: No listening recorded"
+                            else "${day.format(d.start)}: ${(share * 100).roundToInt()} percent of a day's limit"
                         }) {
-                            val r = CornerRadius(size.width / 2, size.width / 2)
+                            val r = CornerRadius(4.dp.toPx())
                             drawRoundRect(track, cornerRadius = r)
-                            val h = (size.height * (share / top)).toFloat().coerceIn(if (share > 0) size.width else 0f, size.height)
-                            if (h > 0) drawRoundRect(barColor, topLeft = Offset(0f, size.height - h), size = Size(size.width, h), cornerRadius = r)
+                            val h = size.height * share.toFloat().coerceIn(0f, 1f)
+                            if (h > 0) drawRoundRect(barColor, topLeft = Offset(0f, size.height - h), size = Size(size.width, h), cornerRadius = CornerRadius(minOf(r.x, h / 2f)))
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(day.format(d.start), style = MaterialTheme.typography.labelMedium,

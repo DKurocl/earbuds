@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -167,10 +168,10 @@ fun HushScreen(
                     }
 
                     Row(Modifier.fillMaxWidth().introFade(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        BigAction(Glyph.FIND, "Find", onClick = onFind)
-                        BigAction(Glyph.BLUETOOTH, if (linked == false || status == Headphones.Status.FAILED) "Connect" else "Bluetooth",
+                        BigAction(Glyph.FIND, "Find", Modifier.weight(1f), onClick = onFind)
+                        BigAction(Glyph.BLUETOOTH, if (linked == false || status == Headphones.Status.FAILED) "Connect" else "Bluetooth", Modifier.weight(1f),
                             onClick = if (status == Headphones.Status.FAILED && linked == true) onConnect else onBluetooth)
-                        BigAction(Glyph.POWER, "Power off", enabled = !turningOff && (ready || linked == true)) { confirmPowerOff = true }
+                        BigAction(Glyph.POWER, "Power off", Modifier.weight(1f), enabled = !turningOff && (ready || linked == true)) { confirmPowerOff = true }
                     }
 
                     Column {
@@ -339,14 +340,42 @@ private fun BatteryRing(
                     .graphicsLayer { alpha = shown },
                 contentAlignment = Alignment.Center,
             ) { art() }
-            HushIcon(
-                when {
-                    value == null -> Glyph.BATTERY_UNKNOWN
-                    charging -> Glyph.BATTERY_CHARGING
-                    value <= 20 -> Glyph.BATTERY_LOW
-                    else -> Glyph.BATTERY
-                }, Modifier.padding(top = (CHIP - 18.dp) / 2).size(18.dp).graphicsLayer { alpha = shown }, chipContent, filled = true,
-            )
+            val icon = Modifier.padding(top = (CHIP - 18.dp) / 2).size(18.dp).graphicsLayer { alpha = shown }
+            Canvas(icon) {
+                val width = 8.dp.toPx()
+                val height = 13.dp.toPx()
+                val start = Offset(center.x - width / 2, center.y - height / 2 + 1.dp.toPx())
+                val outline = 1.dp.toPx()
+                val rounding = CornerRadius(1.dp.toPx())
+                drawRoundRect(chipContent, start, Size(width, height), rounding, style = Stroke(outline))
+                drawRoundRect(
+                    chipContent, Offset(center.x - 1.5.dp.toPx(), start.y - 2.dp.toPx()),
+                    Size(3.dp.toPx(), 2.dp.toPx()), CornerRadius(.5.dp.toPx()),
+                )
+                if (value == null) {
+                    val dash = 1.5.dp.toPx()
+                    drawLine(chipContent, Offset(center.x - dash, center.y), Offset(center.x + dash, center.y), outline, StrokeCap.Round)
+                    return@Canvas
+                }
+                val fillHeight = (height - outline) * fill.value.coerceIn(0f, 1f)
+                if (fillHeight > 0f) drawRoundRect(
+                    chipContent, Offset(start.x + outline / 2, start.y + height - outline / 2 - fillHeight),
+                    Size(width - outline, fillHeight), CornerRadius(minOf(rounding.x, fillHeight / 2)),
+                )
+                if (charging) {
+                    val bolt = Path().apply {
+                        moveTo(center.x + .5.dp.toPx(), start.y + 2.dp.toPx())
+                        lineTo(center.x - 2.dp.toPx(), start.y + 7.5.dp.toPx())
+                        lineTo(center.x - .2.dp.toPx(), start.y + 7.5.dp.toPx())
+                        lineTo(center.x - .5.dp.toPx(), start.y + 11.dp.toPx())
+                        lineTo(center.x + 2.dp.toPx(), start.y + 5.5.dp.toPx())
+                        lineTo(center.x + .2.dp.toPx(), start.y + 5.5.dp.toPx())
+                        close()
+                    }
+                    drawPath(bolt, chipContent, style = Stroke(1.dp.toPx(), join = StrokeJoin.Round))
+                    drawPath(bolt, color)
+                }
+            }
         }
         Row(
             Modifier.padding(horizontal = 4.dp).graphicsLayer { alpha = shown; translationY = (1 - shown) * 6.dp.toPx() },
@@ -382,20 +411,26 @@ private fun BudArt(image: androidx.compose.ui.graphics.painter.Painter) {
 
 /** A home action: A compact tonal action with an expressive press shape. */
 @Composable
-private fun BigAction(glyph: Glyph, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+private fun BigAction(glyph: Glyph, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         FilledTonalIconButton(
             onClick = onClick, enabled = enabled,
             shapes = IconButtonDefaults.shapes(), interactionSource = press,
-            modifier = Modifier.size(width = 56.dp, height = 48.dp)
-                .semantics { contentDescription = label },
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = colors.primaryContainer, contentColor = colors.onPrimaryContainer,
+            ),
+            modifier = Modifier.size(width = 72.dp, height = 56.dp).semantics { contentDescription = label },
         ) {
             // The icon fills in under the finger, as the button squares off.
             HushIcon(glyph, Modifier.size(IconButtonDefaults.mediumIconSize), LocalContentColor.current, filled = pressed, bold = pressed)
         }
-        Text(label, style = MaterialTheme.typography.labelLarge)
+        Text(
+            label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -409,37 +444,47 @@ class DockExtras(
     val minutes: Int, val until: Long?, val returnMode: Mode, val onAmbientFor: () -> Unit, val onStay: () -> Unit,
 )
 
-/** Controls float directly above the mode buttons. */
+/** The active mode's additional controls share a single panel above the mode selector. */
 @Composable
 private fun FloatingModeOptions(state: NcState?, onChoose: (NcState) -> Unit, extras: DockExtras) {
+    val cs = MaterialTheme.colorScheme
     val motion = MaterialTheme.motionScheme
     val mode = state?.mode?.takeIf { it != Mode.OFF }
     var lastMode by remember { mutableStateOf(mode) }
+    var ambient by remember { mutableStateOf(NcState(Mode.AMBIENT)) }
     if (mode != null) lastMode = mode
+    if (state?.mode == Mode.AMBIENT) ambient = state
     AnimatedVisibility(
         visible = mode != null,
-        enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Top),
-        exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Top),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec(), expandFrom = Alignment.Bottom),
+        exit = fadeOut(motion.fastEffectsSpec()) + shrinkVertically(motion.fastSpatialSpec(), shrinkTowards = Alignment.Bottom),
     ) {
-        AnimatedContent(
-            lastMode,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            label = "Mode controls",
-            transitionSpec = {
-                fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using
-                    SizeTransform(clip = false) { _, _ -> motion.defaultSpatialSpec() }
-            },
-        ) { shown ->
-            when (shown) {
-                Mode.AMBIENT -> AmbientControls((state ?: NcState(Mode.AMBIENT)).copy(mode = Mode.AMBIENT), onChoose, extras)
-                else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    extras.speakToChat?.let { on ->
-                        SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
-                            extras.onSpeakToChat(!on)
+        Surface(
+            shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHighest,
+            shadowElevation = 6.dp, modifier = Modifier.fillMaxWidth(),
+        ) {
+            AnimatedContent(
+                lastMode,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                contentAlignment = Alignment.BottomCenter,
+                label = "Mode controls",
+                transitionSpec = {
+                    fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) using
+                        SizeTransform(clip = true) { _, _ -> motion.defaultSpatialSpec() }
+                },
+            ) { shown ->
+                when (shown) {
+                    Mode.AMBIENT -> AmbientControls(ambient, onChoose, extras)
+                    else -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        extras.speakToChat?.let { on ->
+                            SoftChip("Speak-to-Chat", selected = on, glyph = if (on) Glyph.CHECK else Glyph.CHAT, modifier = Modifier.weight(1f), kind = ChipKind.SWITCH) {
+                                extras.onSpeakToChat(!on)
+                            }
                         }
+                        SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
+                            description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                     }
-                    SoftChip("Ambient · ${extras.minutes} min", selected = false, glyph = Glyph.TIMER, modifier = Modifier.weight(1f), kind = ChipKind.BUTTON,
-                        description = "Ambient for ${extras.minutes} minutes, then back to noise cancelling") { extras.onAmbientFor() }
                 }
             }
         }
@@ -563,31 +608,29 @@ private fun AmbientControls(state: NcState, onChange: (NcState) -> Unit, extras:
         }
         val slider = remember { SliderState(value = level, steps = 19, trackRange = 0f..20f) }
         LaunchedEffect(level) { if (slider.value != level) slider.value = level }
-        Surface(shape = CircleShape, color = cs.surfaceContainerHighest, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text("Ambient level", style = MaterialTheme.typography.labelLarge, maxLines = 2,
-                    modifier = Modifier.widthIn(max = 108.dp))
-                Slider(
-                    state = slider,
-                    onValueChange = {
-                        dragging = true
-                        slider.value = it
-                        val step = slider.value.roundToInt()
-                        if (step != level.roundToInt()) feedback.performHapticFeedback(
-                            if (presets.any { p -> p.second == step }) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick,
-                        )
-                        level = step.toFloat()
-                    },
-                    onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
-                    track = { SliderDefaults.Track(sliderState = it, trackCornerSize = androidx.compose.ui.unit.Dp.Unspecified, drawTick = { _, _ -> }) },
-                    modifier = Modifier.weight(1f).semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
-                )
-                RollingText("${level.roundToInt()}", MaterialTheme.typography.titleSmall, color = cs.primary)
-            }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Ambient level", style = MaterialTheme.typography.labelLarge, maxLines = 2,
+                modifier = Modifier.widthIn(max = 108.dp))
+            Slider(
+                state = slider,
+                onValueChange = {
+                    dragging = true
+                    slider.value = it
+                    val step = slider.value.roundToInt()
+                    if (step != level.roundToInt()) feedback.performHapticFeedback(
+                        if (presets.any { p -> p.second == step }) HapticFeedbackType.SegmentTick else HapticFeedbackType.SegmentFrequentTick,
+                    )
+                    level = step.toFloat()
+                },
+                onValueChangeFinished = { onChange(state.copy(level = level.roundToInt())); dragging = false },
+                track = { SliderDefaults.Track(sliderState = it, trackCornerSize = androidx.compose.ui.unit.Dp.Unspecified, drawTick = { _, _ -> }) },
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Ambient sound level"; stateDescription = "${level.roundToInt()} of 20" },
+            )
+            RollingText("${level.roundToInt()}", MaterialTheme.typography.titleSmall, color = cs.primary)
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -634,7 +677,7 @@ private fun SoftChip(
         else -> ToggleButton(
             checked = selected, onCheckedChange = { onClick() },
             shapes = shapes ?: ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight),
-            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurface),
+            colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHigh, contentColor = cs.onSurface),
             contentPadding = padding, content = content,
             modifier = sized.semantics {
                 contentDescription = description

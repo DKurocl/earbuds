@@ -25,13 +25,17 @@ class PortableSettingsTest {
     }
 
     @Test fun turningEqualizerOffPreservesTheLastConfirmedPresetForThisPair() {
-        assertEquals(0xA0, Prefs.lastEnabledEqualizerPreset(ctx))
-        Prefs.cacheEqualizer(ctx, EqualizerProtocol.State(0xA2, emptyList()))
+        assertNull(Prefs.lastEnabledEqualizer(ctx))
+        val saved = EqualizerProtocol.State(0xA0, listOf(0, 2, 0, 0, 0, -2))
+        Prefs.cacheEqualizer(ctx, saved)
         Prefs.cacheEqualizer(ctx, EqualizerProtocol.State(0, emptyList()))
-        assertEquals(0xA2, Prefs.lastEnabledEqualizerPreset(ctx))
+        assertEquals(saved, Prefs.lastEnabledEqualizer(ctx))
         assertEquals(0, Prefs.cachedEqualizer(ctx)?.preset)
+        val named = EqualizerProtocol.State(0xA2, emptyList())
+        Prefs.cacheEqualizer(ctx, named)
+        assertEquals(named, Prefs.lastEnabledEqualizer(ctx))
         Prefs.replaceDevice(ctx, "00:11:22:33:44:77", "New pair")
-        assertEquals(0xA0, Prefs.lastEnabledEqualizerPreset(ctx))
+        assertNull(Prefs.lastEnabledEqualizer(ctx))
     }
 
     @Test fun downloadedGraphicEqFitsSixBandsAndSavedSoundsFollowThePair() {

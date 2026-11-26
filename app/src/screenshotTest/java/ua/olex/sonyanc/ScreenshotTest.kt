@@ -411,12 +411,10 @@ class ScreenshotTest {
     @Test fun floatingModesLeaveSpaceToOpenTheLastRow() {
         var opened = false
         var dockColor = 0
-        var pageColor = 0
         compose.setContent {
             AppTheme(dynamic = false) {
                 val color = MaterialTheme.colorScheme.surfaceContainerHighest.toArgb()
-                val background = Surfaces.page.toArgb()
-                SideEffect { dockColor = color; pageColor = background }
+                SideEffect { dockColor = color }
                 HushScreen(
                     status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.AMBIENT),
                     pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
@@ -452,7 +450,7 @@ class ScreenshotTest {
             val root = compose.activity.findViewById<View>(android.R.id.content)
             val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
             root.draw(Canvas(bitmap))
-            assertEquals("The gap between floating controls shows the page", pageColor, bitmap.getPixel(optionsGapX, optionsGapY))
+            assertEquals("The options panel covers the page between its controls", dockColor, bitmap.getPixel(optionsGapX, optionsGapY))
             bitmap.recycle()
         }
         deviceInfo.performTouchInput { click(center) }
@@ -665,6 +663,22 @@ class ScreenshotTest {
         compose.onNodeWithText("Noise control off").assertDoesNotExist()
         compose.onNodeWithText("Battery details").performClick()
         compose.onNodeWithText("Noise control off").assertExists()
+    }
+
+    @Test fun batteryHistorySelectsTheDayAndLeavesUnmeasuredDaysEmpty() {
+        val oneDay = 24 * 60 * 60_000L
+        val first = NOW - 2 * oneDay
+        val samples = listOf(
+            BatterySample(first, 83, false, null, 1, left = 83),
+            BatterySample(NOW, 45, false, null, 2, left = 45),
+        )
+        fun label(time: Long) = android.text.format.DateFormat.format("EEEE d MMMM", time).toString()
+        compose.setContent { AppTheme(dynamic = false) { BatteryContent(samples, NOW) } }
+        compose.onNodeWithText("45%").assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(first)).performClick().assertIsSelected()
+        compose.onNodeWithText("83%").assertIsDisplayed()
+        compose.onNodeWithContentDescription("${label(NOW - oneDay)}, no readings").performClick().assertIsSelected()
+        compose.onNodeWithText("No readings yet").assertIsDisplayed()
     }
 
     @Test fun batteryHistoryDisplaysOneReadingAndNamesMissingParts() {

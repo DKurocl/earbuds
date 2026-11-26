@@ -241,8 +241,9 @@ internal fun PageLayers(shown: List<String>, pose: PagePose, content: @Composabl
 private fun moving(pose: PagePose) = pose.swipe() > 0f || pose.settle() > 0f || pose.opening()
 
 private fun scrim(pose: PagePose): Float = when {
-    pose.opening() -> pose.settle()
-    moving(pose) -> 1f - pose.settle()
+    pose.opening() -> PageMotion.EMPHASIZED.transform(pose.settle())
+    pose.settle() > 0f -> 1f - PageMotion.EMPHASIZED.transform(pose.settle())
+    pose.swipe() > 0f -> 1f
     else -> 0f
 }
 
@@ -256,7 +257,8 @@ private fun GraphicsLayerScope.gesturePose(pose: PagePose, behind: Boolean): Pos
     val margin = PageMotion.MARGIN.toPx()
     // Closing page: centered, then (left-edge swipe) pushed to the right edge minus the margin.
     val centeredLeft = (1f - PageMotion.SCALE) / 2f * w
-    val closingLeft = if (pose.fromLeft()) w - margin - PageMotion.SCALE * w else centeredLeft
+    val travel = (centeredLeft - margin).coerceAtLeast(0f)
+    val closingLeft = centeredLeft + if (pose.fromLeft()) travel else -travel
     val left = if (behind) -PageMotion.OFFSET.toPx() + centeredLeft * p else closingLeft * p
     // Both follow the finger vertically, decelerating, never past the margin.
     val ratio = min(h / 2f, abs(pose.dy())) / (h / 2f)
@@ -285,13 +287,11 @@ private fun GraphicsLayerScope.closing(pose: PagePose) {
     val cardCorner = PageMotion.CARD_CORNER.toPx()
     if (pose.opening()) {
         if (card != null) {
-            // Container transform: the page grows out of the card, appearing over the first tenth.
-            alpha = min(1f, t * 10f)
+            // Keep the opening surface opaque while it grows out of its card.
             container(lerp(card, full, e), lerp(cardCorner, 0f, e))
             return
         }
-        // Mirror of closing: in from the right, appearing over the first fifth.
-        alpha = min(1f, t * 5f)
+        // Keep both surfaces opaque so their contents never blend on entry.
         place(1f, lerp(offset, 0f, e), 0f, rounded = t < 1f)
         return
     }

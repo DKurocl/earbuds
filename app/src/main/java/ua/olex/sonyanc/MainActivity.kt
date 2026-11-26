@@ -282,7 +282,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                     Page.FIT -> FitTestScreen(::back)
                     Page.DEVICES -> DevicesScreen(::back)
                     Page.BATTERY -> BatteryScreen(::back)
-                    Page.EARBUDS -> EarbudSettingsScreen(::back, { open(Page.APP) },
+                    Page.EARBUDS -> EarbudSettingsScreen(::back,
                         onFitTest = { open(Page.FIT) }.takeIf { functions?.contains(SupportedFunctions.FIT_TEST) == true })
                     Page.DEVICE -> {
                         LaunchedEffect(startTick) { model.readDeviceInfo() }

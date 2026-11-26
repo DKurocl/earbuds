@@ -2,9 +2,23 @@
 
 package ua.olex.sonyanc
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -13,7 +27,7 @@ import ua.olex.sonyanc.DeviceSettingsProtocol.Feature
 
 /** Shows the remembered settings immediately and reads any values missing on this device. */
 @Composable
-fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, onFitTest: (() -> Unit)? = null) {
+fun EarbudSettingsScreen(onBack: () -> Unit, onFitTest: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val values by Headphones.advanced.collectAsState()
     val features by Headphones.features.collectAsState()
@@ -26,7 +40,8 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, onF
     // or puts the old value back with a note. Without this the row waited, then jumped.
     var optimistic by remember { mutableStateOf<Map<Key, List<Int>>>(emptyMap()) }
     var optimisticFeatures by remember { mutableStateOf<Map<Feature, Boolean>>(emptyMap()) }
-    val shownValues = cachedValues + values + optimistic
+    val confirmedValues = cachedValues + values
+    val shownValues = confirmedValues + optimistic
     val shownFeatures = cachedFeatures + features + optimisticFeatures
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(emptySet<Key>()) }
@@ -42,14 +57,13 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, onF
         scope.launch { kotlinx.coroutines.delay(5000); if (notes[id] == note) notes = notes - id }
     }
 
-    suspend fun load(force: Boolean = false) = scanLock.withLock {
-        if (force && !Headphones.connectAndSync()) return@withLock
+    suspend fun load() = scanLock.withLock {
         val generation = Headphones.conn.generation
-        if (!force && scannedGeneration == generation) return@withLock
+        if (scannedGeneration == generation) return@withLock
         val knownKeys = Prefs.cachedAdvanced(ctx).keys + Headphones.advanced.value.keys
         val knownFeatures = Prefs.cachedFeatures(ctx).keys + Headphones.features.value.keys
-        val keys = SETTINGS_ORDER.filter { force || it !in knownKeys }
-        val basic = Feature.entries.filter { force || it !in knownFeatures }
+        val keys = SETTINGS_ORDER.filter { it !in knownKeys }
+        val basic = Feature.entries.filter { it !in knownFeatures }
         loading = keys.toSet()
         featureLoading = basic.toSet()
         try {
@@ -71,8 +85,8 @@ fun EarbudSettingsScreen(onBack: () -> Unit, onAppSettings: () -> Unit = {}, onF
 
     val panelRefused by EarbudSettingsLink.panelRefused.collectAsState()
     EarbudSettingsContent(
-        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, onAppSettings, panelHidden = panelRefused, hideMissing = scannedGeneration != null && (shownValues.isNotEmpty() || shownFeatures.isNotEmpty()),
-        onRefresh = { scope.launch { load(force = true) } }, onFitTest = onFitTest,
+        shownValues, shownFeatures, loading, featureLoading, writing, notes, onBack, panelHidden = panelRefused, hideMissing = scannedGeneration != null && (shownValues.isNotEmpty() || shownFeatures.isNotEmpty()),
+        onFitTest = onFitTest, confirmedValues = confirmedValues,
         onUpdate = { key, index, code ->
             if (writing == null && key !in loading) scope.launch {
                 writing = key; notes = notes - rowId(key, index)
@@ -115,30 +129,25 @@ private val SETTINGS_ORDER = listOf(
 fun EarbudSettingsContent(
     values: Map<Key, List<Int>>, features: Map<Feature, Boolean>,
     loading: Set<Key> = emptySet(), featureLoading: Set<Feature> = emptySet(),
-    writing: Key? = null, notes: Map<String, RowNote> = emptyMap(), onBack: () -> Unit = {}, onAppSettings: () -> Unit = {},
-    onRefresh: () -> Unit = {}, onUpdate: (Key, Int, Int) -> Unit = { _, _, _ -> }, onBasic: (Feature, Boolean) -> Unit = { _, _ -> },
+    writing: Key? = null, notes: Map<String, RowNote> = emptyMap(), onBack: () -> Unit = {},
+    onUpdate: (Key, Int, Int) -> Unit = { _, _, _ -> }, onBasic: (Feature, Boolean) -> Unit = { _, _ -> },
     panelHidden: Boolean = false,
     /** The earbuds are connected and were asked: a setting they did not answer is left out. */
     hideMissing: Boolean = false,
     onFitTest: (() -> Unit)? = null,
+    confirmedValues: Map<Key, List<Int>> = values,
 ) {
     // As Android's own settings: each row says in one line what it does; no illustration on top.
     val update = onUpdate
     val basic = onBasic
 
-    val idle = loading.isEmpty() && featureLoading.isEmpty() && writing == null
-
     // Helpers that bind a protocol field to a row.
     fun busy(key: Key) = key in loading || writing != null
-    fun code(key: Key, index: Int): Int? = values[key]?.get(index)?.let { if (key == Key.TOUCH && it == 0x35) 0 else it }
+    fun code(key: Key, index: Int, source: Map<Key, List<Int>> = values): Int? =
+        source[key]?.get(index)?.let { if (key == Key.TOUCH && it == 0x35) 0 else it }
     fun choices(key: Key, index: Int) = key.fields.first { it.index == index }.choices.map { it.code to it.label }
 
-    PageScaffold("Earbud settings", onBack, actions = {
-        HeaderActionPair(
-            HeaderAction(Glyph.REFRESH, "Refresh settings", { if (idle) onRefresh() }),
-            HeaderAction(Glyph.SETTINGS, "App settings", onAppSettings),
-        )
-    }) {
+    PageScaffold("Earbud settings", onBack) {
         // Rows the earbuds don't answer (while connected) are left out once reading is done (a setting this model
         // lacks is not a row to read "Not available" on), and the settings that only matter when
         // another is on (Speak-to-Chat's detection, the prompts' volume) follow it.
@@ -160,12 +169,27 @@ fun EarbudSettingsContent(
                         val left = ear == 1
                         ChoiceRow(it, if (left) Glyph.SWIPE_LEFT else Glyph.SWIPE_RIGHT,
                             if (left) "Left earbud" else "Right earbud", choices(Key.TOUCH, ear), code(Key.TOUCH, ear),
-                            busy(Key.TOUCH), note = notes[rowId(Key.TOUCH, ear)]) { choice -> update(Key.TOUCH, ear, choice) }
+                            busy(Key.TOUCH), note = notes[rowId(Key.TOUCH, ear)], customOptions = { choose ->
+                                TouchAssignment(
+                                    choices(Key.TOUCH, ear), code(Key.TOUCH, ear, confirmedValues),
+                                    notes[rowId(Key.TOUCH, ear)], choose,
+                                    cycleLink = if (code(Key.CYCLE, 4, confirmedValues) != null) ({
+                                        ChoiceRow(
+                                            it, null, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4),
+                                            busy(Key.CYCLE), customOptions = { selectCycle ->
+                                                NoiseCycle(code(Key.CYCLE, 4, confirmedValues), notes[rowId(Key.CYCLE, 4)], selectCycle)
+                                            },
+                                        ) { update(Key.CYCLE, 4, it) }
+                                    }) else null,
+                                )
+                            }) { choice -> update(Key.TOUCH, ear, choice) }
                     }
                 }
                 if (has(Key.CYCLE)) item {
                     ChoiceRow(it, Glyph.NOISE_AWARE, "Noise control cycle", choices(Key.CYCLE, 4), code(Key.CYCLE, 4),
-                        busy(Key.CYCLE), note = notes[rowId(Key.CYCLE, 4)]) { update(Key.CYCLE, 4, it) }
+                        busy(Key.CYCLE), note = notes[rowId(Key.CYCLE, 4)], customOptions = { choose ->
+                            NoiseCycle(code(Key.CYCLE, 4, confirmedValues), notes[rowId(Key.CYCLE, 4)], choose)
+                        }) { update(Key.CYCLE, 4, it) }
                 }
             }
         }
@@ -178,7 +202,12 @@ fun EarbudSettingsContent(
         }
         ListGroup("Sound") {
             if (has(Feature.DSEE)) item { FeatureSwitch(it, Feature.DSEE, Glyph.HQ, "Restores detail in compressed music", features, featureLoading, basic, notes[Feature.DSEE.name]) }
-            if (has(Key.QUALITY)) item { ChoiceRow(it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0), busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)]) { c -> update(Key.QUALITY, 0, c) } }
+            if (has(Key.QUALITY)) item {
+                ChoiceRow(
+                    it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0),
+                    busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)], descriptions = bluetoothQualityDescriptions,
+                ) { c -> update(Key.QUALITY, 0, c) }
+            }
         }
         // A tool, not a setting: it sits with what concerns wearing the earbuds.
         if (onFitTest != null) ListGroup("Fit") {
@@ -200,6 +229,105 @@ fun EarbudSettingsContent(
             if (promptsOn && has(Key.GUIDANCE_VOLUME)) item { ChoiceRow(it, Glyph.VOLUME, "Prompt volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), note = notes[rowId(Key.GUIDANCE_VOLUME, 0)]) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
         }
     }
+}
+
+private val bluetoothQualityDescriptions = mapOf(
+    0 to "Prioritise audio quality when the signal is strong",
+    1 to "Reduce interruptions when the signal is weak",
+)
+
+@Composable
+private fun TouchAssignment(
+    choices: List<Pair<Int, String>>, selected: Int?, note: RowNote?, onSelect: (Int) -> Unit,
+    cycleLink: (@Composable (ListItemShapes) -> Unit)?,
+) {
+    val icons = listOf(Glyph.NOISE_AWARE, Glyph.PLAY, Glyph.OFF)
+    Row(
+        Modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+    ) {
+        choices.forEachIndexed { index, (code, label) ->
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                ToggleButton(
+                    checked = selected == code, onCheckedChange = { if (it) onSelect(code) },
+                    shapes = when (index) {
+                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).semantics {
+                        role = Role.RadioButton
+                        this.selected = selected == code
+                        contentDescription = label
+                    },
+                ) { HushIcon(icons[index], Modifier.size(24.dp)) }
+                Text(
+                    label, modifier = Modifier.padding(top = 6.dp),
+                    style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+    // These are the documented actions of the Sony assignments. The device may swap sides.
+    AnimatedContent(selected, label = "Touch assignment") { assignment ->
+        when (assignment) {
+            0 -> ListGroup {
+                item { InfoRow(it, null, "Tap", "Switch noise control mode") }
+                item { InfoRow(it, null, "Touch and hold", "Quick Attention") }
+                if (cycleLink != null) item { cycleLink(it) }
+            }
+            AdvancedSettings.PLAYBACK -> ListGroup {
+                item { InfoRow(it, null, "Tap", "Play or pause") }
+                item { InfoRow(it, null, "Tap twice", "Next track") }
+                item { InfoRow(it, null, "Tap three times", "Previous track") }
+            }
+            else -> Spacer(Modifier.height(0.dp))
+        }
+    }
+    ChoiceNote(note)
+}
+
+private val cycleChoices = mapOf(
+    1 to setOf(0, 1, 2), 2 to setOf(0, 1), 3 to setOf(0, 2), 4 to setOf(1, 2),
+)
+
+@Composable
+private fun NoiseCycle(selected: Int?, note: RowNote?, onSelect: (Int) -> Unit) {
+    val modes = listOf("Noise cancellation" to Glyph.QUIET, "Ambient sound" to Glyph.AMBIENT, "Off" to Glyph.OFF)
+    val included = cycleChoices[selected].orEmpty()
+    ListGroup {
+        modes.forEachIndexed { index, (label, glyph) ->
+            item { shape ->
+                val checked = index in included
+                val next = if (checked) included - index else included + index
+                val code = cycleChoices.entries.firstOrNull { it.value == next }?.key
+                SegmentedListItem(
+                    onClick = { if (code != null) onSelect(code) }, enabled = code != null,
+                    shapes = shape, colors = ListItemDefaults.segmentedColors(containerColor = Surfaces.card),
+                    leadingContent = { HushIcon(glyph, Modifier.size(24.dp)) },
+                    trailingContent = { Checkbox(checked = checked, onCheckedChange = null, enabled = code != null) },
+                    modifier = Modifier.fillMaxWidth().semantics {
+                        role = Role.Checkbox
+                        toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
+                    },
+                ) { Text(label) }
+            }
+        }
+    }
+    Text(
+        "Tap the earbud assigned to Noise control to cycle through these modes. Choose at least two.",
+        modifier = Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    ChoiceNote(note)
+}
+
+@Composable
+private fun ChoiceNote(note: RowNote?) {
+    if (note != null) Text(
+        note.text, style = MaterialTheme.typography.bodyMedium,
+        color = if (note.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+    )
 }
 
 /** Sony's two-state settings encode On as 0 and Off as 1. */

@@ -65,7 +65,8 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
             val confirmed = Headphones.writeEqualizer(request.preset, request.bands)
             if (pending === request) {
                 pending = null
-                if (confirmed) lastSlot = request.slot else showMessage("Change not confirmed")
+                if (!confirmed) showMessage("Change not confirmed")
+                else if (request.preset != OFF) lastSlot = request.slot
             }
         }
     }
@@ -74,7 +75,7 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
         try { failed = Headphones.readEqualizer() == null } finally { busy = false }
     }
     LaunchedEffect(resumeTick) { load() }
-    fun write(preset: Int? = null, bands: List<Int>? = null, slot: Int? = null) {
+    fun write(preset: Int? = null, bands: List<Int>? = null, slot: Int? = null, preview: EqualizerProtocol.State? = null) {
         val base = eq ?: return
         val previous = pending
         if (previous != null && previous.preset == preset && previous.bands == bands && previous.slot == slot) return
@@ -83,24 +84,11 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
             lastSlot = slot
             return
         }
-        val shown = if (bands != null) EqualizerProtocol.State(CUSTOM, bands)
+        val shown = preview ?: if (bands != null) EqualizerProtocol.State(CUSTOM, bands)
             else EqualizerProtocol.State(requireNotNull(preset), emptyList())
         val request = EqualizerWrite(shown, preset, bands, slot)
         pending = request
         writes.trySend(request)
-    }
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        val state = eq ?: return@rememberLauncherForActivityResult
-        if (uri != null) scope.launch {
-            val saved = withContext(Dispatchers.IO) {
-                runCatching {
-                    ctx.contentResolver.openOutputStream(uri, "wt")?.use { output ->
-                        output.write(EqualizerFile.write(state).toByteArray())
-                    } != null
-                }.getOrDefault(false)
-            }
-            toast(ctx, if (saved) "Sound exported" else "Couldn't save the file")
-        }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -159,32 +147,27 @@ fun EqualizerScreen(onBack: () -> Unit, resumeTick: Int = 0) {
             if (stored != null) write(bands = stored, slot = index) else write(preset = preset)
         },
         onBands = { write(bands = it) },
-        onToggle = { write(preset = if (it) Prefs.lastEnabledEqualizerPreset(ctx) else OFF) },
+        onToggle = { enabled ->
+            if (enabled) {
+                val previous = Prefs.lastEnabledEqualizer(ctx)
+                write(preset = previous?.preset ?: CUSTOM, slot = lastSlot, preview = previous)
+            } else write(preset = OFF)
+        },
         editable = eq != null,
         selectedSlot = selectedSlot,
         onSave = shown?.bands?.takeIf { it.size == 6 && pending == null }?.let { bands -> { toSave = bands } },
         applyingPreset = pending?.preset != null,
-        exportReady = pending == null && eq?.bands?.size == 6,
-        pendingBands = eq?.bands.takeIf { pending?.preset != null },
+        pendingBands = eq?.bands.takeIf { pending?.preset != null && eq?.preset != OFF },
         haptics = remember { Prefs.haptics(ctx) },
-        onExport = { exporter.launch("Earbuds sound.json") },
         onImport = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
     )
 }
-
-private fun toast(ctx: android.content.Context, text: String) = android.widget.Toast.makeText(ctx, text, android.widget.Toast.LENGTH_SHORT).show()
 
 /**
  * Earbuds JSON maps directly to Sony gains. GraphicEQ is sampled on a logarithmic frequency axis.
  */
 internal object EqualizerFile {
     private const val FORMAT = "earbuds-sound"
-    fun write(state: EqualizerProtocol.State): String {
-        val o = org.json.JSONObject().put("format", FORMAT).put("schema", 1)
-            .put("preset", EqualizerProtocol.presets[state.preset] ?: "Custom")
-        if (state.bands.size == 6) o.put("clearBass", state.bands[0]).put("bands", org.json.JSONArray(state.bands.drop(1)))
-        return o.toString(2)
-    }
     fun read(text: String): List<Int>? {
         val input = text.trim().removePrefix("\uFEFF").trim()
         return if (input.startsWith("GraphicEQ:", ignoreCase = true)) readGraphicEq(input) else readJson(input)
@@ -240,17 +223,14 @@ private fun signed(v: Int) = if (v > 0) "+$v" else v.toString()
 fun EqualizerContent(
     state: EqualizerProtocol.State?, busy: Boolean, unavailable: Boolean, onBack: () -> Unit = {},
     onRetry: () -> Unit = {}, onPreset: (Int) -> Unit = {}, onBands: (List<Int>) -> Unit = {},
-    onExport: () -> Unit = {}, onImport: () -> Unit = {},
-    applyingPreset: Boolean = false, exportReady: Boolean = state?.bands?.size == 6, pendingBands: List<Int>? = null,
+    onImport: () -> Unit = {},
+    applyingPreset: Boolean = false, pendingBands: List<Int>? = null,
     haptics: Boolean = true, editable: Boolean = true,
     selectedSlot: Int? = null, onSave: (() -> Unit)? = null,
     onToggle: (Boolean) -> Unit = { onPreset(if (it) CUSTOM else OFF) },
 ) {
     val cs = MaterialTheme.colorScheme
-    PageScaffold("Equalizer", onBack, actions = {
-        HeaderActionButton(HeaderAction(Glyph.COPY, "Export preset", onExport, exportReady))
-
-    }) {
+    PageScaffold("Equalizer", onBack) {
         when {
             state == null && unavailable -> SoundCard {
                 Text("Equalizer unavailable", style = MaterialTheme.typography.titleMediumEmphasized)
@@ -282,7 +262,9 @@ fun EqualizerContent(
                 }
                 val flat = state.preset == CUSTOM && gains != null && gains.subList(1, 6).all { it == 0 }
                 val editingSound = edit?.let { gains?.get(it.index) != it.gain } == true
+                val awaitingCustom = applyingPreset && state.preset == CUSTOM && gains == null
                 val presetName = when {
+                    awaitingCustom -> ""
                     editingSound && on -> "Custom"
                     selectedSlot != null -> "Saved $selectedSlot"
                     flat -> "Flat"
@@ -292,7 +274,7 @@ fun EqualizerContent(
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     // Android's main switch: the page's one on/off, as "Use charging optimisation".
                     MainSwitchBar("Use equalizer", on, enabled = editable && !busy) { onToggle(it) }
-                    Text(if (on) presetName else "Off", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                    Text(if (on) presetName else "Off", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, minLines = 1,
                         modifier = Modifier.padding(start = 28.dp, top = 8.dp).semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
                     Spacer(Modifier.height(8.dp))
                     Box(contentAlignment = Alignment.Center) {
@@ -320,7 +302,7 @@ fun EqualizerContent(
                     onFinish = { commit(0, it) },
                 )
                 PresetGroups(
-                    active = selectedSlot?.let { 0xA0 + it } ?: state.preset, flat = flat && selectedSlot == null,
+                    active = if (awaitingCustom) OFF else selectedSlot?.let { 0xA0 + it } ?: state.preset, flat = flat && selectedSlot == null,
                     enabled = editable && !busy,
                     onPreset = { if (edit == null) onPreset(it) },
                     onFlat = { onBands(listOf(gains?.first() ?: 0) + List(5) { 0 }) },

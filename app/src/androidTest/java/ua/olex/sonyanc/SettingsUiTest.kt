@@ -57,7 +57,6 @@ class SettingsUiTest {
         val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
         content { key, index, code -> writes.add(Triple(key, index, code)) }
         val titles = mapOf(
-            AdvancedSettings.Key.CYCLE to listOf("Noise control cycle"),
             AdvancedSettings.Key.CHAT_CONFIG to listOf("Voice detection", "Music comes back"),
             AdvancedSettings.Key.POWER to listOf("Automatic power off"),
             AdvancedSettings.Key.QUALITY to listOf("Bluetooth quality"),
@@ -87,15 +86,34 @@ class SettingsUiTest {
         val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
         content { setting, index, code -> writes.add(Triple(setting, index, code)) }
         compose.onNodeWithText("Left earbud").performScrollTo().performClick()
-        choiceOption("Noise control").assertIsSelected()
+        touchOption("Noise control").assertIsSelected()
+        compose.onNode(hasText("Quick Attention") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         closeChoicePage()
         compose.runOnIdle { assertTrue(writes.isEmpty()) }
         compose.onNodeWithText("Right earbud").performScrollTo().performClick()
-        choiceOption("Playback").assertIsSelected()
-        choiceOption("Off").performScrollTo().performClick()
-        compose.onNode(isDialog()).assertDoesNotExist()
+        touchOption("Playback").assertIsSelected()
+        touchOption("Off").performScrollTo().performClick().assertIsSelected()
+        closeChoicePage()
         compose.runOnIdle { assertEquals(listOf(Triple(AdvancedSettings.Key.TOUCH, 2, 0xFF)), writes) }
     }
+    private fun touchOption(label: String) =
+        compose.onNode(hasContentDescription(label) and isSelectable() and hasAnyAncestor(isDialog()))
+
+    @Test fun noiseCycleRequiresAtLeastTwoModes() {
+        val writes = mutableListOf<Triple<AdvancedSettings.Key, Int, Int>>()
+        content { key, index, code -> writes.add(Triple(key, index, code)) }
+        compose.onNodeWithText("Noise control cycle").performScrollTo().performClick()
+        fun mode(label: String) = compose.onNode(hasText(label) and isToggleable() and hasAnyAncestor(isDialog()))
+        mode("Off").assertIsOn().performClick().assertIsOff()
+        mode("Ambient sound").assertIsOn().assertIsNotEnabled()
+        mode("Off").performClick().assertIsOn()
+        mode("Ambient sound").performClick().assertIsOff()
+        closeChoicePage()
+        compose.runOnIdle {
+            assertEquals(listOf(2, 1, 3).map { Triple(AdvancedSettings.Key.CYCLE, 4, it) }, writes)
+        }
+    }
+
     @Test fun missingDeviceValuesNeverBecomeEnabledSwitches() {
         compose.setContent {AppTheme(dynamic=false){EarbudSettingsContent(emptyMap(),emptyMap())}}
         compose.onAllNodes(isToggleable()).assertCountEquals(0)

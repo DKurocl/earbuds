@@ -298,7 +298,10 @@ fun PixelSwitch(checked: Boolean, enabled: Boolean = true, interactionSource: an
 @Composable
 fun ChoiceRow(
     shape: ListItemShapes, glyph: Glyph?, title: String, choices: List<Pair<Int, String>>, selected: Int?,
-    busy: Boolean = false, enabled: Boolean = true, note: RowNote? = null, onSelect: (Int) -> Unit,
+    busy: Boolean = false, enabled: Boolean = true, note: RowNote? = null,
+    descriptions: Map<Int, String> = emptyMap(),
+    customOptions: (@Composable ((Int) -> Unit) -> Unit)? = null,
+    onSelect: (Int) -> Unit,
 ) {
     if (selected == null) {
         InfoRow(shape, glyph, title, if (busy) null else "Not available")
@@ -310,34 +313,41 @@ fun ChoiceRow(
     var open by remember { mutableStateOf(false) }
     val chosen = choices.firstOrNull { it.first == selected }?.second ?: "Device setting"
     NavRow(shape, glyph, title, chosen, enabled = enabled, note = note) { if (!busy) open = true }
-    if (open) ChoicePage(title, choices, selected, onDismiss = { open = false }) { code ->
-        open = false
-        if (code != selected) {
-            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-            onSelect(code)
-        }
-    }
-}
-
-@Composable
-private fun ChoicePage(title: String, choices: List<Pair<Int, String>>, selected: Int?, onDismiss: () -> Unit, onSelect: (Int) -> Unit) {
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        PageScaffold(title, onDismiss) {
-            ListGroup {
+    if (open) {
+        val dismiss = { open = false }
+        ChoicePage(title, dismiss) {
+            if (customOptions != null) {
+                customOptions { code -> if (!busy && code != selected) onSelect(code) }
+            } else ListGroup {
                 choices.forEach { (code, label) ->
                     item { shape ->
                         SegmentedListItem(
-                            onClick = { onSelect(code) }, shapes = shape, colors = rowColors(),
+                            onClick = {
+                                dismiss()
+                                if (code != selected) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                    onSelect(code)
+                                }
+                            },
+                            shapes = shape, colors = rowColors(),
                             leadingContent = { RadioButton(selected = code == selected, onClick = null) },
+                            supportingContent = descriptions[code]?.let { description -> { Text(description) } },
                             modifier = Modifier.fillMaxWidth().semantics { role = Role.RadioButton; this.selected = code == selected },
                         ) { Text(label) }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ChoicePage(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        PageScaffold(title, onDismiss, content = content)
     }
 }
 
