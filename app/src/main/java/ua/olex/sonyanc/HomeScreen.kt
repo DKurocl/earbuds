@@ -678,7 +678,8 @@ private fun ListeningTime(
     val case = battery?.let { BatteryLife.caseMinutes(it, mode, rate, codec) }
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         val corner = PageMotion.CARD_CORNER
-        HomeSummaryTile(RoundedCornerShape(corner, 10.dp, 10.dp, corner), Modifier.weight(1f).fillMaxHeight(),
+        val alone = exposure?.level == null
+        HomeSummaryTile(if (alone) RoundedCornerShape(corner) else RoundedCornerShape(corner, 10.dp, 10.dp, corner), Modifier.weight(1f).fillMaxHeight(),
             "Battery history", onBattery) {
             Text("Listening left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             Text(buds?.let(BatteryLife::short) ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
@@ -686,7 +687,9 @@ private fun ListeningTime(
             Text(case?.let { "+${BatteryLife.short(it)} from case" } ?: "Case unavailable",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
-        HomeSummaryTile(RoundedCornerShape(10.dp, corner, corner, 10.dp), Modifier.weight(1f).fillMaxHeight(),
+        // The level tile appears only once the earbuds have answered with a real reading; until
+        // then the battery tile takes the whole row instead of showing a dash that never fills.
+        if (exposure?.level != null) HomeSummaryTile(RoundedCornerShape(10.dp, corner, corner, 10.dp), Modifier.weight(1f).fillMaxHeight(),
             "Listening level", null) {
             Text("Listening level", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             Text(exposure?.level?.let { "$it dB" } ?: "— dB", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())

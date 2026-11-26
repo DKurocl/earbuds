@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
@@ -286,16 +287,23 @@ fun EqualizerContent(
                 }
 
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 4.dp).heightIn(min = UiTokens.minTouchTarget),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(presetName, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmallEmphasized)
-                        Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
-                            thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
-                            modifier = Modifier.semantics { contentDescription = "Equalizer" })
+                    // As a Settings switch row: what it is, which sound is on, and the switch.
+                    Surface(shape = UiTokens.cardShape, color = Surfaces.card, modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("Use equalizer", style = MaterialTheme.typography.titleLarge)
+                                Text(if (on) presetName else "Off", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            }
+                            Switch(checked = on, enabled = editable && !busy, onCheckedChange = onToggle,
+                                thumbContent = if (on) ({ HushIcon(Glyph.CHECK, Modifier.size(SwitchDefaults.IconSize), cs.primary) }) else null,
+                                modifier = Modifier.semantics { contentDescription = "Equalizer" })
+                        }
                     }
+                    Spacer(Modifier.height(8.dp))
                     Box(contentAlignment = Alignment.Center) {
                         EqCurve(
                             gains = displayed?.subList(1, 6), enabled = controlsReady && edit?.index != 0,
@@ -328,11 +336,9 @@ fun EqualizerContent(
                 )
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onImport, modifier = Modifier.weight(1f)) { Text("Import preset") }
-            TextButton(onClick = { onSave?.invoke() }, enabled = onSave != null, modifier = Modifier.weight(1f)) {
-                Text("Save preset")
-            }
+        ListGroup("Your presets") {
+            item { NavRow(it, Glyph.ADD, "Save current sound", "Keep it as Saved 1 or Saved 2", enabled = onSave != null) { onSave?.invoke() } }
+            item { NavRow(it, Glyph.EDIT, "Import a sound", "From an Earbuds or GraphicEQ file", onClick = onImport) }
         }
     }
 }
@@ -416,31 +422,29 @@ private fun ClearBass(gain: Int?, enabled: Boolean, editing: Boolean, haptics: B
 
 @Composable
 private fun PresetGroups(active: Int, flat: Boolean, enabled: Boolean, onPreset: (Int) -> Unit, onFlat: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    @Composable fun Group(title: String, rows: List<List<Int>>) {
-        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp).semantics { heading() })
-            rows.forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                    row.forEachIndexed { index, code ->
-                        val label = if (code == -1) "Flat" else EqualizerProtocol.presets.getValue(code)
-                        val selected = if (code == -1) flat else active == code && (code != CUSTOM || !flat)
-                        PresetButton(label, selected, enabled, index, row.size, Modifier.weight(1f)) {
-                            if (code == -1) onFlat() else onPreset(code)
-                        }
-                    }
-                }
+    // One scrolling row of chips under the sound, as Pixel Buds lays out its presets: your own
+    // sounds first, then Sony's. The chosen chip fills with a check.
+    val codes = listOf(CUSTOM, -1, 0xA1, 0xA2, 0x10, 0x11, 0x12, 0x13, 0x14, 0x17, 0x15, 0x16)
+    val scroll = androidx.compose.foundation.rememberScrollState()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionTitle("Sound")
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(scroll).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            codes.forEach { code ->
+                val label = if (code == -1) "Flat" else EqualizerProtocol.presets.getValue(code)
+                val selected = if (code == -1) flat else active == code && (code != CUSTOM || !flat)
+                FilterChip(
+                    selected = selected, enabled = enabled,
+                    onClick = { if (!selected) { if (code == -1) onFlat() else onPreset(code) } },
+                    label = { Text(label, maxLines = 1) },
+                    leadingIcon = if (selected) ({ HushIcon(Glyph.CHECK, Modifier.size(FilterChipDefaults.IconSize), LocalContentColor.current) }) else null,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.heightIn(min = 40.dp).semantics { role = Role.RadioButton; this.selected = selected },
+                )
             }
         }
-    }
-    val largeText = LocalDensity.current.fontScale >= 1.3f
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Group("Your sound", listOf(listOf(CUSTOM, -1, 0xA1, 0xA2)))
-        Group("Presets", if (largeText) {
-            listOf(listOf(0x10, 0x11, 0x12), listOf(0x13, 0x14, 0x17), listOf(0x15, 0x16))
-        } else {
-            listOf(listOf(0x10, 0x11, 0x12, 0x13), listOf(0x14, 0x17, 0x15, 0x16))
-        })
     }
 }
 

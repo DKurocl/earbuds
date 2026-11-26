@@ -188,9 +188,10 @@ class ScreenshotTest {
         } }
         val curve = compose.onNodeWithContentDescription("Equalizer curve")
         val bass = compose.onNodeWithContentDescription("Clear Bass")
-        val lastPreset = compose.onNodeWithText("Bass boost").assertIsDisplayed()
+        // Presets scroll sideways now; the first one is on screen and at least a 40 dp chip.
+        val lastPreset = compose.onNodeWithText("Custom").assertIsDisplayed()
         val before = listOf(curve.getBoundsInRoot(), bass.getBoundsInRoot(), lastPreset.getBoundsInRoot())
-        assertTrue("Last preset is clipped", before.last().bottom - before.last().top >= 48.dp)
+        assertTrue("Preset chip is clipped", before.last().bottom - before.last().top >= 40.dp)
         compose.runOnIdle {
             reading.value = true
             state.value = EqualizerProtocol.State(0x15, emptyList())
@@ -231,9 +232,10 @@ class ScreenshotTest {
                 onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
             )
         } }
-        compose.onNodeWithText("Listening level").assertIsDisplayed()
-        compose.onNodeWithText("No reading yet").assertIsDisplayed()
+        // No reading from the earbuds: the level tile stays away instead of showing a dash.
+        compose.onNodeWithText("Listening level").assertDoesNotExist()
         compose.runOnIdle { exposure.value = ListeningExposure(86, 1.2) }
+        compose.onNodeWithText("Listening level").assertIsDisplayed()
         compose.onNodeWithText("86 dB").assertIsDisplayed()
         compose.onNodeWithText("Weekly estimate: turn down").assertIsDisplayed()
         compose.onNodeWithText("Case reserve").assertDoesNotExist()
