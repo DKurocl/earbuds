@@ -79,7 +79,7 @@ fun HushScreen(
     ambientMinutes: Int = 5, ambientUntil: Long? = null, ambientReturn: Mode = Mode.ANC, onAmbientFor: () -> Unit = {}, onStayInAmbient: () -> Unit = {},
     linked: Boolean? = null, bluetoothOn: Boolean = true, paired: Boolean = true,
     onProfiles: (() -> Unit)? = null, onPowerOff: () -> Unit = {},
-    turningOff: Boolean = false, exposure: ListeningExposure? = null,
+    turningOff: Boolean = false,
 ) {
     val ready = status == Headphones.Status.CONNECTED && granted && bluetoothOn && paired && linked != false
     val connecting = status == Headphones.Status.CONNECTING && linked != false
@@ -147,7 +147,7 @@ fun HushScreen(
                             // The estimate follows the mode the earbuds are in, not one just tapped: nothing jumps while a
                             // change is on its way (or can't go through, with the earbuds away).
                             ListeningTime(
-                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, exposure, ready, onBatteryDetails,
+                                battery?.let { BatteryLife.forEstimate(it, batteryParts) }, nc?.mode, batteryCodec, ready, onBatteryDetails,
                             )
                         }
                     }
@@ -166,7 +166,7 @@ fun HushScreen(
                                     modifier = Modifier.semantics { contentDescription = "Equalizer" }, onClick = onEqualizer)
                             }
                             item {
-                                NavRow(it, Glyph.TUNE, "Earbud settings", "Touch controls and voice prompts",
+                                NavRow(it, Glyph.EARBUDS, "Earbud settings", "Touch controls and voice prompts",
                                     modifier = Modifier.semantics { contentDescription = "Earbud settings" }, onClick = onEarbuds)
                             }
                             item {
@@ -668,7 +668,7 @@ private fun SetupCard(title: String, body: String, action: String, glyph: Glyph,
 /** Two equal tiles with matching surfaces for earbud and case estimates. */
 @Composable
 private fun ListeningTime(
-    battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, exposure: ListeningExposure?, connected: Boolean,
+    battery: SonyProtocol.Battery?, mode: Mode?, codec: Int?, connected: Boolean,
     onBattery: () -> Unit,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -678,33 +678,22 @@ private fun ListeningTime(
     val case = battery?.let { BatteryLife.caseMinutes(it, mode, rate, codec) }
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         val corner = PageMotion.CARD_CORNER
-        val alone = exposure?.level == null
-        HomeSummaryTile(if (alone) RoundedCornerShape(corner) else RoundedCornerShape(corner, 10.dp, 10.dp, corner), Modifier.weight(1f).fillMaxHeight(),
+        HomeSummaryTile(RoundedCornerShape(corner), Modifier.weight(1f).fillMaxHeight(),
             "Battery history", onBattery) {
-            Text("Listening left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-            Text(buds?.let(BatteryLife::short) ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
-                color = if (buds != null && buds < 60) cs.error else cs.onSurface)
-            Text(case?.let { "+${BatteryLife.short(it)} from case" } ?: "Case unavailable",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            // One card that leads to the Battery page, as Pixel's battery card does: the estimate on
+            // the left, an arrow on the right so it reads as a way in, not a label.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Listening time left", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                    Text(buds?.let(BatteryLife::short) ?: "—", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures(),
+                        color = if (buds != null && buds < 60) cs.error else cs.onSurface)
+                    Text(case?.let { "The case adds ${BatteryLife.short(it)}" } ?: "Case level unknown",
+                        style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                }
+                HushIcon(Glyph.BACK, Modifier.size(24.dp).graphicsLayer { rotationZ = 180f }, cs.onSurfaceVariant)
+            }
         }
-        // The level tile appears only once the earbuds have answered with a real reading; until
-        // then the battery tile takes the whole row instead of showing a dash that never fills.
-        if (exposure?.level != null) HomeSummaryTile(RoundedCornerShape(10.dp, corner, corner, 10.dp), Modifier.weight(1f).fillMaxHeight(),
-            "Listening level", null) {
-            Text("Listening level", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-            Text(exposure?.level?.let { "$it dB" } ?: "— dB", style = MaterialTheme.typography.headlineSmallEmphasized.withTabularFigures())
-            Text(
-                when {
-                    !connected -> "Disconnected"
-                    exposure == null -> "No reading yet"
-                    exposure.level == null && exposure.unavailable != null -> exposure.unavailable
-                    exposure.fraction >= 1.0 -> "Weekly estimate: turn down"
-                    else -> "${exposure.percent}% tracked this week"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if ((exposure?.fraction ?: 0.0) >= 1.0) cs.error else cs.onSurfaceVariant,
-            )
-        }
+
     }
 }
 

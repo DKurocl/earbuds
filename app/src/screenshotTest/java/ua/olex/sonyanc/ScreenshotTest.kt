@@ -222,25 +222,6 @@ class ScreenshotTest {
         compose.onNodeWithText("Turn on to edit bands").assertIsDisplayed()
     }
 
-    @Test fun homeShowsSoundPressureOnlyWhenTheEarbudsReportIt() {
-        val exposure = mutableStateOf<ListeningExposure?>(null)
-        compose.setContent { AppTheme(dynamic = false) {
-            HushScreen(
-                status = Headphones.Status.CONNECTED, nc = SonyProtocol.NcState(SonyProtocol.Mode.OFF),
-                pending = null, fresh = true, error = null, battery = SonyProtocol.Battery(80, 80, 70),
-                granted = true, hasDevice = true, exposure = exposure.value,
-                onMode = {}, onSettings = {}, onConnect = {}, onPermission = {}, onBluetooth = {}, onPick = {},
-            )
-        } }
-        // No reading from the earbuds: the level tile stays away instead of showing a dash.
-        compose.onNodeWithText("Listening level").assertDoesNotExist()
-        compose.runOnIdle { exposure.value = ListeningExposure(86, 1.2) }
-        compose.onNodeWithText("Listening level").assertIsDisplayed()
-        compose.onNodeWithText("86 dB").assertIsDisplayed()
-        compose.onNodeWithText("Weekly estimate: turn down").assertIsDisplayed()
-        compose.onNodeWithText("Case reserve").assertDoesNotExist()
-    }
-
     @Test fun batteryRingsDoNotRequestRefreshAndBackgroundReadsDoNotShowIt() {
         var refreshRequests = 0
         val background = mutableStateOf(false)

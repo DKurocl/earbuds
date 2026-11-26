@@ -49,24 +49,6 @@ class PortableSettingsTest {
         assertNull(Prefs.lastFirmware(ctx))
     }
 
-    @Test fun soundPressureIgnoresUnavailablePacketsAndDoseUsesAcousticEnergy() {
-        val reply = byteArrayOf(0x5B, 0x01, 80, 0)
-        assertTrue(ListeningPressure.isReply(reply, 1))
-        assertFalse(ListeningPressure.isReply(reply, 3))
-        assertFalse(ListeningPressure.isReply(reply.take(3).toByteArray(), 1))
-        assertEquals(80, ListeningPressure.level(reply))
-        reply[2] = 0xFF.toByte()
-        assertNull(ListeningPressure.level(reply))
-        reply[3] = 2
-        assertEquals("Put in your earbuds", ListeningPressure.unavailable(reply))
-        assertEquals(1.0, ExposureLog.fraction(80, 80, 40 * 3600.0), 1e-12)
-        assertEquals(1.0, ExposureLog.fraction(90, 90, 4 * 3600.0), 1e-12)
-        val now = 200 * ExposureLog.HOUR_MS
-        val log = ExposureLog.decode("32:0.4;33:0.1;201:0.5", now)
-        ExposureLog.add(log, now, 0.3)
-        assertEquals(mapOf(33L to .1, 200L to .3), ExposureLog.decode(ExposureLog.encode(log), now))
-    }
-
     @Test fun blankNamesDoNotReplaceTheDeviceLabel() {
         Prefs.setDisplayName(ctx, "  ")
         assertNull(Prefs.displayName(ctx))

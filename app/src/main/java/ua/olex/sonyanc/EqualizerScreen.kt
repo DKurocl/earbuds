@@ -427,7 +427,7 @@ private fun PresetGroups(active: Int, flat: Boolean, enabled: Boolean, onPreset:
     val codes = listOf(CUSTOM, -1, 0xA1, 0xA2, 0x10, 0x11, 0x12, 0x13, 0x14, 0x17, 0x15, 0x16)
     val scroll = androidx.compose.foundation.rememberScrollState()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("Sound")
+        SectionTitle("Presets")
         Row(
             Modifier.fillMaxWidth().horizontalScroll(scroll).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -162,7 +162,6 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
 
     // ---- navigation: a back stack of pages with the system predictive back gesture ----
     var stack by rememberSaveable { mutableStateOf(listOf(Page.HOME.name)) }
-    val exposure = rememberListeningExposure(stack.lastOrNull() == Page.HOME.name && device.connected, model.saved)
     fun open(page: Page) { if (stack.last() != page.name) stack = stack + page.name }
     fun back() { if (stack.size > 1) stack = stack.dropLast(1) }
     // The predictive back gesture lives in PageStack (Navigation.kt).
@@ -255,7 +254,7 @@ fun App(model: AppModel, startTick: Int, shortcutMode: Mode? = null, onShortcutC
                         paired = model.saved == null || model.devices.any { it.address == model.saved },
                         batterySeenAt = device.batterySeenAt, batteryCodec = device.codec?.code,
                         onFind = ::findHub, onBatteryDetails = { open(Page.BATTERY) },
-                        onPowerOff = { model.turnOff() }, turningOff = model.turningOff, exposure = exposure,
+                        onPowerOff = { model.turnOff() }, turningOff = model.turningOff,
                         speakToChat = (advanced[AdvancedSettings.Key.CHAT] ?: cachedAdvanced[AdvancedSettings.Key.CHAT])
                             ?.firstOrNull()?.let { it == 0 }?.takeIf { linked != false },
                         onSpeakToChat = { model.setSpeakToChat(it) },
