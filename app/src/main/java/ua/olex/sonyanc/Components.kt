@@ -301,6 +301,8 @@ fun ChoiceRow(
     busy: Boolean = false, enabled: Boolean = true, note: RowNote? = null,
     descriptions: Map<Int, String> = emptyMap(),
     customOptions: (@Composable ((Int) -> Unit) -> Unit)? = null,
+    illustration: (@Composable () -> Unit)? = null,
+    keepOpen: Boolean = false,
     onSelect: (Int) -> Unit,
 ) {
     if (selected == null) {
@@ -316,6 +318,7 @@ fun ChoiceRow(
     if (open) {
         val dismiss = { open = false }
         ChoicePage(title, dismiss) {
+            illustration?.invoke()
             if (customOptions != null) {
                 customOptions { code -> if (!busy && code != selected) onSelect(code) }
             } else ListGroup {
@@ -323,8 +326,8 @@ fun ChoiceRow(
                     item { shape ->
                         SegmentedListItem(
                             onClick = {
-                                dismiss()
-                                if (code != selected) {
+                                if (!keepOpen) dismiss()
+                                if (!busy && code != selected) {
                                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                     onSelect(code)
                                 }
@@ -337,6 +340,7 @@ fun ChoiceRow(
                     }
                 }
             }
+            if (keepOpen && note != null) supporting(null, note)?.invoke()
         }
     }
 }

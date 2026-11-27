@@ -169,7 +169,9 @@ fun EarbudSettingsContent(
                         val left = ear == 1
                         ChoiceRow(it, if (left) Glyph.SWIPE_LEFT else Glyph.SWIPE_RIGHT,
                             if (left) "Left earbud" else "Right earbud", choices(Key.TOUCH, ear), code(Key.TOUCH, ear),
-                            busy(Key.TOUCH), note = notes[rowId(Key.TOUCH, ear)], customOptions = { choose ->
+                            busy(Key.TOUCH), note = notes[rowId(Key.TOUCH, ear)],
+                            illustration = { TouchIllustration(left, code(Key.TOUCH, ear, confirmedValues)) },
+                            customOptions = { choose ->
                                 TouchAssignment(
                                     choices(Key.TOUCH, ear), code(Key.TOUCH, ear, confirmedValues),
                                     notes[rowId(Key.TOUCH, ear)], choose,
@@ -196,8 +198,20 @@ fun EarbudSettingsContent(
         if (has(Key.CHAT)) ListGroup("Conversation") {
             item { KeySwitch(it, Key.CHAT, Glyph.CHAT, "Speak-to-Chat", "Pauses music when you start talking", code(Key.CHAT, 0), busy(Key.CHAT), true, update, notes[rowId(Key.CHAT, 0)]) }
             if (chatOn && has(Key.CHAT_CONFIG)) {
-                item { ChoiceRow(it, Glyph.VOICE_SETTINGS, "Voice detection", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 0)]) { c -> update(Key.CHAT_CONFIG, 0, c) } }
-                item { ChoiceRow(it, Glyph.AUTOPLAY, "Music comes back", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1), busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 1)]) { c -> update(Key.CHAT_CONFIG, 1, c) } }
+                item {
+                    ChoiceRow(
+                        it, Glyph.VOICE_SETTINGS, "Voice detection", choices(Key.CHAT_CONFIG, 0), code(Key.CHAT_CONFIG, 0),
+                        busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 0)], keepOpen = true,
+                        illustration = { SettingIllustration(SettingDiagram.VOICE_DETECTION, code(Key.CHAT_CONFIG, 0, confirmedValues)) },
+                    ) { update(Key.CHAT_CONFIG, 0, it) }
+                }
+                item {
+                    ChoiceRow(
+                        it, Glyph.AUTOPLAY, "Music comes back", choices(Key.CHAT_CONFIG, 1), code(Key.CHAT_CONFIG, 1),
+                        busy(Key.CHAT_CONFIG), note = notes[rowId(Key.CHAT_CONFIG, 1)], keepOpen = true,
+                        illustration = { SettingIllustration(SettingDiagram.MUSIC_RETURN, code(Key.CHAT_CONFIG, 1, confirmedValues)) },
+                    ) { update(Key.CHAT_CONFIG, 1, it) }
+                }
             }
         }
         ListGroup("Sound") {
@@ -206,6 +220,8 @@ fun EarbudSettingsContent(
                 ChoiceRow(
                     it, Glyph.BLUETOOTH, "Bluetooth quality", choices(Key.QUALITY, 0), code(Key.QUALITY, 0),
                     busy(Key.QUALITY), note = notes[rowId(Key.QUALITY, 0)], descriptions = bluetoothQualityDescriptions,
+                    illustration = { BluetoothQualityIllustration(code(Key.QUALITY, 0, confirmedValues) == 1) },
+                    keepOpen = true,
                 ) { c -> update(Key.QUALITY, 0, c) }
             }
         }
@@ -215,7 +231,13 @@ fun EarbudSettingsContent(
         }
         if (has(Feature.AUTO_PAUSE) || has(Key.POWER)) ListGroup("In-ear detection") {
             if (has(Feature.AUTO_PAUSE)) item { FeatureSwitch(it, Feature.AUTO_PAUSE, Glyph.PAUSE_CIRCLE, "Pause when you remove an earbud", features, featureLoading, basic, notes[Feature.AUTO_PAUSE.name]) }
-            if (has(Key.POWER)) item { ChoiceRow(it, Glyph.POWER, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0), busy(Key.POWER), note = notes[rowId(Key.POWER, 0)]) { c -> update(Key.POWER, 0, c) } }
+            if (has(Key.POWER)) item {
+                ChoiceRow(
+                    it, Glyph.POWER, "Automatic power off", choices(Key.POWER, 0), code(Key.POWER, 0),
+                    busy(Key.POWER), note = notes[rowId(Key.POWER, 0)], keepOpen = true,
+                    illustration = { SettingIllustration(SettingDiagram.AUTO_POWER, code(Key.POWER, 0, confirmedValues)) },
+                ) { update(Key.POWER, 0, it) }
+            }
         }
         if (has(Key.SIDETONE) || has(Key.GESTURES)) ListGroup("Calls") {
             if (has(Key.SIDETONE)) item { KeySwitch(it, Key.SIDETONE, Glyph.MIC, "Hear my voice", "Hear your voice during calls", code(Key.SIDETONE, 0), busy(Key.SIDETONE), true, update, notes[rowId(Key.SIDETONE, 0)]) }
@@ -226,7 +248,13 @@ fun EarbudSettingsContent(
         }
         if (has(Key.GUIDANCE)) ListGroup("Spoken prompts") {
             item { KeySwitch(it, Key.GUIDANCE, Glyph.CAMPAIGN, "Voice prompts", "Spoken battery and mode changes", code(Key.GUIDANCE, 0), busy(Key.GUIDANCE), true, update, notes[rowId(Key.GUIDANCE, 0)]) }
-            if (promptsOn && has(Key.GUIDANCE_VOLUME)) item { ChoiceRow(it, Glyph.VOLUME, "Prompt volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0), busy(Key.GUIDANCE_VOLUME), note = notes[rowId(Key.GUIDANCE_VOLUME, 0)]) { c -> update(Key.GUIDANCE_VOLUME, 0, c) } }
+            if (promptsOn && has(Key.GUIDANCE_VOLUME)) item {
+                ChoiceRow(
+                    it, Glyph.VOLUME, "Prompt volume", choices(Key.GUIDANCE_VOLUME, 0), code(Key.GUIDANCE_VOLUME, 0),
+                    busy(Key.GUIDANCE_VOLUME), note = notes[rowId(Key.GUIDANCE_VOLUME, 0)], keepOpen = true,
+                    illustration = { SettingIllustration(SettingDiagram.PROMPT_VOLUME, code(Key.GUIDANCE_VOLUME, 0, confirmedValues)) },
+                ) { update(Key.GUIDANCE_VOLUME, 0, it) }
+            }
         }
     }
 }
@@ -237,7 +265,7 @@ private val bluetoothQualityDescriptions = mapOf(
 )
 
 @Composable
-private fun TouchAssignment(
+internal fun TouchAssignment(
     choices: List<Pair<Int, String>>, selected: Int?, note: RowNote?, onSelect: (Int) -> Unit,
     cycleLink: (@Composable (ListItemShapes) -> Unit)?,
 ) {
@@ -292,9 +320,10 @@ private val cycleChoices = mapOf(
 )
 
 @Composable
-private fun NoiseCycle(selected: Int?, note: RowNote?, onSelect: (Int) -> Unit) {
+internal fun NoiseCycle(selected: Int?, note: RowNote?, onSelect: (Int) -> Unit) {
     val modes = listOf("Noise cancellation" to Glyph.QUIET, "Ambient sound" to Glyph.AMBIENT, "Off" to Glyph.OFF)
     val included = cycleChoices[selected].orEmpty()
+    NoiseCycleIllustration(included)
     ListGroup {
         modes.forEachIndexed { index, (label, glyph) ->
             item { shape ->

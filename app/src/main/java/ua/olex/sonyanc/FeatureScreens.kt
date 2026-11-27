@@ -231,7 +231,8 @@ internal fun FitTestContent(state: FitTest.State, onBack: () -> Unit = {}, onSta
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (state.phase == FitTest.Phase.IDLE) FitPlacementIllustration()
+        else Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FitSide("Left", R.drawable.device_bud_left, state.left, busy, Modifier.weight(1f))
             FitSide("Right", R.drawable.device_bud_right, state.right, busy, Modifier.weight(1f))
         }

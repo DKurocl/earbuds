@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performSemanticsAction
@@ -603,6 +604,118 @@ class ScreenshotTest {
     @Config(qualifiers = "w448dp-h960dp-night-xxhdpi")
     @Test fun listeningLevel() = shoot("page-listening") {
         ListeningLevelContent(listeningFixture(), connected = true, on = true, reference = SafeListening.Reference.STANDARD)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h600dp-night-xhdpi")
+    fun illustratedSettingsScrollAtLargeTextSize() {
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, 2f),
+                ) {
+                    PageScaffold("Noise control cycle", {}) { NoiseCycle(1, null, {}) }
+                }
+            }
+        }
+        compose.onNodeWithText("Off").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun illustrationKeepsEarbudAndTouchMarkerAlignedInRtl() {
+        val direction = mutableStateOf(androidx.compose.ui.unit.LayoutDirection.Ltr)
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalLayoutDirection provides direction.value,
+                ) { TouchIllustration(true, AdvancedSettings.PLAYBACK) }
+            }
+        }
+        val leftToRight = illustrationPixels()
+        compose.runOnIdle { direction.value = androidx.compose.ui.unit.LayoutDirection.Rtl }
+        val rightToLeft = illustrationPixels()
+        assertTrue("The product and its touch marker must share physical coordinates", leftToRight.sameAs(rightToLeft))
+        leftToRight.recycle()
+        rightToLeft.recycle()
+    }
+
+    @Test fun settingsIllustrationIsStaticWithAnimationsDisabled() {
+        val animator = android.animation.ValueAnimator::class.java
+        val setScale = animator.getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
+        val original = android.animation.ValueAnimator.getDurationScale()
+        try {
+            setScale.invoke(null, 0f)
+            compose.mainClock.autoAdvance = false
+            compose.setContent {
+                AppTheme(dynamic = false) { SettingIllustration(SettingDiagram.PROMPT_VOLUME, 1) }
+            }
+            compose.mainClock.advanceTimeByFrame()
+            val initial = illustrationPixels()
+            compose.mainClock.advanceTimeBy(450)
+            val later = illustrationPixels()
+            assertTrue("The illustration should show a settled frame immediately", initial.sameAs(later))
+            initial.recycle()
+            later.recycle()
+        } finally {
+            setScale.invoke(null, original)
+        }
+    }
+
+    private fun illustrationPixels(): Bitmap = compose.runOnIdle {
+        val content = compose.activity.findViewById<View>(android.R.id.content)
+        Bitmap.createBitmap(content.width, content.height, Bitmap.Config.ARGB_8888).also {
+            content.draw(Canvas(it))
+        }
+    }
+
+    @Test fun touchLeftPreview() = touchPreview("settings-left", 1, 0)
+    @Test fun touchRightPreview() = touchPreview("settings-right", 2, AdvancedSettings.PLAYBACK)
+
+    private fun touchPreview(name: String, ear: Int, assignment: Int) = shoot(name) {
+        PageScaffold(if (ear == 1) "Left earbud" else "Right earbud", {}) {
+            TouchIllustration(ear == 1, assignment)
+            val options = AdvancedSettings.Key.TOUCH.fields.first { it.index == ear }.choices
+            TouchAssignment(options.map { it.code to it.label }, assignment, null, {}, null)
+        }
+    }
+
+    @Test fun noiseCyclePreview() = shoot("settings-noise-cycle") {
+        PageScaffold("Noise control cycle", {}) { NoiseCycle(1, null, {}) }
+    }
+
+    @Test fun bluetoothQualityPreview() = shoot("settings-bluetooth-quality") {
+        PageScaffold("Bluetooth quality", {}) {
+            BluetoothQualityIllustration(stable = false)
+            ListGroup {
+                item { InfoRow(it, null, "Sound quality", "Prioritise audio quality when the signal is strong") }
+                item { InfoRow(it, null, "Stable connection", "Reduce interruptions when the signal is weak") }
+            }
+        }
+    }
+
+    @Test fun fitPlacementPreview() = shoot("settings-fit-placement") { FitTestContent(FitTest.State()) }
+
+    @Test fun voiceDetectionPreview() = settingPreview("settings-voice-detection", "Voice detection", SettingDiagram.VOICE_DETECTION, 1)
+    @Test fun musicReturnPreview() = settingPreview("settings-music-return", "Music comes back", SettingDiagram.MUSIC_RETURN, 2)
+    @Test fun autoPowerPreview() = settingPreview("settings-auto-power", "Automatic power off", SettingDiagram.AUTO_POWER, 0x10)
+    @Test fun promptVolumePreview() = settingPreview("settings-prompt-volume", "Prompt volume", SettingDiagram.PROMPT_VOLUME, 1)
+
+    private fun settingPreview(name: String, title: String, diagram: SettingDiagram, value: Int) = shoot(name) {
+        PageScaffold(title, {}) { SettingIllustration(diagram, value) }
+    }
+
+    @Test
+    @Config(qualifiers = "+notnight")
+    fun bluetoothQualityInMotion() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppTheme(dynamic = false) {
+                PageScaffold("Bluetooth quality", {}) { BluetoothQualityIllustration(stable = true) }
+            }
+        }
+        compose.mainClock.advanceTimeBy(512)
+        compose.waitForIdle()
+        save("settings-bluetooth-motion-light")
     }
 
     @Config(qualifiers = "w448dp-h960dp-notnight-xxhdpi")

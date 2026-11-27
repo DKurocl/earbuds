@@ -71,7 +71,8 @@ class SettingsUiTest {
                     val currentLabel = field.choices.first { it.code == current }.label
                     choiceOption(currentLabel).assertIsSelected()
                     choiceOption(choice.label).performScrollTo().performClick()
-                    compose.onNode(isDialog()).assertDoesNotExist()
+                    choiceOption(choice.label).assertIsSelected()
+                    closeChoicePage()
                     // Choosing the current value closes the page without a redundant device write.
                     if (choice.code != current) expected.add(Triple(key, field.index, choice.code))
                     current = choice.code
