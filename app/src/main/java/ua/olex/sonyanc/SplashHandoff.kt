@@ -11,13 +11,11 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * From the splash into the app, calmly, as Google's own apps open: Android shows the launcher
- * icon on its white circle; then the icon settles back a little and fades while the splash
- * dissolves and Home fades up in place. Nothing travels across the screen.
+ * From the splash into the app, calmly, the same in every app of the family (VPN's
+ * docs/FAMILY-STYLE.md): Android shows the launcher icon on its white circle; then the icon settles
+ * and the whole splash fades on the RenderThread while Home fades up in place. Nothing flies.
  */
 object SplashHandoff {
-    private val emphasized = android.view.animation.PathInterpolator(androidx.core.graphics.PathParser.createPathFromPathData(
-        "M 0,0 C 0.05,0 0.133333,0.06 0.166666,0.4 C 0.208333,0.82 0.25,1 1,1"))
 
     fun install(activity: Activity) {
         activity.splashScreen.setOnExitAnimationListener { splash ->
@@ -33,31 +31,26 @@ object SplashHandoff {
         }
     }
 
-    private fun span(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f, 1f)
-    private fun decel(x: Float): Float { val u = 1 - x; return 1 - u * u * u * u }
-
     private fun handOver(splash: SplashScreenView) {
         Intro.start()
         // Home's rings are already where they belong: no piece flies in.
         listOf("Left", "Right", "Case").forEach(Intro::land)
-        val icon = splash.iconView
-        val background = (splash.background as? android.graphics.drawable.ColorDrawable)?.color ?: Color.TRANSPARENT
+        // The splash's own fades run as ViewPropertyAnimators: on hardware views Android plays
+        // them on the RenderThread, so they stay at the screen's full rate while the main thread
+        // builds Home. The whole splash fades, plate included: Android draws the icon's white
+        // plate apart from the icon view, so fading the icon alone left the plate over Home.
+        val decelerate = android.view.animation.PathInterpolator(0f, 0f, 0f, 1f)
+        splash.iconView?.animate()?.scaleX(0.92f)?.scaleY(0.92f)?.alpha(0f)
+            ?.setDuration(130)?.setInterpolator(decelerate)?.start()
+        splash.animate().alpha(0f).setDuration(160).setInterpolator(decelerate)
+            .withEndAction { splash.remove() }.start()
+        // Home fades up under it, from a third of the way (docs: the family style, as in VPN).
         ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 380
-            addUpdateListener { a ->
-                val t = a.animatedValue as Float
-                val e = emphasized.getInterpolation(t)
-                icon?.apply {
-                    val k = 1f - 0.08f * e
-                    scaleX = k; scaleY = k
-                    alpha = 1f - decel(span(t, 0f, 0.35f))
-                }
-                splash.setBackgroundColor(ColorUtils.setAlphaComponent(background, ((1 - decel(span(t, 0.15f, 1f))) * Color.alpha(background)).toInt()))
-                Intro.reveal(decel(span(t, 0.3f, 1f)))
-            }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) { Intro.finish(); splash.remove() }
-            })
+            startDelay = 110
+            duration = 270
+            interpolator = decelerate
+            addUpdateListener { Intro.reveal(it.animatedValue as Float) }
+            addListener(object : AnimatorListenerAdapter() { override fun onAnimationEnd(animation: Animator) { Intro.finish() } })
             start()
         }
     }
