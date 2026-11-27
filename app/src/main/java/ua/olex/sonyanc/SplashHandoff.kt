@@ -50,10 +50,10 @@ object SplashHandoff {
                 icon?.apply {
                     val k = 1f - 0.08f * e
                     scaleX = k; scaleY = k
-                    alpha = 1f - decel(span(t, 0f, 0.6f))
+                    alpha = 1f - decel(span(t, 0f, 0.35f))
                 }
                 splash.setBackgroundColor(ColorUtils.setAlphaComponent(background, ((1 - decel(span(t, 0.15f, 1f))) * Color.alpha(background)).toInt()))
-                Intro.reveal(decel(span(t, 0.2f, 1f)))
+                Intro.reveal(decel(span(t, 0.3f, 1f)))
             }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) { Intro.finish(); splash.remove() }
